@@ -1,0 +1,40 @@
+# ============================================
+# WorkFlow - configurações e dados confidenciais
+# ============================================
+
+# Configurações específicas de ambiente
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/appsettings.Production.json
+**/appsettings.*.local.json
+
+# Variáveis de ambiente e segredos
+.env
+.env.*
+!.env.example
+**/secrets.json
+
+# Certificados e chaves privadas
+*.pfx
+*.p12
+*.pem
+*.key
+*.snk
+*.publishsettings
+
+# Perfis de publicação
+**/Properties/PublishProfiles/
+
+# Bancos e backups locais
+*.bak
+*.mdf
+*.ldf
+*.ndf
+*.db
+*.sqlite
+
+# Logs e arquivos produzidos durante a execução
+**/Logs/
+**/logs/
+**/uploads/
+**/wwwroot/uploads/
