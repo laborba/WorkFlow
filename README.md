@@ -1,6 +1,6 @@
 # WorkFlow
 
-![.NET](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet)
+![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)
 ![C%23](https://img.shields.io/badge/C%23-13-512BD4?logo=csharp)
 ![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)
 ![License](https://img.shields.io/badge/licença-todos%20os%20direitos%20reservados-red)
@@ -30,7 +30,7 @@ O WorkFlow tem como objetivo permitir que empresas organizem seus projetos e equ
 
 ### Utilizadas atualmente
 
-* .NET 9
+* .NET 10
 * C#
 * ASP.NET Core Web API
 * xUnit
@@ -141,8 +141,8 @@ No processo de validação, usuários autorizados poderão assumir a responsabil
 
 ### Pré-requisitos
 
-* .NET 9 SDK
-* Visual Studio 2022 17.14 ou superior
+* .NET 10 SDK
+* Visual Studio 2026 ou outra IDE compatível
 
 ### Clonar o repositório
 
