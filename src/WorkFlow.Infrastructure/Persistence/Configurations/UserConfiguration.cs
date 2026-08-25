@@ -81,7 +81,7 @@ public sealed class UserConfiguration :
         builder.HasOne<Tenant>()
             .WithMany()
             .HasForeignKey(user => user.TenantId)
-            .OnDelete(DeleteBehavior.Restrict)
+            .OnDelete(DeleteBehavior.ClientNoAction)
             .HasConstraintName("fk_users_tenants");
     }
 }

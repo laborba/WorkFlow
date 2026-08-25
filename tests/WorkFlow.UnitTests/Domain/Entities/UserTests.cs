@@ -51,6 +51,18 @@ public class UserTests
         Assert.Equal(UserRole.SystemAdmin, user.Role);
     }
 
+    [Fact]
+    public void Constructor_ShouldThrow_WhenSystemAdminHasTenant()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new User(
+                1,
+                "System Administrator",
+                "admin@workflow.com",
+                "valid-password-hash",
+                UserRole.SystemAdmin));
+    }
+
     [Theory]
     [InlineData(UserRole.TenantAdmin)]
     [InlineData(UserRole.ProjectManager)]
@@ -373,6 +385,25 @@ public class UserTests
             user.ChangeRole(UserRole.Member));
 
         Assert.Equal(UserRole.SystemAdmin, user.Role);
+        Assert.Null(user.UpdatedAt);
+    }
+
+    [Fact]
+    public void
+    ChangeRole_ShouldThrowAndPreserveUser_WhenTenantUserChangesToSystemAdmin()
+    {
+        var user = new User(
+            1,
+            "Lucas",
+            "user@email.com",
+            "valid-password-hash",
+            UserRole.Member);
+
+        Assert.Throws<ArgumentException>(() =>
+            user.ChangeRole(UserRole.SystemAdmin));
+
+        Assert.Equal(UserRole.Member, user.Role);
+        Assert.Equal(1, user.TenantId);
         Assert.Null(user.UpdatedAt);
     }
 }

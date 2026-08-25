@@ -32,22 +32,50 @@ public class User
         UserRole role)
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("O nome do usuário não pode estar vazio.", nameof(name));
+            throw new ArgumentException(
+                "O nome do usuário não pode estar vazio.",
+                nameof(name));
 
         if (string.IsNullOrWhiteSpace(email))
-            throw new ArgumentException("O e-mail não pode estar vazio.", nameof(email));
+            throw new ArgumentException(
+                "O e-mail não pode estar vazio.",
+                nameof(email));
 
         if (string.IsNullOrWhiteSpace(passwordHash))
-            throw new ArgumentException("O hash da senha não pode estar vazio.", nameof(passwordHash));
+            throw new ArgumentException(
+                "O hash da senha não pode estar vazio.",
+                nameof(passwordHash));
 
         if (!Enum.IsDefined(typeof(UserRole), role))
-            throw new ArgumentException("O perfil do usuário é inválido.", nameof(role));
+            throw new ArgumentException(
+                "O perfil do usuário é inválido.",
+                nameof(role));
 
         if (tenantId.HasValue && tenantId.Value <= 0)
-            throw new ArgumentOutOfRangeException(nameof(tenantId), "O TenantId deve ser maior que zero quando informado.");
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(tenantId),
+                "O TenantId deve ser maior que zero " +
+                "quando informado.");
+        }
 
-        if (role != UserRole.SystemAdmin && tenantId is null)
-            throw new ArgumentException("Um Tenant é obrigatório para este perfil de usuário.", nameof(tenantId));
+        if (role == UserRole.SystemAdmin &&
+            tenantId is not null)
+        {
+            throw new ArgumentException(
+                "Um SystemAdmin não pode pertencer " +
+                "a um Tenant.",
+                nameof(tenantId));
+        }
+
+        if (role != UserRole.SystemAdmin &&
+            tenantId is null)
+        {
+            throw new ArgumentException(
+                "Um Tenant é obrigatório para este " +
+                "perfil de usuário.",
+                nameof(tenantId));
+        }
 
         TenantId = tenantId;
         PublicId = Guid.NewGuid();
@@ -62,7 +90,9 @@ public class User
     public void Rename(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("O nome do usuário não pode estar vazio.", nameof(name));
+            throw new ArgumentException(
+                "O nome do usuário não pode estar vazio.",
+                nameof(name));
 
         Name = name.Trim();
         UpdatedAt = DateTime.UtcNow;
@@ -71,7 +101,9 @@ public class User
     public void ChangeEmail(string email)
     {
         if (string.IsNullOrWhiteSpace(email))
-            throw new ArgumentException("O e-mail não pode estar vazio.", nameof(email));
+            throw new ArgumentException(
+                "O e-mail não pode estar vazio.",
+                nameof(email));
 
         Email = email.Trim();
         UpdatedAt = DateTime.UtcNow;
@@ -103,10 +135,27 @@ public class User
     public void ChangeRole(UserRole role)
     {
         if (!Enum.IsDefined(typeof(UserRole), role))
-            throw new ArgumentException("O perfil do usuário é inválido.", nameof(role));
+            throw new ArgumentException(
+                "O perfil do usuário é inválido.",
+                nameof(role));
 
-        if (role != UserRole.SystemAdmin && TenantId is null)
-            throw new ArgumentException("Um Tenant é obrigatório para este perfil de usuário.", nameof(role));
+        if (role == UserRole.SystemAdmin &&
+            TenantId is not null)
+        {
+            throw new ArgumentException(
+                "Um usuário vinculado a um Tenant não " +
+                "pode assumir o perfil SystemAdmin.",
+                nameof(role));
+        }
+
+        if (role != UserRole.SystemAdmin &&
+            TenantId is null)
+        {
+            throw new ArgumentException(
+                "Um Tenant é obrigatório para este " +
+                "perfil de usuário.",
+                nameof(role));
+        }
 
         Role = role;
         UpdatedAt = DateTime.UtcNow;
