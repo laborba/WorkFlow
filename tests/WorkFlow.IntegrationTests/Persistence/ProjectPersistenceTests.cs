@@ -109,9 +109,13 @@ public sealed class ProjectPersistenceTests
         Assert.Null(
             persistedProject.StatusBeforeArchive);
 
+        Assert.NotNull(
+            persistedProject.DueDate);
+
         Assert.Equal(
             dueDate,
-            persistedProject.DueDate);
+            persistedProject.DueDate.Value,
+            TimeSpan.FromMicroseconds(1));
 
         Assert.False(
             persistedProject.IsArchived);

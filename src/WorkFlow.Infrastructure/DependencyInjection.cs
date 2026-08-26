@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using WorkFlow.Application.Abstractions.Persistence;
 using WorkFlow.Infrastructure.Persistence;
+using WorkFlow.Infrastructure.Persistence.Repositories;
 
 namespace WorkFlow.Infrastructure;
 
@@ -15,6 +17,15 @@ public static class DependencyInjection
 
         services.AddDbContext<WorkFlowDbContext>(options =>
             options.UseNpgsql(connectionString));
+
+        services.AddScoped<IUnitOfWork>(
+            serviceProvider =>
+                serviceProvider.GetRequiredService<
+                    WorkFlowDbContext>());
+
+        services.AddScoped<
+            ITenantRepository,
+            TenantRepository>();
 
         return services;
     }

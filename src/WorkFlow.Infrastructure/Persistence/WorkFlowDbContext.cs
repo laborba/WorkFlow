@@ -1,9 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using WorkFlow.Domain.Entities;
+using WorkFlow.Application.Abstractions.Persistence;
 
 namespace WorkFlow.Infrastructure.Persistence;
 
-public sealed class WorkFlowDbContext : DbContext
+public sealed class WorkFlowDbContext : DbContext, IUnitOfWork
 {
     public WorkFlowDbContext(
         DbContextOptions<WorkFlowDbContext> options)

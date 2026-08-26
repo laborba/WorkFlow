@@ -34,13 +34,13 @@ public class Tenant
         string? phone = null)
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Tenant name cannot be empty.", nameof(name));
+            throw new ArgumentException("O nome da empresa não pode estar vazio.", nameof(name));
 
         if (string.IsNullOrWhiteSpace(registrationNumber))
-            throw new ArgumentException("Registration number cannot be empty.", nameof(registrationNumber));
+            throw new ArgumentException("O número de registro não pode estar vazio.", nameof(registrationNumber));
 
         if (string.IsNullOrWhiteSpace(email))
-            throw new ArgumentException("Email cannot be empty.", nameof(email));
+            throw new ArgumentException("O e-mail da empresa não pode estar vazio.", nameof(email));
 
         PublicId = Guid.NewGuid();
         Name = name.Trim();
@@ -54,7 +54,7 @@ public class Tenant
     public void Rename(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Tenant name cannot be empty.", nameof(name));
+            throw new ArgumentException("O nome da empresa não pode estar vazio.", nameof(name));
 
         var normalizedName = name.Trim();
 
@@ -68,7 +68,7 @@ public class Tenant
     public void UpdateContact(string email, string? phone = null)
     {
         if (string.IsNullOrWhiteSpace(email))
-            throw new ArgumentException("Email cannot be empty.", nameof(email));
+            throw new ArgumentException("O e-mail da empresa não pode estar vazio.", nameof(email));
 
         var normalizedEmail = email.Trim();
 
