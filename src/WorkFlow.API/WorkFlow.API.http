@@ -79,3 +79,73 @@ Accept: application/json
 {
   "isActive": false
 }
+
+### Atualizar empresa existente
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Empresa Testes Atualizada",
+  "email": "empresa-atualizada@test.local",
+  "phone": "(47) 98888-7777"
+}
+
+### Consultar empresa atualizada
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07
+Accept: application/json
+
+### Atualizar empresa inexistente
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Empresa Inexistente",
+  "email": "inexistente@test.local",
+  "phone": null
+}
+
+### Atualizar empresa com nome vazio
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "   ",
+  "email": "empresa-atualizada@test.local",
+  "phone": "(47) 98888-7777"
+}
+
+### Atualizar empresa com e-mail vazio
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Empresa Testes Atualizada",
+  "email": "   ",
+  "phone": "(47) 98888-7777"
+}
+
+### Remover telefone da empresa
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Empresa Testes Atualizada",
+  "email": "empresa-atualizada@test.local",
+  "phone": null
+}
+
+### Confirmar remoção do telefone
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07
+Accept: application/json
