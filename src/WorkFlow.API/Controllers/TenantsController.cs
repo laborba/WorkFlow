@@ -3,6 +3,8 @@ using WorkFlow.API.Contracts.Common;
 using WorkFlow.API.Contracts.Tenants;
 using WorkFlow.Application.Tenants.CreateTenant;
 using WorkFlow.Application.Tenants.GetTenantByPublicId;
+using WorkFlow.Application.Tenants.ChangeTenantStatus;
+using WorkFlow.Application.Tenants;
 
 namespace WorkFlow.API.Controllers;
 
@@ -16,15 +18,17 @@ public sealed class TenantsController : ControllerBase
     private readonly GetTenantByPublicIdHandler
         _getTenantByPublicIdHandler;
 
+    private readonly ChangeTenantStatusHandler 
+        _changeTenantStatusHandler;
+
     public TenantsController(
         CreateTenantHandler createTenantHandler,
-        GetTenantByPublicIdHandler getTenantByPublicIdHandler)
+        GetTenantByPublicIdHandler getTenantByPublicIdHandler,
+        ChangeTenantStatusHandler changeTenantStatusHandler)
     {
-        _createTenantHandler =
-            createTenantHandler;
-
-        _getTenantByPublicIdHandler =
-            getTenantByPublicIdHandler;
+        _createTenantHandler = createTenantHandler;
+        _getTenantByPublicIdHandler = getTenantByPublicIdHandler;
+        _changeTenantStatusHandler = changeTenantStatusHandler;
     }
 
     [HttpPost]
@@ -108,6 +112,41 @@ public sealed class TenantsController : ControllerBase
             tenant.IsActive,
             tenant.CreatedAt,
             tenant.UpdatedAt);
+
+        return Ok(response);
+    }
+
+    [HttpPatch("{publicId:guid}/status")]
+    public async Task<ActionResult<ChangeTenantStatusResponse>> ChangeStatus(
+    Guid publicId,
+    [FromBody] ChangeTenantStatusRequest request,
+    CancellationToken cancellationToken)
+    {
+        var command = new ChangeTenantStatusCommand(
+            publicId,
+            request.IsActive);
+
+        var result = await _changeTenantStatusHandler.HandleAsync(
+            command,
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var errorResponse = new ErrorResponse(
+                result.Error.Code,
+                result.Error.Message);
+
+            if (result.Error == TenantErrors.NotFound)
+            {
+                return NotFound(errorResponse);
+            }
+
+            return BadRequest(errorResponse);
+        }
+
+        var response = new ChangeTenantStatusResponse(
+            result.Value.PublicId,
+            result.Value.IsActive);
 
         return Ok(response);
     }

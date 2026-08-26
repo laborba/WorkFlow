@@ -37,6 +37,17 @@ public sealed class TenantRepository : ITenantRepository
                 cancellationToken);
     }
 
+    public Task<Tenant?> GetForUpdateByPublicIdAsync(
+    Guid publicId,
+    CancellationToken cancellationToken = default)
+    {
+        return _context.Tenants
+            .SingleOrDefaultAsync(
+                tenant =>
+                    tenant.PublicId == publicId,
+                cancellationToken);
+    }
+
     public async Task AddAsync(
         Tenant tenant,
         CancellationToken cancellationToken = default)

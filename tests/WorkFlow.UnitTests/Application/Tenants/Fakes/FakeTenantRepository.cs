@@ -15,6 +15,8 @@ internal sealed class FakeTenantRepository : ITenantRepository
 
     public Tenant? TenantToReturn { get; set; }
 
+    public Guid? CheckedPublicIdForUpdate { get; private set; }
+
 
     public Task<bool> ExistsByRegistrationNumberAsync(
         string registrationNumber,
@@ -32,6 +34,17 @@ internal sealed class FakeTenantRepository : ITenantRepository
         CancellationToken cancellationToken = default)
     {
         CheckedPublicId = publicId;
+
+        return Task.FromResult(
+            TenantToReturn);
+    }
+
+    public Task<Tenant?> GetForUpdateByPublicIdAsync(
+    Guid publicId,
+    CancellationToken cancellationToken = default)
+    {
+        CheckedPublicIdForUpdate =
+            publicId;
 
         return Task.FromResult(
             TenantToReturn);
