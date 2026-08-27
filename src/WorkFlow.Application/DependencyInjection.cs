@@ -3,6 +3,7 @@ using WorkFlow.Application.Tenants.CreateTenant;
 using WorkFlow.Application.Tenants.GetTenantByPublicId;
 using WorkFlow.Application.Tenants.ChangeTenantStatus;
 using WorkFlow.Application.Tenants.UpdateTenant;
+using WorkFlow.Application.Tenants.ListTenants;
 
 namespace WorkFlow.Application;
 
@@ -15,6 +16,7 @@ public static class DependencyInjection
         services.AddScoped<GetTenantByPublicIdHandler>();
         services.AddScoped<ChangeTenantStatusHandler>();
         services.AddScoped<UpdateTenantHandler>();
+        services.AddScoped<ListTenantsHandler>();
 
         return services;
     }

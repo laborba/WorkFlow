@@ -149,3 +149,33 @@ Accept: application/json
 
 GET {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07
 Accept: application/json
+
+### Listar empresas com paginação padrão
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants
+Accept: application/json
+
+### Listar segunda página de empresas
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants?pageNumber=2&pageSize=2
+Accept: application/json
+
+### Pesquisar empresa pelo nome
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants?search=atualizada
+Accept: application/json
+
+### Listar somente empresas inativas
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants?isActive=false
+Accept: application/json
+
+### Listar empresas com número de página inválido
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants?pageNumber=0&pageSize=20
+Accept: application/json
+
+### Listar empresas com tamanho de página acima do limite
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants?pageNumber=1&pageSize=101
+Accept: application/json

@@ -6,6 +6,7 @@ using WorkFlow.Application.Tenants.GetTenantByPublicId;
 using WorkFlow.Application.Tenants.ChangeTenantStatus;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Tenants.UpdateTenant;
+using WorkFlow.Application.Tenants.ListTenants;
 
 namespace WorkFlow.API.Controllers;
 
@@ -25,16 +26,21 @@ public sealed class TenantsController : ControllerBase
     private readonly UpdateTenantHandler 
         _updateTenantHandler;
 
+    private readonly ListTenantsHandler 
+        _listTenantsHandler;
+
     public TenantsController(
         CreateTenantHandler createTenantHandler,
         GetTenantByPublicIdHandler getTenantByPublicIdHandler,
         ChangeTenantStatusHandler changeTenantStatusHandler,
-        UpdateTenantHandler updateTenantHandler)
+        UpdateTenantHandler updateTenantHandler,
+        ListTenantsHandler listTenantsHandler)
     {
         _createTenantHandler = createTenantHandler;
         _getTenantByPublicIdHandler = getTenantByPublicIdHandler;
         _changeTenantStatusHandler = changeTenantStatusHandler;
         _updateTenantHandler = updateTenantHandler;
+        _listTenantsHandler = listTenantsHandler;
     }
 
     [HttpPost]
@@ -193,6 +199,44 @@ public sealed class TenantsController : ControllerBase
             result.Value.Email,
             result.Value.Phone,
             result.Value.UpdatedAt);
+
+        return Ok(response);
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<ListTenantsResponse>> List(
+    [FromQuery] ListTenantsRequest request,
+    CancellationToken cancellationToken)
+    {
+        var query = new ListTenantsQuery(
+            request.PageNumber,
+            request.PageSize,
+            request.IsActive,
+            request.Search);
+
+        var result = await _listTenantsHandler.HandleAsync(
+            query,
+            cancellationToken);
+
+        var items = result.Value.Items
+            .Select(item =>
+                new TenantListItemResponse(
+                    item.PublicId,
+                    item.Name,
+                    item.RegistrationNumber,
+                    item.Email,
+                    item.Phone,
+                    item.IsActive,
+                    item.CreatedAt,
+                    item.UpdatedAt))
+            .ToArray();
+
+        var response = new ListTenantsResponse(
+            items,
+            result.Value.PageNumber,
+            result.Value.PageSize,
+            result.Value.TotalCount,
+            result.Value.TotalPages);
 
         return Ok(response);
     }

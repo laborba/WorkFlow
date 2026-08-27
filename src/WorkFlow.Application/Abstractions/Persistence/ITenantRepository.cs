@@ -1,4 +1,5 @@
 ﻿using WorkFlow.Domain.Entities;
+using WorkFlow.Application.Common.Pagination;
 
 namespace WorkFlow.Application.Abstractions.Persistence;
 
@@ -18,5 +19,12 @@ public interface ITenantRepository
 
     Task<Tenant?> GetForUpdateByPublicIdAsync(
         Guid publicId,
+        CancellationToken cancellationToken = default);
+
+    Task<PagedData<Tenant>> GetPagedAsync(
+        int pageNumber,
+        int pageSize,
+        bool? isActive,
+        string? search,
         CancellationToken cancellationToken = default);
 }
