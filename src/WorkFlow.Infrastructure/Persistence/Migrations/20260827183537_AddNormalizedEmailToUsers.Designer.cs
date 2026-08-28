@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using WorkFlow.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using WorkFlow.Infrastructure.Persistence;
 namespace WorkFlow.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(WorkFlowDbContext))]
-    partial class WorkFlowDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260827183537_AddNormalizedEmailToUsers")]
+    partial class AddNormalizedEmailToUsers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

@@ -1,4 +1,5 @@
 ﻿using WorkFlow.Domain.Enums;
+using WorkFlow.Domain.Common;
 
 namespace WorkFlow.Domain.Entities;
 
@@ -13,6 +14,8 @@ public class User
     public string Name { get; private set; }
 
     public string Email { get; private set; }
+
+    public string NormalizedEmail { get; private set; }
 
     public string PasswordHash { get; private set; }
 
@@ -81,6 +84,7 @@ public class User
         PublicId = Guid.NewGuid();
         Name = name.Trim();
         Email = email.Trim();
+        NormalizedEmail = EmailNormalizer.Normalize(email);
         PasswordHash = passwordHash;
         Role = role;
         IsActive = true;
@@ -106,6 +110,7 @@ public class User
                 nameof(email));
 
         Email = email.Trim();
+        NormalizedEmail = EmailNormalizer.Normalize(email);
         UpdatedAt = DateTime.UtcNow;
     }
 

@@ -3,6 +3,8 @@ using WorkFlow.Domain.Entities;
 using WorkFlow.Domain.Enums;
 using WorkFlow.IntegrationTests.Infrastructure;
 using Xunit;
+using WorkFlow.Infrastructure.Persistence.Repositories;
+
 
 namespace WorkFlow.IntegrationTests.Persistence;
 
@@ -183,6 +185,175 @@ public sealed class UserPersistenceTests
 
         await Assert.ThrowsAsync<DbUpdateException>(
             () => context.SaveChangesAsync());
+
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task
+ExistsByEmailAsync_ShouldReturnTrue_WhenEmailDiffersOnlyByCase()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant = new Tenant(
+            "Empresa do Usuário",
+            $"registration-{uniqueValue}",
+            $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(tenant);
+
+        await context.SaveChangesAsync();
+
+        var email =
+            $"usuario-{uniqueValue}@test.local";
+
+        var user = new User(
+            tenant.Id,
+            "Usuário de Teste",
+            email,
+            "password-hash-for-test",
+            UserRole.Member);
+
+        context.Users.Add(user);
+
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new UserRepository(context);
+
+        var emailWithDifferentCase =
+            email.ToUpperInvariant();
+
+        var exists =
+            await repository.ExistsByEmailAsync(
+                tenant.Id,
+                emailWithDifferentCase);
+
+        Assert.True(exists);
+
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task
+SaveChanges_ShouldThrow_WhenTenantUserEmailDiffersOnlyByCase()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant = new Tenant(
+            "Empresa do Usuário",
+            $"registration-{uniqueValue}",
+            $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(tenant);
+
+        await context.SaveChangesAsync();
+
+        var email =
+            $"usuario-{uniqueValue}@test.local";
+
+        var firstUser = new User(
+            tenant.Id,
+            "Primeiro Usuário",
+            email,
+            "first-password-hash",
+            UserRole.Member);
+
+        context.Users.Add(firstUser);
+
+        await context.SaveChangesAsync();
+
+        var secondUser = new User(
+            tenant.Id,
+            "Segundo Usuário",
+            email.ToUpperInvariant(),
+            "second-password-hash",
+            UserRole.Member);
+
+        context.Users.Add(secondUser);
+
+        await Assert.ThrowsAsync<DbUpdateException>(
+            () => context.SaveChangesAsync());
+
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task
+SaveChanges_ShouldAllowSameEmail_WhenUsersBelongToDifferentTenants()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var firstTenant = new Tenant(
+            "Primeira Empresa",
+            $"registration-first-{uniqueValue}",
+            $"tenant-first-{uniqueValue}@test.local");
+
+        var secondTenant = new Tenant(
+            "Segunda Empresa",
+            $"registration-second-{uniqueValue}",
+            $"tenant-second-{uniqueValue}@test.local");
+
+        context.Tenants.Add(firstTenant);
+        context.Tenants.Add(secondTenant);
+
+        await context.SaveChangesAsync();
+
+        var email =
+            $"usuario-{uniqueValue}@test.local";
+
+        var firstUser = new User(
+            firstTenant.Id,
+            "Primeiro Usuário",
+            email,
+            "first-password-hash",
+            UserRole.Member);
+
+        var secondUser = new User(
+            secondTenant.Id,
+            "Segundo Usuário",
+            email.ToUpperInvariant(),
+            "second-password-hash",
+            UserRole.Member);
+
+        context.Users.Add(firstUser);
+        context.Users.Add(secondUser);
+
+        await context.SaveChangesAsync();
+
+        Assert.True(firstUser.Id > 0);
+        Assert.True(secondUser.Id > 0);
+
+        Assert.NotEqual(
+            firstUser.TenantId,
+            secondUser.TenantId);
+
+        Assert.Equal(
+            firstUser.NormalizedEmail,
+            secondUser.NormalizedEmail);
 
         await transaction.RollbackAsync();
     }

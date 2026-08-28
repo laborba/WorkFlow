@@ -179,3 +179,101 @@ Accept: application/json
 
 GET {{WorkFlow_API_HostAddress}}/api/tenants?pageNumber=1&pageSize=101
 Accept: application/json
+
+### Cadastrar usuário em uma empresa
+
+POST {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07/users
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Teste API",
+  "email": "usuario-teste-api@test.local",
+  "password": "uma senha longa e segura",
+  "role": 4
+}
+
+### Tentar cadastrar e-mail duplicado na mesma empresa
+
+POST {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07/users
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Outro Usuário",
+  "email": "usuario-teste-api@test.local",
+  "password": "outra senha longa e segura",
+  "role": 4
+}
+
+### Cadastrar usuário em empresa inexistente
+
+POST {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/users
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário sem Empresa",
+  "email": "sem-empresa@test.local",
+  "password": "uma senha longa e segura",
+  "role": 4
+}
+
+### Tentar cadastrar SystemAdmin em uma empresa
+
+POST {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07/users
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Administrador do Sistema",
+  "email": "system-admin@test.local",
+  "password": "uma senha longa e segura",
+  "role": 1
+}
+
+### Cadastrar usuário com senha abaixo do mínimo
+
+POST {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07/users
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Senha Curta",
+  "email": "senha-curta@test.local",
+  "password": "12345678901234",
+  "role": 4
+}
+
+### Desativar empresa para testar cadastro de usuário
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+### Tentar cadastrar usuário em empresa inativa
+
+POST {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Empresa Inativa",
+  "email": "empresa-inativa@test.local",
+  "password": "uma senha longa e segura",
+  "role": 4
+}
+
+### Reativar uma empresa inativa
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": true
+}

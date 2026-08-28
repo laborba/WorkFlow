@@ -35,6 +35,10 @@ public sealed class UserConfiguration :
             .HasColumnName("email")
             .IsRequired();
 
+        builder.Property(user => user.NormalizedEmail)
+            .HasColumnName("normalized_email")
+            .IsRequired();
+
         builder.Property(user => user.PasswordHash)
             .HasColumnName("password_hash")
             .IsRequired();
@@ -65,18 +69,18 @@ public sealed class UserConfiguration :
                 user => new
                 {
                     user.TenantId,
-                    user.Email
+                    user.NormalizedEmail
                 })
             .IsUnique()
             .HasFilter("tenant_id IS NOT NULL")
             .HasDatabaseName(
-                "ux_users_tenant_id_email");
+                "ux_users_tenant_id_normalized_email");
 
-        builder.HasIndex(user => user.Email)
+        builder.HasIndex(user => user.NormalizedEmail)
             .IsUnique()
             .HasFilter("tenant_id IS NULL")
             .HasDatabaseName(
-                "ux_users_system_admin_email");
+                "ux_users_system_admin_normalized_email");
 
         builder.HasOne<Tenant>()
             .WithMany()

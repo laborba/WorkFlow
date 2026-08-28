@@ -406,4 +406,47 @@ public class UserTests
         Assert.Equal(1, user.TenantId);
         Assert.Null(user.UpdatedAt);
     }
+
+    [Fact]
+    public void Constructor_ShouldNormalizeEmail_WhenEmailIsValid()
+    {
+        var user = new User(
+            1,
+            "Lucas",
+            "  Lucas.Teste@Empresa.COM  ",
+            "valid-password-hash",
+            UserRole.Member);
+
+        Assert.Equal(
+            "Lucas.Teste@Empresa.COM",
+            user.Email);
+
+        Assert.Equal(
+            "LUCAS.TESTE@EMPRESA.COM",
+            user.NormalizedEmail);
+    }
+
+    [Fact]
+    public void ChangeEmail_ShouldUpdateNormalizedEmail_WhenEmailChanges()
+    {
+        var user = new User(
+            1,
+            "Lucas",
+            "old@email.com",
+            "valid-password-hash",
+            UserRole.Member);
+
+        user.ChangeEmail(
+            "  Novo.Email@Empresa.COM  ");
+
+        Assert.Equal(
+            "Novo.Email@Empresa.COM",
+            user.Email);
+
+        Assert.Equal(
+            "NOVO.EMAIL@EMPRESA.COM",
+            user.NormalizedEmail);
+
+        Assert.NotNull(user.UpdatedAt);
+    }
 }

@@ -13,4 +13,9 @@ public static class TenantErrors
         new(
             "Tenants.NotFound",
             "A empresa informada não foi encontrada.");
+
+    public static Error Inactive { get; } =
+        new(
+            "Tenants.Inactive",
+            "Não é possível realizar esta operação porque a empresa está desativada.");
 }
