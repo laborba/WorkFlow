@@ -188,7 +188,20 @@ Accept: application/json
 
 {
   "name": "Usuário Teste API",
-  "email": "usuario-teste-api@test.local",
+  "email": "uSuario-testE-api@test.local",
+  "password": "uma senha longa e segura",
+  "role": 4
+}
+
+### Cadastrar usuario nova empresa
+
+POST {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Outra Empresa",
+  "email": "Usuario-Teste-API@Test.Local",
   "password": "uma senha longa e segura",
   "role": 4
 }
@@ -277,3 +290,23 @@ Accept: application/json
 {
   "isActive": true
 }
+
+### Consultar usuário pelo PublicId
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
+Accept: application/json
+
+### Tentar consultar usuário de outra empresa
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
+Accept: application/json
+
+### Consultar usuário inexistente
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/11111111-1111-1111-1111-111111111111
+Accept: application/json
+
+### Consultar usuário em empresa inexistente
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
+Accept: application/json

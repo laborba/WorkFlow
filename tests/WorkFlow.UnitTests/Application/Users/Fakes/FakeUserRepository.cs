@@ -13,6 +13,12 @@ internal sealed class FakeUserRepository : IUserRepository
 
     public User? AddedUser { get; private set; }
 
+    public User? UserToReturn { get; set; }
+
+    public long? CheckedGetByPublicIdTenantId { get; private set; }
+
+    public Guid? CheckedPublicId { get; private set; }
+
     public Task<bool> ExistsByEmailAsync(
         long tenantId,
         string email,
@@ -26,6 +32,21 @@ internal sealed class FakeUserRepository : IUserRepository
 
         return Task.FromResult(
             EmailExists);
+    }
+
+    public Task<User?> GetByPublicIdAsync(
+        long tenantId,
+        Guid publicId,
+        CancellationToken cancellationToken = default)
+    {
+        CheckedGetByPublicIdTenantId =
+            tenantId;
+
+        CheckedPublicId =
+            publicId;
+
+        return Task.FromResult(
+            UserToReturn);
     }
 
     public Task AddAsync(

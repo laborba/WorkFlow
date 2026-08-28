@@ -4,6 +4,7 @@ using WorkFlow.API.Contracts.Users;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Application.Users.CreateUser;
+using WorkFlow.Application.Users.GetUserByPublicId;
 
 namespace WorkFlow.API.Controllers;
 
@@ -14,11 +15,18 @@ public sealed class UsersController : ControllerBase
     private readonly CreateUserHandler
         _createUserHandler;
 
+    private readonly GetUserByPublicIdHandler
+        _getUserByPublicIdHandler;
+
     public UsersController(
-        CreateUserHandler createUserHandler)
+        CreateUserHandler createUserHandler,
+        GetUserByPublicIdHandler getUserByPublicIdHandler)
     {
         _createUserHandler =
             createUserHandler;
+
+        _getUserByPublicIdHandler =
+            getUserByPublicIdHandler;
     }
 
     [HttpPost]
@@ -92,6 +100,67 @@ public sealed class UsersController : ControllerBase
             $"/api/tenants/" +
             $"{response.TenantPublicId}/users/" +
             $"{response.PublicId}",
+            response);
+    }
+
+    [HttpGet("{userPublicId:guid}")]
+    [ProducesResponseType<GetUserByPublicIdResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<GetUserByPublicIdResponse>> GetByPublicId(
+        Guid tenantPublicId,
+        Guid userPublicId,
+        CancellationToken cancellationToken)
+    {
+        var query =
+            new GetUserByPublicIdQuery(
+                tenantPublicId,
+                userPublicId);
+
+        var result =
+            await _getUserByPublicIdHandler.HandleAsync(
+                query,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound ||
+                error == UserErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var user =
+            result.Value!;
+
+        var response =
+            new GetUserByPublicIdResponse(
+                user.PublicId,
+                user.TenantPublicId,
+                user.Name,
+                user.Email,
+                user.Role,
+                user.IsActive,
+                user.CreatedAt,
+                user.UpdatedAt);
+
+        return Ok(
             response);
     }
 }

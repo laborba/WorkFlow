@@ -357,4 +357,58 @@ SaveChanges_ShouldAllowSameEmail_WhenUsersBelongToDifferentTenants()
 
         await transaction.RollbackAsync();
     }
+
+    [Fact]
+    public async Task
+    GetByPublicIdAsync_ShouldReturnNull_WhenUserBelongsToDifferentTenant()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var firstTenant = new Tenant(
+            "Primeira Empresa",
+            $"registration-first-{uniqueValue}",
+            $"first-{uniqueValue}@test.local");
+
+        var secondTenant = new Tenant(
+            "Segunda Empresa",
+            $"registration-second-{uniqueValue}",
+            $"second-{uniqueValue}@test.local");
+
+        context.Tenants.Add(firstTenant);
+        context.Tenants.Add(secondTenant);
+
+        await context.SaveChangesAsync();
+
+        var user = new User(
+            secondTenant.Id,
+            "Usuário da Segunda Empresa",
+            $"user-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        context.Users.Add(user);
+
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new UserRepository(context);
+
+        var result =
+            await repository.GetByPublicIdAsync(
+                firstTenant.Id,
+                user.PublicId);
+
+        Assert.Null(result);
+
+        await transaction.RollbackAsync();
+    }
 }

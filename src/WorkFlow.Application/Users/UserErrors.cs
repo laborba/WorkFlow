@@ -4,6 +4,11 @@ namespace WorkFlow.Application.Users;
 
 public static class UserErrors
 {
+    public static Error NotFound { get; } =
+        new(
+            "Users.NotFound",
+            "O usuário informado não foi encontrado.");
+
     public static Error EmailAlreadyExists { get; } =
         new(
             "Users.EmailAlreadyExists",
