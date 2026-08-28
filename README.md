@@ -45,6 +45,10 @@ Atualmente estão implementados:
 - normalização de e-mail;
 - unicidade de e-mail case-insensitive dentro da mesma empresa;
 - possibilidade de reutilizar o mesmo e-mail em empresas diferentes.
+- listagem paginada de usuários por empresa;
+- busca de usuários por nome ou e-mail;
+- filtro por perfil;
+- filtro por status ativo/inativo;
 
 ### Persistência
 
@@ -60,7 +64,7 @@ Atualmente estão implementados:
 Última validação local:
 
 ```text
-514 testes automatizados aprovados
+530 testes automatizados aprovados
 0 falhas
 ```
 
@@ -522,6 +526,61 @@ PasswordHash
 NormalizedEmail
 ```
 
+---
+
+### Listar usuários de uma empresa
+
+```http
+GET /api/tenants/{tenantPublicId}/users
+```
+
+Parâmetros disponíveis:
+
+```text
+pageNumber
+pageSize
+role
+isActive
+search
+```
+
+Exemplo:
+
+```http
+GET /api/tenants/{tenantPublicId}/users?pageNumber=1&pageSize=20&role=4&isActive=true&search=lucas
+```
+
+A listagem é sempre limitada ao Tenant informado na rota.
+
+Os filtros são opcionais:
+
+- `pageNumber`: número da página, começando em `1`;
+- `pageSize`: quantidade de itens por página, entre `1` e `100`;
+- `role`: perfil do usuário;
+- `isActive`: filtra usuários ativos ou inativos;
+- `search`: pesquisa por nome ou e-mail, sem diferenciação entre maiúsculas e minúsculas.
+
+Exemplo de resposta:
+
+```json
+{
+  "items": [
+    {
+      "publicId": "00000000-0000-0000-0000-000000000000",
+      "name": "Usuário Teste",
+      "email": "usuario@empresa.com",
+      "role": 4,
+      "isActive": true,
+      "createdAt": "2026-01-01T12:00:00Z",
+      "updatedAt": null
+    }
+  ],
+  "pageNumber": 1,
+  "pageSize": 20,
+  "totalCount": 1,
+  "totalPages": 1
+}
+```
 ---
 
 # Tratamento de erros
@@ -1017,7 +1076,7 @@ Essa camada ainda não está implementada.
 - [x] Normalização de e-mail
 - [x] Unicidade case-insensitive
 - [x] Consulta individual por Tenant
-- [ ] Listagem de usuários
+- [x] Listagem de usuários
 - [ ] Atualização de usuário
 - [ ] Ativação/desativação de usuário
 - [ ] Alteração de perfil
@@ -1170,7 +1229,7 @@ Commit
 .NET 10
 Entity Framework Core 10
 PostgreSQL
-514 testes automatizados aprovados
+530 testes automatizados aprovados
 ```
 
 ---

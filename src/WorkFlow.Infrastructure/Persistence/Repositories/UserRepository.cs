@@ -2,6 +2,9 @@
 using WorkFlow.Application.Abstractions.Persistence;
 using WorkFlow.Domain.Entities;
 using WorkFlow.Domain.Common;
+using WorkFlow.Application.Common.Pagination;
+using WorkFlow.Domain.Enums;
+
 
 namespace WorkFlow.Infrastructure.Persistence.Repositories;
 
@@ -42,6 +45,67 @@ public sealed class UserRepository : IUserRepository
                     user.TenantId == tenantId &&
                     user.PublicId == publicId,
                 cancellationToken);
+    }
+
+    public async Task<PagedData<User>> GetPagedAsync(
+        long tenantId,
+        int pageNumber,
+        int pageSize,
+        UserRole? role,
+        bool? isActive,
+        string? search,
+        CancellationToken cancellationToken = default)
+    {
+        var query =
+            _context.Users
+                .AsNoTracking()
+                .Where(user =>
+                    user.TenantId == tenantId);
+
+        if (role.HasValue)
+        {
+            query = query.Where(
+                user =>
+                    user.Role == role.Value);
+        }
+
+        if (isActive.HasValue)
+        {
+            query = query.Where(
+                user =>
+                    user.IsActive == isActive.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchPattern =
+                $"%{search.Trim()}%";
+
+            query = query.Where(
+                user =>
+                    EF.Functions.ILike(
+                        user.Name,
+                        searchPattern) ||
+                    EF.Functions.ILike(
+                        user.Email,
+                        searchPattern));
+        }
+
+        var totalCount =
+            await query.CountAsync(
+                cancellationToken);
+
+        var items =
+            await query
+                .OrderBy(user => user.Name)
+                .ThenBy(user => user.Id)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+
+        return new PagedData<User>(
+            items,
+            totalCount);
     }
 
     public async Task AddAsync(

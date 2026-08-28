@@ -310,3 +310,63 @@ Accept: application/json
 
 GET {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
 Accept: application/json
+
+### Listar usuários da empresa
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users
+Accept: application/json
+
+### Listar usuários com paginação
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users?pageNumber=1&pageSize=1
+Accept: application/json
+
+### Listar usuários filtrando por perfil
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users?role=4
+Accept: application/json
+
+### Listar usuários filtrando por perfil sem resultados
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users?role=3
+Accept: application/json
+
+### Listar usuários ativos
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users?isActive=true
+Accept: application/json
+
+### Listar usuários inativos
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users?isActive=false
+Accept: application/json
+
+### Pesquisar usuário pelo nome
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users?search=outra
+Accept: application/json
+
+### Pesquisar usuário pelo e-mail
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users?search=TESTE-API
+Accept: application/json
+
+### Listar usuários com número de página inválido
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users?pageNumber=0
+Accept: application/json
+
+### Listar usuários com tamanho de página acima do limite
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users?pageSize=101
+Accept: application/json
+
+### Listar usuários de empresa inexistente
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/users
+Accept: application/json
+
+### Listar usuários com perfil inválido
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users?role=99
+Accept: application/json

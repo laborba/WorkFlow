@@ -5,6 +5,8 @@ using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Application.Users.CreateUser;
 using WorkFlow.Application.Users.GetUserByPublicId;
+using WorkFlow.Application.Users.ListUsers;
+using WorkFlow.Domain.Enums;
 
 namespace WorkFlow.API.Controllers;
 
@@ -18,15 +20,22 @@ public sealed class UsersController : ControllerBase
     private readonly GetUserByPublicIdHandler
         _getUserByPublicIdHandler;
 
+    private readonly ListUsersHandler
+        _listUsersHandler;
+
     public UsersController(
         CreateUserHandler createUserHandler,
-        GetUserByPublicIdHandler getUserByPublicIdHandler)
+        GetUserByPublicIdHandler getUserByPublicIdHandler,
+        ListUsersHandler listUsersHandler)
     {
         _createUserHandler =
             createUserHandler;
 
         _getUserByPublicIdHandler =
             getUserByPublicIdHandler;
+
+        _listUsersHandler =
+            listUsersHandler;
     }
 
     [HttpPost]
@@ -159,6 +168,82 @@ public sealed class UsersController : ControllerBase
                 user.IsActive,
                 user.CreatedAt,
                 user.UpdatedAt);
+
+        return Ok(
+            response);
+    }
+
+    [HttpGet]
+    [ProducesResponseType<ListUsersResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ListUsersResponse>> List(
+        Guid tenantPublicId,
+        [FromQuery] ListUsersRequest request,
+        CancellationToken cancellationToken)
+    {
+        var query =
+            new ListUsersQuery(
+                tenantPublicId,
+                request.PageNumber,
+                request.PageSize,
+                request.Role.HasValue
+                    ? (UserRole?)request.Role.Value
+                    : null,
+                request.IsActive,
+                request.Search);
+
+        var result =
+            await _listUsersHandler.HandleAsync(
+                query,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var listedUsers =
+            result.Value!;
+
+        var items =
+            listedUsers.Items
+                .Select(user =>
+                    new UserListItemResponse(
+                        user.PublicId,
+                        user.Name,
+                        user.Email,
+                        user.Role,
+                        user.IsActive,
+                        user.CreatedAt,
+                        user.UpdatedAt))
+                .ToArray();
+
+        var response =
+            new ListUsersResponse(
+                items,
+                listedUsers.PageNumber,
+                listedUsers.PageSize,
+                listedUsers.TotalCount,
+                listedUsers.TotalPages);
 
         return Ok(
             response);

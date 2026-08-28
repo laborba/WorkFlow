@@ -6,6 +6,7 @@ using WorkFlow.Application.Tenants.UpdateTenant;
 using WorkFlow.Application.Tenants.ListTenants;
 using WorkFlow.Application.Users.CreateUser;
 using WorkFlow.Application.Users.GetUserByPublicId;
+using WorkFlow.Application.Users.ListUsers;
 
 namespace WorkFlow.Application;
 
@@ -21,6 +22,7 @@ public static class DependencyInjection
         services.AddScoped<ListTenantsHandler>();
         services.AddScoped<CreateUserHandler>();
         services.AddScoped<GetUserByPublicIdHandler>();
+        services.AddScoped<ListUsersHandler>();
 
         return services;
     }

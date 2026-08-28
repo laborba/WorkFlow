@@ -411,4 +411,576 @@ SaveChanges_ShouldAllowSameEmail_WhenUsersBelongToDifferentTenants()
 
         await transaction.RollbackAsync();
     }
+
+    [Fact]
+    public async Task
+    GetPagedAsync_ShouldReturnOnlyUsersFromRequestedTenant()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var firstTenant = new Tenant(
+            "Primeira Empresa",
+            $"registration-first-{uniqueValue}",
+            $"first-{uniqueValue}@test.local");
+
+        var secondTenant = new Tenant(
+            "Segunda Empresa",
+            $"registration-second-{uniqueValue}",
+            $"second-{uniqueValue}@test.local");
+
+        context.Tenants.Add(firstTenant);
+        context.Tenants.Add(secondTenant);
+
+        await context.SaveChangesAsync();
+
+        var firstTenantUser = new User(
+            firstTenant.Id,
+            "Usuário Primeira Empresa",
+            $"first-user-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        var secondTenantUser = new User(
+            secondTenant.Id,
+            "Usuário Segunda Empresa",
+            $"second-user-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        context.Users.Add(firstTenantUser);
+        context.Users.Add(secondTenantUser);
+
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new UserRepository(context);
+
+        var result =
+            await repository.GetPagedAsync(
+                firstTenant.Id,
+                pageNumber: 1,
+                pageSize: 20,
+                role: null,
+                isActive: null,
+                search: null);
+
+        var user =
+            Assert.Single(result.Items);
+
+        Assert.Equal(
+            firstTenantUser.PublicId,
+            user.PublicId);
+
+        Assert.Equal(
+            firstTenant.Id,
+            user.TenantId);
+
+        Assert.Equal(
+            1,
+            result.TotalCount);
+
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task
+    GetPagedAsync_ShouldFilterUsersByRole()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant = new Tenant(
+            "Empresa dos Usuários",
+            $"registration-{uniqueValue}",
+            $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(tenant);
+
+        await context.SaveChangesAsync();
+
+        var member = new User(
+            tenant.Id,
+            "Usuário Member",
+            $"member-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        var projectManager = new User(
+            tenant.Id,
+            "Usuário Gerente",
+            $"manager-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.ProjectManager);
+
+        context.Users.Add(member);
+        context.Users.Add(projectManager);
+
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new UserRepository(context);
+
+        var result =
+            await repository.GetPagedAsync(
+                tenant.Id,
+                pageNumber: 1,
+                pageSize: 20,
+                role: UserRole.ProjectManager,
+                isActive: null,
+                search: null);
+
+        var user =
+            Assert.Single(result.Items);
+
+        Assert.Equal(
+            projectManager.PublicId,
+            user.PublicId);
+
+        Assert.Equal(
+            UserRole.ProjectManager,
+            user.Role);
+
+        Assert.Equal(
+            1,
+            result.TotalCount);
+
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task
+    GetPagedAsync_ShouldFilterUsersByIsActive()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant = new Tenant(
+            "Empresa dos Usuários",
+            $"registration-{uniqueValue}",
+            $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(tenant);
+
+        await context.SaveChangesAsync();
+
+        var activeUser = new User(
+            tenant.Id,
+            "Usuário Ativo",
+            $"active-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        var inactiveUser = new User(
+            tenant.Id,
+            "Usuário Inativo",
+            $"inactive-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        inactiveUser.Deactivate();
+
+        context.Users.Add(activeUser);
+        context.Users.Add(inactiveUser);
+
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new UserRepository(context);
+
+        var result =
+            await repository.GetPagedAsync(
+                tenant.Id,
+                pageNumber: 1,
+                pageSize: 20,
+                role: null,
+                isActive: false,
+                search: null);
+
+        var user =
+            Assert.Single(result.Items);
+
+        Assert.Equal(
+            inactiveUser.PublicId,
+            user.PublicId);
+
+        Assert.False(
+            user.IsActive);
+
+        Assert.Equal(
+            1,
+            result.TotalCount);
+
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task
+    GetPagedAsync_ShouldFilterUsersByNameSearch()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant = new Tenant(
+            "Empresa dos Usuários",
+            $"registration-{uniqueValue}",
+            $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(tenant);
+
+        await context.SaveChangesAsync();
+
+        var firstUser = new User(
+            tenant.Id,
+            "Lucas Aaron",
+            $"lucas-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        var secondUser = new User(
+            tenant.Id,
+            "Maria Silva",
+            $"maria-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        context.Users.Add(firstUser);
+        context.Users.Add(secondUser);
+
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new UserRepository(context);
+
+        var result =
+            await repository.GetPagedAsync(
+                tenant.Id,
+                pageNumber: 1,
+                pageSize: 20,
+                role: null,
+                isActive: null,
+                search: "lUcAs");
+
+        var user =
+            Assert.Single(result.Items);
+
+        Assert.Equal(
+            firstUser.PublicId,
+            user.PublicId);
+
+        Assert.Equal(
+            1,
+            result.TotalCount);
+
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task
+GetPagedAsync_ShouldFilterUsersByEmailSearch()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant = new Tenant(
+            "Empresa dos Usuários",
+            $"registration-{uniqueValue}",
+            $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(tenant);
+
+        await context.SaveChangesAsync();
+
+        var firstUser = new User(
+            tenant.Id,
+            "Primeiro Usuário",
+            $"financeiro-{uniqueValue}@empresa.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        var secondUser = new User(
+            tenant.Id,
+            "Segundo Usuário",
+            $"suporte-{uniqueValue}@empresa.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        context.Users.Add(firstUser);
+        context.Users.Add(secondUser);
+
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new UserRepository(context);
+
+        var result =
+            await repository.GetPagedAsync(
+                tenant.Id,
+                pageNumber: 1,
+                pageSize: 20,
+                role: null,
+                isActive: null,
+                search: "FiNaNcEiRo");
+
+        var user =
+            Assert.Single(result.Items);
+
+        Assert.Equal(
+            firstUser.PublicId,
+            user.PublicId);
+
+        Assert.Equal(
+            1,
+            result.TotalCount);
+
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task
+    GetPagedAsync_ShouldPaginateAndOrderByNameThenId()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant = new Tenant(
+            "Empresa dos Usuários",
+            $"registration-{uniqueValue}",
+            $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(tenant);
+
+        await context.SaveChangesAsync();
+
+        var firstAna = new User(
+            tenant.Id,
+            "Ana",
+            $"ana-1-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        context.Users.Add(firstAna);
+        await context.SaveChangesAsync();
+
+        var secondAna = new User(
+            tenant.Id,
+            "Ana",
+            $"ana-2-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        context.Users.Add(secondAna);
+        await context.SaveChangesAsync();
+
+        var bruno = new User(
+            tenant.Id,
+            "Bruno",
+            $"bruno-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        context.Users.Add(bruno);
+        await context.SaveChangesAsync();
+
+        var carlos = new User(
+            tenant.Id,
+            "Carlos",
+            $"carlos-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        context.Users.Add(carlos);
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new UserRepository(context);
+
+        var firstPage =
+            await repository.GetPagedAsync(
+                tenant.Id,
+                pageNumber: 1,
+                pageSize: 2,
+                role: null,
+                isActive: null,
+                search: null);
+
+        var secondPage =
+            await repository.GetPagedAsync(
+                tenant.Id,
+                pageNumber: 2,
+                pageSize: 2,
+                role: null,
+                isActive: null,
+                search: null);
+
+        Assert.Equal(
+            4,
+            firstPage.TotalCount);
+
+        Assert.Equal(
+            4,
+            secondPage.TotalCount);
+
+        Assert.Equal(
+            new[]
+            {
+            firstAna.PublicId,
+            secondAna.PublicId
+            },
+            firstPage.Items
+                .Select(user => user.PublicId)
+                .ToArray());
+
+        Assert.Equal(
+            new[]
+            {
+            bruno.PublicId,
+            carlos.PublicId
+            },
+            secondPage.Items
+                .Select(user => user.PublicId)
+                .ToArray());
+
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task
+GetPagedAsync_ShouldCombineRoleIsActiveAndSearchFilters()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant = new Tenant(
+            "Empresa dos Usuários",
+            $"registration-{uniqueValue}",
+            $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(tenant);
+
+        await context.SaveChangesAsync();
+
+        var matchingUser = new User(
+            tenant.Id,
+            "Lucas Gerente",
+            $"lucas-manager-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.ProjectManager);
+
+        matchingUser.Deactivate();
+
+        var wrongRole = new User(
+            tenant.Id,
+            "Lucas Membro",
+            $"lucas-member-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        wrongRole.Deactivate();
+
+        var wrongStatus = new User(
+            tenant.Id,
+            "Lucas Gerente Ativo",
+            $"lucas-active-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.ProjectManager);
+
+        var wrongSearch = new User(
+            tenant.Id,
+            "Maria Gerente",
+            $"maria-manager-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.ProjectManager);
+
+        wrongSearch.Deactivate();
+
+        context.Users.AddRange(
+            matchingUser,
+            wrongRole,
+            wrongStatus,
+            wrongSearch);
+
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new UserRepository(context);
+
+        var result =
+            await repository.GetPagedAsync(
+                tenant.Id,
+                pageNumber: 1,
+                pageSize: 20,
+                role: UserRole.ProjectManager,
+                isActive: false,
+                search: "lucas");
+
+        var user =
+            Assert.Single(result.Items);
+
+        Assert.Equal(
+            matchingUser.PublicId,
+            user.PublicId);
+
+        Assert.Equal(
+            1,
+            result.TotalCount);
+
+        await transaction.RollbackAsync();
+    }
 }
