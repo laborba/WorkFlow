@@ -16,6 +16,11 @@ public interface IUserRepository
         Guid publicId,
         CancellationToken cancellationToken = default);
 
+    Task<User?> GetTrackedByPublicIdAsync(
+        long tenantId,
+        Guid publicId,
+        CancellationToken cancellationToken = default);
+
     Task<PagedData<User>> GetPagedAsync(
         long tenantId,
         int pageNumber,

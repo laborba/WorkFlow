@@ -6,6 +6,7 @@ using WorkFlow.Application.Users;
 using WorkFlow.Application.Users.CreateUser;
 using WorkFlow.Application.Users.GetUserByPublicId;
 using WorkFlow.Application.Users.ListUsers;
+using WorkFlow.Application.Users.UpdateUser;
 using WorkFlow.Domain.Enums;
 
 namespace WorkFlow.API.Controllers;
@@ -23,10 +24,14 @@ public sealed class UsersController : ControllerBase
     private readonly ListUsersHandler
         _listUsersHandler;
 
+    private readonly UpdateUserHandler
+        _updateUserHandler;
+
     public UsersController(
         CreateUserHandler createUserHandler,
         GetUserByPublicIdHandler getUserByPublicIdHandler,
-        ListUsersHandler listUsersHandler)
+        ListUsersHandler listUsersHandler,
+        UpdateUserHandler updateUserHandler)
     {
         _createUserHandler =
             createUserHandler;
@@ -36,6 +41,9 @@ public sealed class UsersController : ControllerBase
 
         _listUsersHandler =
             listUsersHandler;
+
+        _updateUserHandler =
+            updateUserHandler;
     }
 
     [HttpPost]
@@ -244,6 +252,79 @@ public sealed class UsersController : ControllerBase
                 listedUsers.PageSize,
                 listedUsers.TotalCount,
                 listedUsers.TotalPages);
+
+        return Ok(
+            response);
+    }
+
+    [HttpPut("{userPublicId:guid}")]
+    [ProducesResponseType<UpdateUserResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<UpdateUserResponse>> Update(
+        Guid tenantPublicId,
+        Guid userPublicId,
+        [FromBody] UpdateUserRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command =
+            new UpdateUserCommand(
+                tenantPublicId,
+                userPublicId,
+                request.Name,
+                request.Email);
+
+        var result =
+            await _updateUserHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound ||
+                error == UserErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            if (error == TenantErrors.Inactive ||
+                error == UserErrors.EmailAlreadyExists)
+            {
+                return Conflict(
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var updatedUser =
+            result.Value!;
+
+        var response =
+            new UpdateUserResponse(
+                updatedUser.PublicId,
+                updatedUser.TenantPublicId,
+                updatedUser.Name,
+                updatedUser.Email,
+                updatedUser.Role,
+                updatedUser.IsActive,
+                updatedUser.CreatedAt,
+                updatedUser.UpdatedAt);
 
         return Ok(
             response);

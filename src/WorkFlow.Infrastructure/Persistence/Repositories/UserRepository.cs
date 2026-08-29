@@ -19,9 +19,9 @@ public sealed class UserRepository : IUserRepository
     }
 
     public Task<bool> ExistsByEmailAsync(
-    long tenantId,
-    string email,
-    CancellationToken cancellationToken = default)
+        long tenantId,
+        string email,
+        CancellationToken cancellationToken = default)
     {
         var normalizedEmail =
             EmailNormalizer.Normalize(email);
@@ -34,12 +34,25 @@ public sealed class UserRepository : IUserRepository
     }
 
     public Task<User?> GetByPublicIdAsync(
-    long tenantId,
-    Guid publicId,
-    CancellationToken cancellationToken = default)
+        long tenantId,
+        Guid publicId,
+        CancellationToken cancellationToken = default)
     {
         return _context.Users
             .AsNoTracking()
+            .SingleOrDefaultAsync(
+                user =>
+                    user.TenantId == tenantId &&
+                    user.PublicId == publicId,
+                cancellationToken);
+    }
+
+    public Task<User?> GetTrackedByPublicIdAsync(
+        long tenantId,
+        Guid publicId,
+        CancellationToken cancellationToken = default)
+    {
+        return _context.Users
             .SingleOrDefaultAsync(
                 user =>
                     user.TenantId == tenantId &&

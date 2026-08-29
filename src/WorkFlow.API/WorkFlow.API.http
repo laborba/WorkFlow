@@ -370,3 +370,173 @@ Accept: application/json
 
 GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users?role=99
 Accept: application/json
+
+### Atualizar usuário existente
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Atualizado API",
+  "email": "usuario-atualizado-api@test.local"
+}
+
+### Confirmar atualização do usuário
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
+Accept: application/json
+
+### Atualizar usuário inexistente
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/11111111-1111-1111-1111-111111111111
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Inexistente",
+  "email": "usuario-inexistente@test.local"
+}
+
+### Atualizar usuário em empresa inexistente
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Atualizado",
+  "email": "usuario-atualizado@test.local"
+}
+
+### Tentar atualizar usuário de outra empresa
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Tentativa Entre Empresas",
+  "email": "tentativa-entre-empresas@test.local"
+}
+
+### Tentar atualizar usuário com e-mail já utilizado na mesma empresa
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Atualizado API",
+  "email": "Usuario-Teste-API@Test.Local"
+}
+
+### Cadastrar segundo usuário para testar e-mail duplicado na atualização
+
+POST {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Segundo Usuário Teste",
+  "email": "segundo-usuario-update@test.local",
+  "password": "uma senha longa e segura",
+  "role": 4
+}
+
+### Tentar atualizar usuário com e-mail já utilizado por outro usuário da mesma empresa
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Atualizado API",
+  "email": "SEGUNDO-USUARIO-UPDATE@TEST.LOCAL"
+}
+
+### Tentar atualizar usuário com nome vazio
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "   ",
+  "email": "Usuario-Teste-API@Test.Local"
+}
+
+### Tentar atualizar usuário com e-mail vazio
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Atualizado API",
+  "email": "   "
+}
+
+### Atualizar usuário mantendo o mesmo e-mail normalizado
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Atualizado Mesmo Email",
+  "email": "usuario-teste-api@test.local"
+}
+
+### Desativar empresa para testar atualização de usuário
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+### Tentar atualizar usuário em empresa inativa
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Não Deve Atualizar",
+  "email": "usuario-inativo-update@test.local"
+}
+
+### Reativar empresa após teste de atualização de usuário
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": true
+}
+
+### Tentar atualizar usuário com PublicId vazio
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/00000000-0000-0000-0000-000000000000
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Teste",
+  "email": "usuario-publicid-vazio@test.local"
+}
+
+### Tentar atualizar usuário com TenantPublicId vazio
+
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/00000000-0000-0000-0000-000000000000/users/1c5cf21b-056d-4a03-917d-72bd5e62e800
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Teste",
+  "email": "usuario-tenant-vazio@test.local"
+}

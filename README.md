@@ -35,6 +35,7 @@ Atualmente estão implementados:
 
 - cadastro de usuários vinculados a uma empresa;
 - consulta individual por `PublicId`;
+- atualização de nome e e-mail do usuário;
 - isolamento do usuário pelo Tenant;
 - perfis de usuário;
 - validação de empresa existente;
@@ -64,7 +65,7 @@ Atualmente estão implementados:
 Última validação local:
 
 ```text
-530 testes automatizados aprovados
+542 testes automatizados aprovados
 0 falhas
 ```
 
@@ -583,6 +584,59 @@ Exemplo de resposta:
 ```
 ---
 
+### Atualizar usuário dentro de uma empresa
+
+```http
+PUT /api/tenants/{tenantPublicId}/users/{userPublicId}
+```
+
+Exemplo:
+
+```json
+{
+  "name": "Usuário Atualizado",
+  "email": "usuario-atualizado@empresa.com"
+}
+```
+
+Campos disponíveis para atualização:
+
+- `name`: nome do usuário;
+- `email`: e-mail do usuário.
+
+Este endpoint não altera:
+
+- perfil;
+- senha;
+- status ativo/inativo.
+
+O usuário é localizado obrigatoriamente dentro do Tenant informado na rota.
+
+Um `userPublicId` pertencente a outro Tenant retorna:
+
+```text
+Users.NotFound
+```
+
+O e-mail deve continuar sendo único dentro da mesma empresa, sem diferenciação entre maiúsculas e minúsculas.
+
+Exemplo de resposta:
+
+```json
+{
+  "publicId": "00000000-0000-0000-0000-000000000000",
+  "tenantPublicId": "00000000-0000-0000-0000-000000000000",
+  "name": "Usuário Atualizado",
+  "email": "usuario-atualizado@empresa.com",
+  "role": 4,
+  "isActive": true,
+  "createdAt": "2026-01-01T12:00:00Z",
+  "updatedAt": "2026-01-02T15:30:00Z"
+}
+```
+
+---
+
 # Tratamento de erros
 
 A API utiliza códigos de erro estáveis.
@@ -1077,7 +1131,7 @@ Essa camada ainda não está implementada.
 - [x] Unicidade case-insensitive
 - [x] Consulta individual por Tenant
 - [x] Listagem de usuários
-- [ ] Atualização de usuário
+- [x] Atualização de usuário
 - [ ] Ativação/desativação de usuário
 - [ ] Alteração de perfil
 - [ ] Recuperação de senha
@@ -1229,7 +1283,7 @@ Commit
 .NET 10
 Entity Framework Core 10
 PostgreSQL
-530 testes automatizados aprovados
+542 testes automatizados aprovados
 ```
 
 ---
