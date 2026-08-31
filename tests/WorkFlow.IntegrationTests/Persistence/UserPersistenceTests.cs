@@ -1195,4 +1195,78 @@ GetPagedAsync_ShouldCombineRoleIsActiveAndSearchFilters()
 
         await transaction.RollbackAsync();
     }
+
+    [Fact]
+    public async Task
+    GetTrackedByPublicIdAsync_ShouldPersistUserRoleChange()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant = new Tenant(
+            "Empresa do Usuário",
+            $"registration-{uniqueValue}",
+            $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(tenant);
+
+        await context.SaveChangesAsync();
+
+        var user = new User(
+            tenant.Id,
+            "Usuário de Teste",
+            $"user-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        context.Users.Add(user);
+
+        await context.SaveChangesAsync();
+
+        var userPublicId =
+            user.PublicId;
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new UserRepository(context);
+
+        var trackedUser =
+            await repository.GetTrackedByPublicIdAsync(
+                tenant.Id,
+                userPublicId);
+
+        Assert.NotNull(
+            trackedUser);
+
+        trackedUser!.ChangeRole(
+            UserRole.ProjectManager);
+
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var persistedUser =
+            await context.Users
+                .AsNoTracking()
+                .SingleAsync(
+                    currentUser =>
+                        currentUser.PublicId ==
+                        userPublicId);
+
+        Assert.Equal(
+            UserRole.ProjectManager,
+            persistedUser.Role);
+
+        Assert.NotNull(
+            persistedUser.UpdatedAt);
+
+        await transaction.RollbackAsync();
+    }
 }

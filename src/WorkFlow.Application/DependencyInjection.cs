@@ -9,6 +9,7 @@ using WorkFlow.Application.Users.GetUserByPublicId;
 using WorkFlow.Application.Users.ListUsers;
 using WorkFlow.Application.Users.UpdateUser;
 using WorkFlow.Application.Users.ChangeUserStatus;
+using WorkFlow.Application.Users.ChangeUserRole;
 
 namespace WorkFlow.Application;
 
@@ -27,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<ListUsersHandler>();
         services.AddScoped<UpdateUserHandler>();
         services.AddScoped<ChangeUserStatusHandler>();
+        services.AddScoped<ChangeUserRoleHandler>();
 
         return services;
     }

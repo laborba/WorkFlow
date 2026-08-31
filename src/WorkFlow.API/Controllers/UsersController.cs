@@ -9,6 +9,7 @@ using WorkFlow.Application.Users.ListUsers;
 using WorkFlow.Application.Users.UpdateUser;
 using WorkFlow.Domain.Enums;
 using WorkFlow.Application.Users.ChangeUserStatus;
+using WorkFlow.Application.Users.ChangeUserRole;
 
 namespace WorkFlow.API.Controllers;
 
@@ -31,12 +32,16 @@ public sealed class UsersController : ControllerBase
     private readonly ChangeUserStatusHandler
         _changeUserStatusHandler;
 
+    private readonly ChangeUserRoleHandler
+        _changeUserRoleHandler;
+
     public UsersController(
         CreateUserHandler createUserHandler,
         GetUserByPublicIdHandler getUserByPublicIdHandler,
         ListUsersHandler listUsersHandler,
         UpdateUserHandler updateUserHandler,
-        ChangeUserStatusHandler changeUserStatusHandler)
+        ChangeUserStatusHandler changeUserStatusHandler,
+        ChangeUserRoleHandler changeUserRoleHandler)
     {
         _createUserHandler =
             createUserHandler;
@@ -52,6 +57,9 @@ public sealed class UsersController : ControllerBase
 
         _changeUserStatusHandler =
             changeUserStatusHandler;
+
+        _changeUserRoleHandler =
+            changeUserRoleHandler;
     }
 
     [HttpPost]
@@ -404,4 +412,72 @@ public sealed class UsersController : ControllerBase
         return Ok(
             response);
     }
+
+    [HttpPatch("{userPublicId:guid}/role")]
+    [ProducesResponseType<ChangeUserRoleResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ChangeUserRoleResponse>> ChangeRole(
+        Guid tenantPublicId,
+        Guid userPublicId,
+    [FromBody] ChangeUserRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command =
+            new ChangeUserRoleCommand(
+                tenantPublicId,
+                userPublicId,
+                (UserRole)request.Role);
+
+        var result =
+            await _changeUserRoleHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound ||
+                error == UserErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            if (error == TenantErrors.Inactive)
+            {
+                return Conflict(
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var changedUser =
+            result.Value!;
+
+        var response =
+            new ChangeUserRoleResponse(
+                changedUser.PublicId,
+                changedUser.TenantPublicId,
+                changedUser.Role,
+                changedUser.UpdatedAt);
+
+        return Ok(
+            response);
+    }
+
 }

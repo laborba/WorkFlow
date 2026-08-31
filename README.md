@@ -37,6 +37,7 @@ Atualmente estão implementados:
 - consulta individual por `PublicId`;
 - atualização de nome e e-mail do usuário;
 - ativação e desativação de usuários;
+- alteração de perfil do usuário;
 - isolamento do usuário pelo Tenant;
 - perfis de usuário;
 - validação de empresa existente;
@@ -66,7 +67,7 @@ Atualmente estão implementados:
 Última validação local:
 
 ```text
-550 testes automatizados aprovados
+560 testes automatizados aprovados
 0 falhas
 ```
 
@@ -496,12 +497,63 @@ Exemplo:
 }
 ```
 
+Perfis disponíveis:
+
+```text
+1 = SystemAdmin
+2 = TenantAdmin
+3 = ProjectManager
+4 = Member
+```
+
+Usuários criados dentro de uma empresa não podem utilizar o perfil:
+
+```text
+SystemAdmin
+```
+
+Nesse caso, a API retorna:
+
+```text
+Users.SystemAdminCannotBelongToTenant
+```
+
+Não é permitido cadastrar usuários em uma empresa inativa.
+
+Nesse caso, a API retorna:
+
+```text
+Tenants.Inactive
+```
+
+O e-mail deve ser único dentro da mesma empresa, sem diferenciação entre maiúsculas e minúsculas.
+
+Por exemplo:
+
+```text
+usuario@empresa.com
+Usuario@Empresa.com
+USUARIO@EMPRESA.COM
+```
+
+são considerados o mesmo e-mail dentro do mesmo Tenant.
+
+O mesmo endereço de e-mail pode ser utilizado em empresas diferentes.
+
 ---
 
 ### Consultar usuário dentro de uma empresa
 
 ```http
 GET /api/tenants/{tenantPublicId}/users/{userPublicId}
+```
+
+O usuário é localizado obrigatoriamente dentro do Tenant informado na rota.
+
+Um `userPublicId` pertencente a outro Tenant retorna:
+
+```text
+Users.NotFound
 ```
 
 Exemplo de resposta:
@@ -583,6 +635,7 @@ Exemplo de resposta:
   "totalPages": 1
 }
 ```
+
 ---
 
 ### Atualizar usuário dentro de uma empresa
@@ -620,6 +673,22 @@ Users.NotFound
 ```
 
 O e-mail deve continuar sendo único dentro da mesma empresa, sem diferenciação entre maiúsculas e minúsculas.
+
+Caso outro usuário do mesmo Tenant já utilize o e-mail informado, a API retorna:
+
+```text
+Users.EmailAlreadyExists
+```
+
+Alterar apenas a capitalização do próprio e-mail é permitido.
+
+Por exemplo:
+
+```text
+usuario@empresa.com
+↓
+Usuario@Empresa.com
+```
 
 Exemplo de resposta:
 
@@ -683,6 +752,86 @@ Exemplo de resposta:
   "publicId": "00000000-0000-0000-0000-000000000000",
   "tenantPublicId": "00000000-0000-0000-0000-000000000000",
   "isActive": false,
+  "updatedAt": "2026-08-31T12:00:00Z"
+}
+```
+
+---
+
+### Alterar perfil do usuário
+
+```http
+PATCH /api/tenants/{tenantPublicId}/users/{userPublicId}/role
+```
+
+Exemplo:
+
+```json
+{
+  "role": 3
+}
+```
+
+Perfis disponíveis:
+
+```text
+1 = SystemAdmin
+2 = TenantAdmin
+3 = ProjectManager
+4 = Member
+```
+
+Usuários vinculados a uma empresa não podem assumir o perfil:
+
+```text
+SystemAdmin
+```
+
+Nesse caso, a API retorna:
+
+```text
+Users.SystemAdminCannotBelongToTenant
+```
+
+O usuário é localizado obrigatoriamente dentro do Tenant informado na rota.
+
+Um `userPublicId` pertencente a outro Tenant retorna:
+
+```text
+Users.NotFound
+```
+
+Não é permitido alterar o perfil de usuários quando a empresa estiver inativa.
+
+Nesse caso, a API retorna:
+
+```text
+Tenants.Inactive
+```
+
+Valores que não representam um perfil válido também são rejeitados.
+
+Por exemplo:
+
+```json
+{
+  "role": 99
+}
+```
+
+Nesse caso, a API retorna:
+
+```text
+Validation.InvalidArgument
+```
+
+Exemplo de resposta:
+
+```json
+{
+  "publicId": "00000000-0000-0000-0000-000000000000",
+  "tenantPublicId": "00000000-0000-0000-0000-000000000000",
+  "role": 3,
   "updatedAt": "2026-08-31T12:00:00Z"
 }
 ```
@@ -1186,7 +1335,7 @@ Essa camada ainda não está implementada.
 - [x] Listagem de usuários
 - [x] Atualização de usuário
 - [x] Ativação/desativação de usuário
-- [ ] Alteração de perfil
+- [x] Alteração de perfil
 - [ ] Recuperação de senha
 
 ## Segurança
@@ -1336,7 +1485,7 @@ Commit
 .NET 10
 Entity Framework Core 10
 PostgreSQL
-550 testes automatizados aprovados
+560 testes automatizados aprovados
 ```
 
 ---
