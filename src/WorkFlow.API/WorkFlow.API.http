@@ -540,3 +540,109 @@ Accept: application/json
   "name": "Usuário Teste",
   "email": "usuario-tenant-vazio@test.local"
 }
+
+### Desativar usuário
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/62a75794-5263-4f93-8e0b-7fbc19ac8cf6/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+### Confirmar usuário desativado
+
+GET {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/62a75794-5263-4f93-8e0b-7fbc19ac8cf6
+Accept: application/json
+
+### Reativar usuário
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/62a75794-5263-4f93-8e0b-7fbc19ac8cf6/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": true
+}
+
+### Tentar alterar status de usuário de outra empresa
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07/users/62a75794-5263-4f93-8e0b-7fbc19ac8cf6/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+### Alterar status de usuário em empresa inexistente
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/users/62a75794-5263-4f93-8e0b-7fbc19ac8cf6/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+### Alterar status de usuário inexistente
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/11111111-1111-1111-1111-111111111111/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+### Desativar empresa para testar alteração de status do usuário
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+### Tentar alterar status de usuário em empresa inativa
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/62a75794-5263-4f93-8e0b-7fbc19ac8cf6/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+### Reativar empresa após teste de status do usuário
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": true
+}
+
+### Tentar alterar status de usuário com PublicId vazio
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/00000000-0000-0000-0000-000000000000/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+### Tentar alterar status de usuário com TenantPublicId vazio
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/00000000-0000-0000-0000-000000000000/users/62a75794-5263-4f93-8e0b-7fbc19ac8cf6/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+

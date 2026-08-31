@@ -36,6 +36,7 @@ Atualmente estão implementados:
 - cadastro de usuários vinculados a uma empresa;
 - consulta individual por `PublicId`;
 - atualização de nome e e-mail do usuário;
+- ativação e desativação de usuários;
 - isolamento do usuário pelo Tenant;
 - perfis de usuário;
 - validação de empresa existente;
@@ -65,7 +66,7 @@ Atualmente estão implementados:
 Última validação local:
 
 ```text
-542 testes automatizados aprovados
+550 testes automatizados aprovados
 0 falhas
 ```
 
@@ -637,6 +638,58 @@ Exemplo de resposta:
 
 ---
 
+### Alterar status do usuário
+
+```http
+PATCH /api/tenants/{tenantPublicId}/users/{userPublicId}/status
+```
+
+Exemplo para desativar:
+
+```json
+{
+  "isActive": false
+}
+```
+
+Exemplo para ativar:
+
+```json
+{
+  "isActive": true
+}
+```
+
+O usuário é localizado obrigatoriamente dentro do Tenant informado na rota.
+
+Um `userPublicId` pertencente a outro Tenant retorna:
+
+```text
+Users.NotFound
+```
+
+Não é permitido alterar o status de usuários quando a empresa estiver inativa.
+
+Nesse caso, a API retorna:
+
+```text
+Tenants.Inactive
+```
+
+Exemplo de resposta:
+
+```json
+{
+  "publicId": "00000000-0000-0000-0000-000000000000",
+  "tenantPublicId": "00000000-0000-0000-0000-000000000000",
+  "isActive": false,
+  "updatedAt": "2026-08-31T12:00:00Z"
+}
+```
+
+---
+
+
 # Tratamento de erros
 
 A API utiliza códigos de erro estáveis.
@@ -1132,7 +1185,7 @@ Essa camada ainda não está implementada.
 - [x] Consulta individual por Tenant
 - [x] Listagem de usuários
 - [x] Atualização de usuário
-- [ ] Ativação/desativação de usuário
+- [x] Ativação/desativação de usuário
 - [ ] Alteração de perfil
 - [ ] Recuperação de senha
 
@@ -1283,7 +1336,7 @@ Commit
 .NET 10
 Entity Framework Core 10
 PostgreSQL
-542 testes automatizados aprovados
+550 testes automatizados aprovados
 ```
 
 ---

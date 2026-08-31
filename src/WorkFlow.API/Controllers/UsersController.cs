@@ -8,6 +8,7 @@ using WorkFlow.Application.Users.GetUserByPublicId;
 using WorkFlow.Application.Users.ListUsers;
 using WorkFlow.Application.Users.UpdateUser;
 using WorkFlow.Domain.Enums;
+using WorkFlow.Application.Users.ChangeUserStatus;
 
 namespace WorkFlow.API.Controllers;
 
@@ -27,11 +28,15 @@ public sealed class UsersController : ControllerBase
     private readonly UpdateUserHandler
         _updateUserHandler;
 
+    private readonly ChangeUserStatusHandler
+        _changeUserStatusHandler;
+
     public UsersController(
         CreateUserHandler createUserHandler,
         GetUserByPublicIdHandler getUserByPublicIdHandler,
         ListUsersHandler listUsersHandler,
-        UpdateUserHandler updateUserHandler)
+        UpdateUserHandler updateUserHandler,
+        ChangeUserStatusHandler changeUserStatusHandler)
     {
         _createUserHandler =
             createUserHandler;
@@ -44,6 +49,9 @@ public sealed class UsersController : ControllerBase
 
         _updateUserHandler =
             updateUserHandler;
+
+        _changeUserStatusHandler =
+            changeUserStatusHandler;
     }
 
     [HttpPost]
@@ -325,6 +333,73 @@ public sealed class UsersController : ControllerBase
                 updatedUser.IsActive,
                 updatedUser.CreatedAt,
                 updatedUser.UpdatedAt);
+
+        return Ok(
+            response);
+    }
+
+    [HttpPatch("{userPublicId:guid}/status")]
+    [ProducesResponseType<ChangeUserStatusResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ChangeUserStatusResponse>> ChangeStatus(
+        Guid tenantPublicId,
+        Guid userPublicId,
+    [FromBody] ChangeUserStatusRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command =
+            new ChangeUserStatusCommand(
+                tenantPublicId,
+                userPublicId,
+                request.IsActive);
+
+        var result =
+            await _changeUserStatusHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound ||
+                error == UserErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            if (error == TenantErrors.Inactive)
+            {
+                return Conflict(
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var changedUser =
+            result.Value!;
+
+        var response =
+            new ChangeUserStatusResponse(
+                changedUser.PublicId,
+                changedUser.TenantPublicId,
+                changedUser.IsActive,
+                changedUser.UpdatedAt);
 
         return Ok(
             response);

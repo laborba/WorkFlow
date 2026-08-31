@@ -1123,4 +1123,76 @@ GetPagedAsync_ShouldCombineRoleIsActiveAndSearchFilters()
 
         await transaction.RollbackAsync();
     }
+
+    [Fact]
+    public async Task
+    GetTrackedByPublicIdAsync_ShouldPersistUserDeactivation()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant = new Tenant(
+            "Empresa do Usuário",
+            $"registration-{uniqueValue}",
+            $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(tenant);
+
+        await context.SaveChangesAsync();
+
+        var user = new User(
+            tenant.Id,
+            "Usuário de Teste",
+            $"user-{uniqueValue}@test.local",
+            "password-hash-for-test",
+            UserRole.Member);
+
+        context.Users.Add(user);
+
+        await context.SaveChangesAsync();
+
+        var userPublicId =
+            user.PublicId;
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new UserRepository(context);
+
+        var trackedUser =
+            await repository.GetTrackedByPublicIdAsync(
+                tenant.Id,
+                userPublicId);
+
+        Assert.NotNull(
+            trackedUser);
+
+        trackedUser!.Deactivate();
+
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var persistedUser =
+            await context.Users
+                .AsNoTracking()
+                .SingleAsync(
+                    currentUser =>
+                        currentUser.PublicId ==
+                        userPublicId);
+
+        Assert.False(
+            persistedUser.IsActive);
+
+        Assert.NotNull(
+            persistedUser.UpdatedAt);
+
+        await transaction.RollbackAsync();
+    }
 }
