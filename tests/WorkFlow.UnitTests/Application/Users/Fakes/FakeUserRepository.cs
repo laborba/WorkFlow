@@ -24,6 +24,10 @@ internal sealed class FakeUserRepository : IUserRepository
     public IReadOnlyCollection<User> UsersToReturn { get; set; } =
     Array.Empty<User>();
 
+    public long? CheckedGetByEmailTenantId { get; private set; }
+
+    public string? CheckedGetByEmail { get; private set; }
+
     public int TotalCountToReturn { get; set; }
 
     public long? CheckedPagedTenantId { get; private set; }
@@ -42,6 +46,7 @@ internal sealed class FakeUserRepository : IUserRepository
 
     public Guid? CheckedTrackedPublicId { get; private set; }
 
+    
     public Task<bool> ExistsByEmailAsync(
         long tenantId,
         string email,
@@ -55,6 +60,21 @@ internal sealed class FakeUserRepository : IUserRepository
 
         return Task.FromResult(
             EmailExists);
+    }
+
+    public Task<User?> GetByEmailAsync(
+        long tenantId,
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        CheckedGetByEmailTenantId =
+            tenantId;
+
+        CheckedGetByEmail =
+            email;
+
+        return Task.FromResult(
+            UserToReturn);
     }
 
     public Task<User?> GetByPublicIdAsync(

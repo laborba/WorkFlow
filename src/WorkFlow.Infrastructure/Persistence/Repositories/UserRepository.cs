@@ -33,6 +33,23 @@ public sealed class UserRepository : IUserRepository
             cancellationToken);
     }
 
+    public Task<User?> GetByEmailAsync(
+        long tenantId,
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedEmail =
+            EmailNormalizer.Normalize(email);
+
+        return _context.Users
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                user =>
+                    user.TenantId == tenantId &&
+                    user.NormalizedEmail == normalizedEmail,
+                cancellationToken);
+    }
+
     public Task<User?> GetByPublicIdAsync(
         long tenantId,
         Guid publicId,

@@ -29,6 +29,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\src\WorkFlow.API\WorkFlow.API.csproj" />
 		<ProjectReference Include="..\..\src\WorkFlow.Application\WorkFlow.Application.csproj" />
 		<ProjectReference Include="..\..\src\WorkFlow.Domain\WorkFlow.Domain.csproj" />
 		<ProjectReference Include="..\..\src\WorkFlow.Infrastructure\WorkFlow.Infrastructure.csproj" />

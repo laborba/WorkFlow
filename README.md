@@ -47,11 +47,30 @@ Atualmente estão implementados:
 - política de senha;
 - normalização de e-mail;
 - unicidade de e-mail case-insensitive dentro da mesma empresa;
-- possibilidade de reutilizar o mesmo e-mail em empresas diferentes.
+- possibilidade de reutilizar o mesmo e-mail em empresas diferentes;
 - listagem paginada de usuários por empresa;
 - busca de usuários por nome ou e-mail;
 - filtro por perfil;
-- filtro por status ativo/inativo;
+- filtro por status ativo/inativo.
+
+### Autenticação
+
+- login de usuários vinculados a uma empresa;
+- autenticação baseada em JWT Bearer;
+- geração de access token assinado;
+- validação de assinatura, `Issuer`, `Audience` e expiração;
+- identificação do Tenant dentro do token;
+- identificação do perfil do usuário através de claims;
+- login com e-mail case-insensitive;
+- isolamento multi-tenant durante a autenticação;
+- bloqueio de login para empresas inativas;
+- bloqueio de login para usuários inativos;
+- resposta genérica para e-mail inexistente ou senha incorreta;
+- endpoint protegido para consulta do usuário autenticado.
+
+O login atual é destinado a usuários vinculados a um Tenant.
+
+A autenticação específica de `SystemAdmin`, que não pertence a um Tenant, será implementada separadamente.
 
 ### Persistência
 
@@ -67,11 +86,25 @@ Atualmente estão implementados:
 Última validação local:
 
 ```text
-560 testes automatizados aprovados
+578 testes automatizados aprovados
 0 falhas
 ```
 
 A solução possui testes unitários e testes de integração.
+
+A autenticação possui testes cobrindo, entre outros cenários:
+
+- login válido;
+- credenciais inválidas;
+- usuário inativo;
+- empresa inativa;
+- isolamento entre Tenants;
+- busca de usuário por e-mail normalizado;
+- geração de JWT;
+- claims do token;
+- assinatura do token;
+- validação de `Issuer` e `Audience`;
+- rejeição de token assinado com chave incorreta.
 
 ---
 
@@ -89,7 +122,13 @@ A solução possui testes unitários e testes de integração.
 ## Segurança
 
 - ASP.NET Core PasswordHasher
-- User Secrets para credenciais locais
+- autenticação JWT Bearer
+- tokens assinados com HMAC SHA-256
+- validação de `Issuer`
+- validação de `Audience`
+- validação de assinatura
+- validação de expiração
+- User Secrets para credenciais locais e chave JWT
 - hash de senha com salt
 - normalização de e-mail
 - isolamento multi-tenant no backend
@@ -225,7 +264,9 @@ Responsável por:
 - status HTTP;
 - configuração da aplicação.
 
-Autenticação e autorização ainda serão implementadas.
+A autenticação JWT e o login já estão implementados.
+
+A autorização baseada em perfis, policies e permissões específicas ainda será evoluída.
 
 ---
 
@@ -838,6 +879,188 @@ Exemplo de resposta:
 
 ---
 
+## Autenticação
+
+### Realizar login
+
+```http
+POST /api/authentication/login
+```
+
+Exemplo:
+
+```json
+{
+  "tenantPublicId": "00000000-0000-0000-0000-000000000000",
+  "email": "usuario@empresa.com",
+  "password": "uma senha longa e segura"
+}
+```
+
+O login atual exige:
+
+```text
+TenantPublicId
++ e-mail
++ senha
+```
+
+O `TenantPublicId` é necessário porque o mesmo endereço de e-mail pode existir em empresas diferentes.
+
+A busca pelo e-mail não diferencia letras maiúsculas e minúsculas.
+
+Por exemplo:
+
+```text
+usuario@empresa.com
+USUARIO@EMPRESA.COM
+Usuario@Empresa.com
+```
+
+são tratados como o mesmo e-mail dentro daquele Tenant.
+
+O usuário somente pode autenticar através da empresa à qual pertence.
+
+Conhecer o e-mail e a senha de um usuário não permite autenticá-lo utilizando outro `TenantPublicId`.
+
+Quando o e-mail não existe ou a senha está incorreta, a API retorna a mesma resposta:
+
+```text
+401 Unauthorized
+Authentication.InvalidCredentials
+```
+
+Isso evita revelar se determinada conta existe.
+
+Um usuário inativo com senha correta retorna:
+
+```text
+403 Forbidden
+Authentication.UserInactive
+```
+
+Porém, se a senha desse usuário estiver incorreta, a resposta continua sendo:
+
+```text
+401 Unauthorized
+Authentication.InvalidCredentials
+```
+
+Uma empresa inexistente retorna:
+
+```text
+404 Not Found
+Tenants.NotFound
+```
+
+Uma empresa inativa retorna:
+
+```text
+409 Conflict
+Tenants.Inactive
+```
+
+Exemplo de resposta para login válido:
+
+```json
+{
+  "accessToken": "eyJ...",
+  "expiresAt": "2026-08-31T18:00:00Z",
+  "userPublicId": "00000000-0000-0000-0000-000000000000",
+  "tenantPublicId": "00000000-0000-0000-0000-000000000000",
+  "name": "Usuário Teste",
+  "email": "usuario@empresa.com",
+  "role": 4
+}
+```
+
+O access token atual possui duração configurável.
+
+No ambiente de desenvolvimento, a configuração utilizada atualmente é:
+
+```text
+60 minutos
+```
+
+O token contém claims referentes a:
+
+```text
+sub
+email
+name
+role
+tenant_public_id
+```
+
+A chave utilizada para assinatura do JWT não é armazenada no repositório.
+
+Durante o desenvolvimento local ela é configurada através de:
+
+```text
+User Secrets
+```
+
+---
+
+### Consultar usuário autenticado
+
+```http
+GET /api/authentication/me
+```
+
+Este endpoint exige autenticação.
+
+A requisição deve enviar:
+
+```http
+Authorization: Bearer <accessToken>
+```
+
+Exemplo:
+
+```http
+GET /api/authentication/me
+Authorization: Bearer eyJ...
+```
+
+O token é validado antes da execução do endpoint.
+
+São validados:
+
+```text
+assinatura
+Issuer
+Audience
+expiração
+```
+
+Uma requisição sem token retorna:
+
+```text
+401 Unauthorized
+```
+
+Um token inválido também retorna:
+
+```text
+401 Unauthorized
+```
+
+Exemplo de resposta:
+
+```json
+{
+  "userPublicId": "00000000-0000-0000-0000-000000000000",
+  "tenantPublicId": "00000000-0000-0000-0000-000000000000",
+  "name": "Usuário Teste",
+  "email": "usuario@empresa.com",
+  "role": 4
+}
+```
+
+Atualmente esse endpoint utiliza as informações já validadas presentes nas claims do JWT.
+
+---
 
 # Tratamento de erros
 
@@ -852,6 +1075,9 @@ Tenants.Inactive
 Users.NotFound
 Users.EmailAlreadyExists
 Users.SystemAdminCannotBelongToTenant
+
+Authentication.InvalidCredentials
+Authentication.UserInactive
 
 Validation.InvalidArgument
 ```
@@ -1081,18 +1307,58 @@ Futuramente serão executados automaticamente através de CI/CD antes de novas v
 
 # Segurança
 
-Alguns princípios adotados no projeto:
+Alguns princípios e recursos adotados no projeto:
 
 - senhas nunca são armazenadas em texto puro;
 - secrets não são versionados;
+- a chave de assinatura JWT é mantida fora do código-fonte;
+- autenticação utiliza JWT Bearer;
+- tokens possuem assinatura criptográfica;
+- `Issuer`, `Audience`, assinatura e expiração são validados;
+- tokens expirados não são aceitos;
 - isolamento de Tenant ocorre no backend;
+- o Tenant autenticado é identificado através do token;
 - identificadores públicos não são usados como autorização;
+- respostas de autenticação evitam revelar desnecessariamente a existência de usuários;
 - respostas da API evitam exposição de informações internas;
 - histórico importante deverá ser preservado;
 - operações críticas deverão possuir testes;
 - logs não deverão armazenar senhas, tokens ou secrets.
 
-Autenticação e autorização ainda estão em desenvolvimento e serão adicionadas antes da utilização pública do sistema.
+O login e a autenticação JWT já estão implementados para usuários vinculados a um Tenant.
+
+O access token atual transporta informações como:
+
+```text
+UserPublicId
+TenantPublicId
+Name
+Email
+Role
+```
+
+O conhecimento ou alteração manual dessas informações não é suficiente para produzir um token válido, pois a assinatura JWT é verificada pela API.
+
+A autorização ainda será evoluída com:
+
+```text
+Roles
+Policies
+Permissões por projeto
+Regras administrativas
+```
+
+A autenticação específica de `SystemAdmin` também será tratada separadamente.
+
+Funcionalidades futuras de segurança incluem:
+
+```text
+Refresh tokens
+Rate limiting
+MFA
+Recuperação segura de conta
+Revogação e gestão de sessões
+```
 
 ---
 
@@ -1340,9 +1606,9 @@ Essa camada ainda não está implementada.
 
 ## Segurança
 
-- [ ] Autenticação
-- [ ] Login
-- [ ] Tokens
+- [x] Autenticação
+- [x] Login
+- [x] Tokens
 - [ ] Autorização
 - [ ] Policies
 - [ ] Rate limiting
@@ -1485,7 +1751,8 @@ Commit
 .NET 10
 Entity Framework Core 10
 PostgreSQL
-560 testes automatizados aprovados
+Autenticação JWT Bearer
+578 testes automatizados aprovados
 ```
 
 ---

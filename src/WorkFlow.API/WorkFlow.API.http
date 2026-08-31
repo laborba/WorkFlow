@@ -765,3 +765,217 @@ Accept: application/json
 {
   "role": 4
 }
+
+### Criar usuário para testes de login
+
+POST {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Login API",
+  "email": "login-api@test.local",
+  "password": "uma senha longa e segura",
+  "role": 4
+}
+
+### Login válido
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "242cffd3-3bb1-4c99-bf0a-e4efd1655a0b",
+  "email": "login-api@test.local",
+  "password": "uma senha longa e segura"
+}
+
+### Login com senha incorreta
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "242cffd3-3bb1-4c99-bf0a-e4efd1655a0b",
+  "email": "login-api@test.local",
+  "password": "senha-incorreta"
+}
+
+### Login com e-mail inexistente
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "242cffd3-3bb1-4c99-bf0a-e4efd1655a0b",
+  "email": "nao-existe@test.local",
+  "password": "qualquer-senha"
+}
+
+### Desativar usuário para testar login
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/9736e157-994d-4f05-b27f-fe0562adf400/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+### Login com usuário inativo
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "242cffd3-3bb1-4c99-bf0a-e4efd1655a0b",
+  "email": "login-api@test.local",
+  "password": "uma senha longa e segura"
+}
+
+### Login com usuário inativo e senha incorreta
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "242cffd3-3bb1-4c99-bf0a-e4efd1655a0b",
+  "email": "login-api@test.local",
+  "password": "senha-incorreta"
+}
+
+### Reativar usuário após testes de login
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users/9736e157-994d-4f05-b27f-fe0562adf400/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": true
+}
+
+### Login com empresa inexistente
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  "email": "login-api@test.local",
+  "password": "uma senha longa e segura"
+}
+
+### Desativar empresa para testar login
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+### Login com empresa inativa
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "242cffd3-3bb1-4c99-bf0a-e4efd1655a0b",
+  "email": "login-api@test.local",
+  "password": "uma senha longa e segura"
+}
+
+### Reativar empresa após testes de login
+
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": true
+}
+
+### Tentar login através de outra empresa
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "185f2285-260c-4f28-bdd9-d85496219e07",
+  "email": "login-api@test.local",
+  "password": "uma senha longa e segura"
+}
+
+### Login com TenantPublicId vazio
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "00000000-0000-0000-0000-000000000000",
+  "email": "login-api@test.local",
+  "password": "uma senha longa e segura"
+}
+
+### Login com e-mail vazio
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "242cffd3-3bb1-4c99-bf0a-e4efd1655a0b",
+  "email": "   ",
+  "password": "uma senha longa e segura"
+}
+
+### Login com senha vazia
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "242cffd3-3bb1-4c99-bf0a-e4efd1655a0b",
+  "email": "login-api@test.local",
+  "password": "   "
+}
+
+### Login com e-mail em capitalização diferente
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "242cffd3-3bb1-4c99-bf0a-e4efd1655a0b",
+  "email": "LOGIN-API@TEST.LOCAL",
+  "password": "uma senha longa e segura"
+}
+
+### Consultar usuário autenticado
+
+GET {{WorkFlow_API_HostAddress}}/api/authentication/me
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5NzM2ZTE1Ny05OTRkLTRmMDUtYjI3Zi1mZTA1NjJhZGY0MDAiLCJlbWFpbCI6ImxvZ2luLWFwaUB0ZXN0LmxvY2FsIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZSI6IlVzdcOhcmlvIExvZ2luIEFQSSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6Ik1lbWJlciIsInRlbmFudF9wdWJsaWNfaWQiOiIyNDJjZmZkMy0zYmIxLTRjOTktYmYwYS1lNGVmZDE2NTVhMGIiLCJuYmYiOjE3ODgxOTkzODMsImV4cCI6MTc4ODIwMjk4MywiaXNzIjoiV29ya0Zsb3cuQVBJIiwiYXVkIjoiV29ya0Zsb3cuQ2xpZW50In0.wE_y6c2MTbIIt5nrNGRROprq4wGow4c8atJqgphyejo
+Accept: application/json
+
+### Consultar usuário autenticado sem token
+
+GET {{WorkFlow_API_HostAddress}}/api/authentication/me
+Accept: application/json
+
+### Consultar usuário autenticado com token inválido
+
+GET {{WorkFlow_API_HostAddress}}/api/authentication/me
+Authorization: Bearer token-invalido
+Accept: application/json

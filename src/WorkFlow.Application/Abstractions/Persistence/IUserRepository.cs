@@ -11,6 +11,11 @@ public interface IUserRepository
         string email,
         CancellationToken cancellationToken = default);
 
+    Task<User?> GetByEmailAsync(
+        long tenantId,
+        string email,
+        CancellationToken cancellationToken = default);
+
     Task<User?> GetByPublicIdAsync(
         long tenantId,
         Guid publicId,
