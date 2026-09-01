@@ -1,11 +1,14 @@
-using WorkFlow.Infrastructure;
-using WorkFlow.Application;
-using WorkFlow.API.Exceptions;
-using WorkFlow.API.Authentication;
-using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using WorkFlow.API.Authentication;
+using WorkFlow.API.Authorization;
+using WorkFlow.API.Exceptions;
+using WorkFlow.Application;
 using WorkFlow.Application.Abstractions.Security;
+using WorkFlow.Domain.Enums;
+using WorkFlow.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -62,6 +65,35 @@ builder.Services
                 ClockSkew = TimeSpan.Zero
             };
     });
+
+builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(
+        AuthorizationPolicyNames.TenantAccess,
+        policy =>
+        {
+            policy.RequireAuthenticatedUser();
+
+            policy.AddRequirements(
+                new TenantAccessRequirement());
+        });
+
+    options.AddPolicy(
+        AuthorizationPolicyNames.TenantAdmin,
+        policy =>
+        {
+            policy.RequireAuthenticatedUser();
+
+            policy.RequireRole(
+                UserRole.TenantAdmin.ToString());
+        });
+});
+
+builder.Services.AddScoped<
+    IAuthorizationHandler,
+    TenantAccessHandler>();
 
 var connectionString =
     builder.Configuration.GetConnectionString("PostgreSQL")

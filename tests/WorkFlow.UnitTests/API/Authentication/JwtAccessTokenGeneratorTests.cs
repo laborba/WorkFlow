@@ -116,7 +116,7 @@ public sealed class JwtAccessTokenGeneratorTests
                 .Single(
                     claim =>
                         claim.Type ==
-                        "tenant_public_id")
+                        JwtClaimNames.TenantPublicId)
                 .Value);
     }
 

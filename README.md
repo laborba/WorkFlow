@@ -53,7 +53,7 @@ Atualmente estão implementados:
 - filtro por perfil;
 - filtro por status ativo/inativo.
 
-### Autenticação
+### Autenticação e autorização
 
 - login de usuários vinculados a uma empresa;
 - autenticação baseada em JWT Bearer;
@@ -66,7 +66,13 @@ Atualmente estão implementados:
 - bloqueio de login para empresas inativas;
 - bloqueio de login para usuários inativos;
 - resposta genérica para e-mail inexistente ou senha incorreta;
-- endpoint protegido para consulta do usuário autenticado.
+- endpoint protegido para consulta do usuário autenticado;
+- autorização baseada em policies;
+- policy `TenantAccess` para garantir acesso somente ao Tenant autenticado;
+- policy `TenantAdmin` para operações administrativas;
+- proteção contra acesso entre Tenants;
+- endpoints administrativos de usuários restritos a `TenantAdmin`;
+- endpoints de consulta de usuários restritos ao Tenant autenticado.
 
 O login atual é destinado a usuários vinculados a um Tenant.
 
@@ -86,13 +92,13 @@ A autenticação específica de `SystemAdmin`, que não pertence a um Tenant, se
 Última validação local:
 
 ```text
-578 testes automatizados aprovados
+585 testes automatizados aprovados
 0 falhas
 ```
 
 A solução possui testes unitários e testes de integração.
 
-A autenticação possui testes cobrindo, entre outros cenários:
+A autenticação e autorização possuem testes cobrindo, entre outros cenários:
 
 - login válido;
 - credenciais inválidas;
@@ -103,8 +109,16 @@ A autenticação possui testes cobrindo, entre outros cenários:
 - geração de JWT;
 - claims do token;
 - assinatura do token;
-- validação de `Issuer` e `Audience`;
-- rejeição de token assinado com chave incorreta.
+- validação de Issuer e Audience;
+- rejeição de token assinado com chave incorreta;
+- acesso ao Tenant correto;
+- bloqueio de acesso a outro Tenant;
+- ausência da claim de Tenant;
+- claim de Tenant inválida;
+- rota sem Tenant;
+- Tenant inválido na rota;
+- autorização de TenantAdmin;
+- bloqueio de operações administrativas para Member.
 
 ---
 
@@ -250,7 +264,6 @@ Contém implementações relacionadas à infraestrutura:
 - implementação do serviço de hash de senha.
 
 ---
-
 ## WorkFlow.API
 
 É a camada de entrada HTTP da aplicação.
@@ -266,7 +279,20 @@ Responsável por:
 
 A autenticação JWT e o login já estão implementados.
 
-A autorização baseada em perfis, policies e permissões específicas ainda será evoluída.
+A API também possui uma camada inicial de autorização baseada em policies.
+
+Atualmente estão implementadas:
+
+```text
+TenantAccess
+TenantAdmin
+```
+
+A policy `TenantAccess` garante que o `TenantPublicId` presente no JWT corresponda ao Tenant informado na rota.
+
+A policy `TenantAdmin` restringe operações administrativas a usuários com perfil `TenantAdmin`.
+
+Permissões específicas por projeto e regras de autorização mais avançadas serão adicionadas conforme os respectivos módulos forem implementados.
 
 ---
 
@@ -520,6 +546,61 @@ GET /api/tenants?pageNumber=1&pageSize=20&search=empresa&isActive=true
 ---
 
 ## Usuários
+
+### Autorização dos endpoints de usuários
+
+Os endpoints de usuários utilizam autenticação e autorização no backend.
+
+Operações administrativas exigem:
+
+```text
+TenantAccess
++
+TenantAdmin
+```
+
+Atualmente isso inclui:
+
+```http
+POST /api/tenants/{tenantPublicId}/users
+PUT /api/tenants/{tenantPublicId}/users/{userPublicId}
+PATCH /api/tenants/{tenantPublicId}/users/{userPublicId}/status
+PATCH /api/tenants/{tenantPublicId}/users/{userPublicId}/role
+```
+
+Consultas de usuários exigem autenticação e acesso ao Tenant:
+
+```text
+TenantAccess
+```
+
+Atualmente isso inclui:
+
+```http
+GET /api/tenants/{tenantPublicId}/users
+GET /api/tenants/{tenantPublicId}/users/{userPublicId}
+```
+
+Uma requisição sem token válido retorna:
+
+```text
+401 Unauthorized
+```
+
+Um usuário autenticado tentando acessar outro Tenant retorna:
+
+```text
+403 Forbidden
+```
+
+Um usuário autenticado sem o perfil necessário para uma operação administrativa retorna:
+
+```text
+403 Forbidden
+```
+
+---
+
 
 ### Criar usuário dentro de uma empresa
 
@@ -1304,7 +1385,6 @@ Os testes permanecerão no projeto durante toda sua evolução.
 Futuramente serão executados automaticamente através de CI/CD antes de novas versões serem publicadas.
 
 ---
-
 # Segurança
 
 Alguns princípios e recursos adotados no projeto:
@@ -1318,7 +1398,14 @@ Alguns princípios e recursos adotados no projeto:
 - tokens expirados não são aceitos;
 - isolamento de Tenant ocorre no backend;
 - o Tenant autenticado é identificado através do token;
+- a claim `tenant_public_id` identifica o Tenant do usuário autenticado;
+- a claim de perfil identifica o papel global do usuário;
+- a policy `TenantAccess` valida o Tenant autenticado contra o Tenant da rota;
+- a policy `TenantAdmin` protege operações administrativas;
 - identificadores públicos não são usados como autorização;
+- conhecer um `PublicId` não concede acesso ao recurso;
+- requisições sem autenticação em endpoints protegidos retornam `401 Unauthorized`;
+- usuários autenticados sem autorização retornam `403 Forbidden`;
 - respostas de autenticação evitam revelar desnecessariamente a existência de usuários;
 - respostas da API evitam exposição de informações internas;
 - histórico importante deverá ser preservado;
@@ -1339,13 +1426,21 @@ Role
 
 O conhecimento ou alteração manual dessas informações não é suficiente para produzir um token válido, pois a assinatura JWT é verificada pela API.
 
-A autorização ainda será evoluída com:
+A autorização inicial já utiliza:
 
 ```text
 Roles
 Policies
+TenantAccess
+TenantAdmin
+```
+
+A autorização continuará sendo evoluída com:
+
+```text
 Permissões por projeto
-Regras administrativas
+Regras administrativas adicionais
+Permissões específicas por recurso
 ```
 
 A autenticação específica de `SystemAdmin` também será tratada separadamente.
@@ -1609,8 +1704,12 @@ Essa camada ainda não está implementada.
 - [x] Autenticação
 - [x] Login
 - [x] Tokens
-- [ ] Autorização
-- [ ] Policies
+- [x] Autorização inicial
+- [x] Policies
+- [x] Isolamento de Tenant por JWT
+- [x] Policy `TenantAccess`
+- [x] Policy `TenantAdmin`
+- [ ] Permissões por projeto
 - [ ] Rate limiting
 - [ ] MFA
 - [ ] Recuperação de conta
@@ -1752,7 +1851,11 @@ Commit
 Entity Framework Core 10
 PostgreSQL
 Autenticação JWT Bearer
-578 testes automatizados aprovados
+Autorização baseada em policies
+Isolamento multi-tenant por JWT
+Policy TenantAccess
+Policy TenantAdmin
+585 testes automatizados aprovados
 ```
 
 ---

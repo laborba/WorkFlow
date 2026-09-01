@@ -10,6 +10,8 @@ using WorkFlow.Application.Users.UpdateUser;
 using WorkFlow.Domain.Enums;
 using WorkFlow.Application.Users.ChangeUserStatus;
 using WorkFlow.Application.Users.ChangeUserRole;
+using Microsoft.AspNetCore.Authorization;
+using WorkFlow.API.Authorization;
 
 namespace WorkFlow.API.Controllers;
 
@@ -62,9 +64,17 @@ public sealed class UsersController : ControllerBase
             changeUserRoleHandler;
     }
 
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAdmin)]
     [HttpPost]
     [ProducesResponseType<CreateUserResponse>(
         StatusCodes.Status201Created)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(
+        StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ErrorResponse>(
         StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ErrorResponse>(
@@ -136,9 +146,15 @@ public sealed class UsersController : ControllerBase
             response);
     }
 
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
     [HttpGet("{userPublicId:guid}")]
     [ProducesResponseType<GetUserByPublicIdResponse>(
         StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(
+        StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ErrorResponse>(
         StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ErrorResponse>(
@@ -197,6 +213,8 @@ public sealed class UsersController : ControllerBase
             response);
     }
 
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
     [HttpGet]
     [ProducesResponseType<ListUsersResponse>(
         StatusCodes.Status200OK)]
@@ -204,6 +222,10 @@ public sealed class UsersController : ControllerBase
         StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ErrorResponse>(
         StatusCodes.Status404NotFound)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(
+        StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ListUsersResponse>> List(
         Guid tenantPublicId,
         [FromQuery] ListUsersRequest request,
@@ -273,9 +295,17 @@ public sealed class UsersController : ControllerBase
             response);
     }
 
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAdmin)]
     [HttpPut("{userPublicId:guid}")]
     [ProducesResponseType<UpdateUserResponse>(
         StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(
+        StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ErrorResponse>(
         StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ErrorResponse>(
@@ -346,9 +376,17 @@ public sealed class UsersController : ControllerBase
             response);
     }
 
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAdmin)]
     [HttpPatch("{userPublicId:guid}/status")]
     [ProducesResponseType<ChangeUserStatusResponse>(
         StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(
+        StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ErrorResponse>(
         StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ErrorResponse>(
@@ -358,7 +396,7 @@ public sealed class UsersController : ControllerBase
     public async Task<ActionResult<ChangeUserStatusResponse>> ChangeStatus(
         Guid tenantPublicId,
         Guid userPublicId,
-    [FromBody] ChangeUserStatusRequest request,
+        [FromBody] ChangeUserStatusRequest request,
         CancellationToken cancellationToken)
     {
         var command =
@@ -413,9 +451,17 @@ public sealed class UsersController : ControllerBase
             response);
     }
 
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAdmin)]
     [HttpPatch("{userPublicId:guid}/role")]
     [ProducesResponseType<ChangeUserRoleResponse>(
         StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(
+        StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ErrorResponse>(
         StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ErrorResponse>(
@@ -425,7 +471,7 @@ public sealed class UsersController : ControllerBase
     public async Task<ActionResult<ChangeUserRoleResponse>> ChangeRole(
         Guid tenantPublicId,
         Guid userPublicId,
-    [FromBody] ChangeUserRoleRequest request,
+        [FromBody] ChangeUserRoleRequest request,
         CancellationToken cancellationToken)
     {
         var command =

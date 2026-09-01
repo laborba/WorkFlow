@@ -59,7 +59,7 @@ public sealed class JwtAccessTokenGenerator :
                     user.Role.ToString()),
 
                 new Claim(
-                    "tenant_public_id",
+                    JwtClaimNames.TenantPublicId,
                     tenantPublicId.ToString())
             };
 

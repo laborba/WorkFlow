@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using WorkFlow.API.Authentication;
 using WorkFlow.API.Contracts.Authentication;
 using WorkFlow.API.Contracts.Common;
 using WorkFlow.Application.Authentication;
@@ -125,7 +126,7 @@ public sealed class AuthenticationController :
 
         var tenantPublicIdValue =
             User.FindFirst(
-                "tenant_public_id")?.Value;
+                JwtClaimNames.TenantPublicId)?.Value;
 
         var name =
             User.FindFirst(
