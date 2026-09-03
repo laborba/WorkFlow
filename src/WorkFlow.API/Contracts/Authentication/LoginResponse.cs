@@ -6,7 +6,7 @@ public sealed record LoginResponse(
     string AccessToken,
     DateTime ExpiresAt,
     Guid UserPublicId,
-    Guid TenantPublicId,
+    Guid? TenantPublicId,
     string Name,
     string Email,
     UserRole Role);

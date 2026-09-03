@@ -21,11 +21,28 @@ public sealed class JwtAccessTokenGenerator :
 
     public (string AccessToken, DateTime ExpiresAt) Generate(
         User user,
-        Guid tenantPublicId)
+        Guid? tenantPublicId)
     {
         ArgumentNullException.ThrowIfNull(user);
 
-        if (tenantPublicId == Guid.Empty)
+        if (user.Role == WorkFlow.Domain.Enums.UserRole.SystemAdmin &&
+            tenantPublicId.HasValue)
+        {
+            throw new ArgumentException(
+                "Um SystemAdmin não pode possuir Tenant no token.",
+                nameof(tenantPublicId));
+        }
+
+        if (user.Role != WorkFlow.Domain.Enums.UserRole.SystemAdmin &&
+            !tenantPublicId.HasValue)
+        {
+            throw new ArgumentException(
+                "Um Tenant é obrigatório no token para este perfil.",
+                nameof(tenantPublicId));
+        }
+
+        if (tenantPublicId.HasValue &&
+            tenantPublicId.Value == Guid.Empty)
         {
             throw new ArgumentException(
                 "O PublicId da empresa não pode estar vazio.",
@@ -40,28 +57,32 @@ public sealed class JwtAccessTokenGenerator :
                 _options.ExpirationMinutes);
 
         var claims =
-            new[]
+            new List<Claim>
             {
-                new Claim(
+                new(
                     JwtRegisteredClaimNames.Sub,
                     user.PublicId.ToString()),
 
-                new Claim(
+                new(
                     JwtRegisteredClaimNames.Email,
                     user.Email),
 
-                new Claim(
+                new(
                     ClaimTypes.Name,
                     user.Name),
 
-                new Claim(
+                new(
                     ClaimTypes.Role,
-                    user.Role.ToString()),
+                    user.Role.ToString())
+            };
 
+        if (tenantPublicId.HasValue)
+        {
+            claims.Add(
                 new Claim(
                     JwtClaimNames.TenantPublicId,
-                    tenantPublicId.ToString())
-            };
+                    tenantPublicId.Value.ToString()));
+        }
 
         var signingKey =
             new SymmetricSecurityKey(

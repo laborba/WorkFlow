@@ -763,4 +763,410 @@ public sealed class LoginHandlerTests
         Assert.Null(
             accessTokenGenerator.UserReceived);
     }
+
+    [Fact]
+    public async Task
+HandleAsync_ShouldReturnLoginResult_WhenSystemAdminCredentialsAreValid()
+    {
+        var systemAdmin =
+            new User(
+                null,
+                "Administrador do Sistema",
+                "admin@workflow.test",
+                "stored-password-hash",
+                UserRole.SystemAdmin);
+
+        var tenantRepository =
+            new FakeTenantRepository();
+
+        var userRepository =
+            new FakeUserRepository
+            {
+                UserToReturn = systemAdmin
+            };
+
+        var passwordHasher =
+            new FakePasswordHasher
+            {
+                VerificationResult = true
+            };
+
+        var expiresAt =
+            DateTime.UtcNow.AddHours(1);
+
+        var accessTokenGenerator =
+            new FakeAccessTokenGenerator
+            {
+                AccessTokenToReturn =
+                    "generated-system-admin-token",
+
+                ExpiresAtToReturn =
+                    expiresAt
+            };
+
+        var handler =
+            new LoginHandler(
+                tenantRepository,
+                userRepository,
+                passwordHasher,
+                accessTokenGenerator);
+
+        var command =
+            new LoginCommand(
+                null,
+                "admin@workflow.test",
+                "valid-password");
+
+        var result =
+            await handler.HandleAsync(command);
+
+        Assert.True(
+            result.IsSuccess);
+
+        Assert.NotNull(
+            result.Value);
+
+        Assert.Null(
+            tenantRepository.CheckedPublicId);
+
+        Assert.Equal(
+            command.Email,
+            userRepository.CheckedGetSystemAdminByEmail);
+
+        Assert.Null(
+            userRepository.CheckedGetByEmailTenantId);
+
+        Assert.Null(
+            userRepository.CheckedGetByEmail);
+
+        Assert.Equal(
+            command.Password,
+            passwordHasher.PasswordReceivedForVerification);
+
+        Assert.Equal(
+            systemAdmin.PasswordHash,
+            passwordHasher.HashReceivedForVerification);
+
+        Assert.Same(
+            systemAdmin,
+            accessTokenGenerator.UserReceived);
+
+        Assert.Null(
+            accessTokenGenerator.TenantPublicIdReceived);
+
+        Assert.Equal(
+            "generated-system-admin-token",
+            result.Value!.AccessToken);
+
+        Assert.Equal(
+            expiresAt,
+            result.Value.ExpiresAt);
+
+        Assert.Equal(
+            systemAdmin.PublicId,
+            result.Value.UserPublicId);
+
+        Assert.Null(
+            result.Value.TenantPublicId);
+
+        Assert.Equal(
+            systemAdmin.Name,
+            result.Value.Name);
+
+        Assert.Equal(
+            systemAdmin.Email,
+            result.Value.Email);
+
+        Assert.Equal(
+            UserRole.SystemAdmin,
+            result.Value.Role);
+    }
+
+    [Fact]
+    public async Task
+HandleAsync_ShouldReturnInvalidCredentials_WhenSystemAdminDoesNotExist()
+    {
+        var tenantRepository =
+            new FakeTenantRepository();
+
+        var userRepository =
+            new FakeUserRepository
+            {
+                UserToReturn = null
+            };
+
+        var passwordHasher =
+            new FakePasswordHasher();
+
+        var accessTokenGenerator =
+            new FakeAccessTokenGenerator();
+
+        var handler =
+            new LoginHandler(
+                tenantRepository,
+                userRepository,
+                passwordHasher,
+                accessTokenGenerator);
+
+        var command =
+            new LoginCommand(
+                null,
+                "inexistente@workflow.test",
+                "some-password");
+
+        var result =
+            await handler.HandleAsync(command);
+
+        Assert.True(
+            result.IsFailure);
+
+        Assert.Equal(
+            AuthenticationErrors.InvalidCredentials,
+            result.Error);
+
+        Assert.Null(
+            tenantRepository.CheckedPublicId);
+
+        Assert.Equal(
+            command.Email,
+            userRepository.CheckedGetSystemAdminByEmail);
+
+        Assert.Null(
+            userRepository.CheckedGetByEmailTenantId);
+
+        Assert.Null(
+            passwordHasher.PasswordReceivedForVerification);
+
+        Assert.Null(
+            accessTokenGenerator.UserReceived);
+    }
+
+    [Fact]
+    public async Task
+HandleAsync_ShouldReturnInvalidCredentials_WhenSystemAdminPasswordIsInvalid()
+    {
+        var systemAdmin =
+            new User(
+                null,
+                "Administrador do Sistema",
+                "admin@workflow.test",
+                "stored-password-hash",
+                UserRole.SystemAdmin);
+
+        var tenantRepository =
+            new FakeTenantRepository();
+
+        var userRepository =
+            new FakeUserRepository
+            {
+                UserToReturn = systemAdmin
+            };
+
+        var passwordHasher =
+            new FakePasswordHasher
+            {
+                VerificationResult = false
+            };
+
+        var accessTokenGenerator =
+            new FakeAccessTokenGenerator();
+
+        var handler =
+            new LoginHandler(
+                tenantRepository,
+                userRepository,
+                passwordHasher,
+                accessTokenGenerator);
+
+        var command =
+            new LoginCommand(
+                null,
+                "admin@workflow.test",
+                "wrong-password");
+
+        var result =
+            await handler.HandleAsync(command);
+
+        Assert.True(
+            result.IsFailure);
+
+        Assert.Equal(
+            AuthenticationErrors.InvalidCredentials,
+            result.Error);
+
+        Assert.Null(
+            tenantRepository.CheckedPublicId);
+
+        Assert.Equal(
+            command.Email,
+            userRepository.CheckedGetSystemAdminByEmail);
+
+        Assert.Null(
+            userRepository.CheckedGetByEmailTenantId);
+
+        Assert.Equal(
+            command.Password,
+            passwordHasher.PasswordReceivedForVerification);
+
+        Assert.Equal(
+            systemAdmin.PasswordHash,
+            passwordHasher.HashReceivedForVerification);
+
+        Assert.Null(
+            accessTokenGenerator.UserReceived);
+    }
+
+    [Fact]
+    public async Task
+HandleAsync_ShouldReturnUserInactive_WhenSystemAdminIsInactiveAndPasswordIsValid()
+    {
+        var systemAdmin =
+            new User(
+                null,
+                "Administrador do Sistema",
+                "admin@workflow.test",
+                "stored-password-hash",
+                UserRole.SystemAdmin);
+
+        systemAdmin.Deactivate();
+
+        var tenantRepository =
+            new FakeTenantRepository();
+
+        var userRepository =
+            new FakeUserRepository
+            {
+                UserToReturn = systemAdmin
+            };
+
+        var passwordHasher =
+            new FakePasswordHasher
+            {
+                VerificationResult = true
+            };
+
+        var accessTokenGenerator =
+            new FakeAccessTokenGenerator();
+
+        var handler =
+            new LoginHandler(
+                tenantRepository,
+                userRepository,
+                passwordHasher,
+                accessTokenGenerator);
+
+        var command =
+            new LoginCommand(
+                null,
+                "admin@workflow.test",
+                "valid-password");
+
+        var result =
+            await handler.HandleAsync(command);
+
+        Assert.True(
+            result.IsFailure);
+
+        Assert.Equal(
+            AuthenticationErrors.UserInactive,
+            result.Error);
+
+        Assert.Null(
+            tenantRepository.CheckedPublicId);
+
+        Assert.Equal(
+            command.Email,
+            userRepository.CheckedGetSystemAdminByEmail);
+
+        Assert.Null(
+            userRepository.CheckedGetByEmailTenantId);
+
+        Assert.Equal(
+            command.Password,
+            passwordHasher.PasswordReceivedForVerification);
+
+        Assert.Equal(
+            systemAdmin.PasswordHash,
+            passwordHasher.HashReceivedForVerification);
+
+        Assert.Null(
+            accessTokenGenerator.UserReceived);
+    }
+
+    [Fact]
+    public async Task
+    HandleAsync_ShouldReturnInvalidCredentials_WhenSystemAdminIsInactiveAndPasswordIsInvalid()
+    {
+        var systemAdmin =
+            new User(
+                null,
+                "Administrador do Sistema",
+                "admin@workflow.test",
+                "stored-password-hash",
+                UserRole.SystemAdmin);
+
+        systemAdmin.Deactivate();
+
+        var tenantRepository =
+            new FakeTenantRepository();
+
+        var userRepository =
+            new FakeUserRepository
+            {
+                UserToReturn = systemAdmin
+            };
+
+        var passwordHasher =
+            new FakePasswordHasher
+            {
+                VerificationResult = false
+            };
+
+        var accessTokenGenerator =
+            new FakeAccessTokenGenerator();
+
+        var handler =
+            new LoginHandler(
+                tenantRepository,
+                userRepository,
+                passwordHasher,
+                accessTokenGenerator);
+
+        var command =
+            new LoginCommand(
+                null,
+                "admin@workflow.test",
+                "wrong-password");
+
+        var result =
+            await handler.HandleAsync(command);
+
+        Assert.True(
+            result.IsFailure);
+
+        Assert.Equal(
+            AuthenticationErrors.InvalidCredentials,
+            result.Error);
+
+        Assert.Null(
+            tenantRepository.CheckedPublicId);
+
+        Assert.Equal(
+            command.Email,
+            userRepository.CheckedGetSystemAdminByEmail);
+
+        Assert.Null(
+            userRepository.CheckedGetByEmailTenantId);
+
+        Assert.Equal(
+            command.Password,
+            passwordHasher.PasswordReceivedForVerification);
+
+        Assert.Equal(
+            systemAdmin.PasswordHash,
+            passwordHasher.HashReceivedForVerification);
+
+        Assert.Null(
+            accessTokenGenerator.UserReceived);
+    }
 }

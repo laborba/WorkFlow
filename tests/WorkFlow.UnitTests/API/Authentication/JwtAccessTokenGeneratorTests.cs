@@ -122,6 +122,90 @@ public sealed class JwtAccessTokenGeneratorTests
 
     [Fact]
     public void
+    Generate_ShouldCreateTokenWithoutTenantClaim_WhenTenantPublicIdIsNull()
+    {
+        var options =
+            Options.Create(
+                new JwtOptions
+                {
+                    Issuer = "WorkFlow.API.Tests",
+                    Audience = "WorkFlow.Client.Tests",
+                    Key =
+                        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_=!",
+                    ExpirationMinutes = 60
+                });
+
+        var generator =
+            new JwtAccessTokenGenerator(
+                options);
+
+        var systemAdmin =
+            new User(
+                null,
+                "Administrador do Sistema",
+                "admin@workflow.test",
+                "password-hash-for-test",
+                UserRole.SystemAdmin);
+
+        var result =
+            generator.Generate(
+                systemAdmin,
+                null);
+
+        Assert.False(
+            string.IsNullOrWhiteSpace(
+                result.AccessToken));
+
+        var token =
+            new JwtSecurityTokenHandler()
+                .ReadJwtToken(
+                    result.AccessToken);
+
+        Assert.Equal(
+            systemAdmin.PublicId.ToString(),
+            token.Claims
+                .Single(
+                    claim =>
+                        claim.Type ==
+                        JwtRegisteredClaimNames.Sub)
+                .Value);
+
+        Assert.Equal(
+            systemAdmin.Email,
+            token.Claims
+                .Single(
+                    claim =>
+                        claim.Type ==
+                        JwtRegisteredClaimNames.Email)
+                .Value);
+
+        Assert.Equal(
+            systemAdmin.Name,
+            token.Claims
+                .Single(
+                    claim =>
+                        claim.Type ==
+                        ClaimTypes.Name)
+                .Value);
+
+        Assert.Equal(
+            UserRole.SystemAdmin.ToString(),
+            token.Claims
+                .Single(
+                    claim =>
+                        claim.Type ==
+                        ClaimTypes.Role)
+                .Value);
+
+        Assert.DoesNotContain(
+            token.Claims,
+            claim =>
+                claim.Type ==
+                JwtClaimNames.TenantPublicId);
+    }
+
+    [Fact]
+    public void
     Generate_ShouldThrow_WhenTenantPublicIdIsEmpty()
     {
         var options =
@@ -336,5 +420,81 @@ public sealed class JwtAccessTokenGeneratorTests
                 result.AccessToken,
                 validationParameters,
                 out _));
+    }
+
+    [Fact]
+    public void
+    Generate_ShouldThrow_WhenSystemAdminHasTenantPublicId()
+    {
+        var options =
+            Options.Create(
+                new JwtOptions
+                {
+                    Issuer = "WorkFlow.API.Tests",
+                    Audience = "WorkFlow.Client.Tests",
+                    Key =
+                        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_=!",
+                    ExpirationMinutes = 60
+                });
+
+        var generator =
+            new JwtAccessTokenGenerator(
+                options);
+
+        var systemAdmin =
+            new User(
+                null,
+                "Administrador do Sistema",
+                "admin@workflow.test",
+                "password-hash-for-test",
+                UserRole.SystemAdmin);
+
+        var exception =
+            Assert.Throws<ArgumentException>(
+                () => generator.Generate(
+                    systemAdmin,
+                    Guid.NewGuid()));
+
+        Assert.Equal(
+            "tenantPublicId",
+            exception.ParamName);
+    }
+
+    [Fact]
+    public void
+    Generate_ShouldThrow_WhenTenantUserDoesNotHaveTenantPublicId()
+    {
+        var options =
+            Options.Create(
+                new JwtOptions
+                {
+                    Issuer = "WorkFlow.API.Tests",
+                    Audience = "WorkFlow.Client.Tests",
+                    Key =
+                        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_=!",
+                    ExpirationMinutes = 60
+                });
+
+        var generator =
+            new JwtAccessTokenGenerator(
+                options);
+
+        var user =
+            new User(
+                42,
+                "Usuário de Tenant",
+                "usuario@workflow.test",
+                "password-hash-for-test",
+                UserRole.Member);
+
+        var exception =
+            Assert.Throws<ArgumentException>(
+                () => generator.Generate(
+                    user,
+                    null));
+
+        Assert.Equal(
+            "tenantPublicId",
+            exception.ParamName);
     }
 }

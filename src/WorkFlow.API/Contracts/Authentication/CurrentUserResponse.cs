@@ -4,7 +4,7 @@ namespace WorkFlow.API.Contracts.Authentication;
 
 public sealed record CurrentUserResponse(
     Guid UserPublicId,
-    Guid TenantPublicId,
+    Guid? TenantPublicId,
     string Name,
     string Email,
     UserRole Role);

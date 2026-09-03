@@ -7,11 +7,15 @@ using WorkFlow.Application.Tenants.ChangeTenantStatus;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Tenants.UpdateTenant;
 using WorkFlow.Application.Tenants.ListTenants;
+using Microsoft.AspNetCore.Authorization;
+using WorkFlow.API.Authorization;
 
 namespace WorkFlow.API.Controllers;
 
 [ApiController]
 [Route("api/tenants")]
+[Authorize(
+    Policy = AuthorizationPolicyNames.SystemAdmin)]
 public sealed class TenantsController : ControllerBase
 {
     private readonly CreateTenantHandler

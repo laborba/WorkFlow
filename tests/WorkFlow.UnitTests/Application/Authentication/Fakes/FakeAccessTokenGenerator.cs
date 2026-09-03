@@ -18,7 +18,7 @@ internal sealed class FakeAccessTokenGenerator :
 
     public (string AccessToken, DateTime ExpiresAt) Generate(
         User user,
-        Guid tenantPublicId)
+        Guid? tenantPublicId)
     {
         UserReceived =
             user;

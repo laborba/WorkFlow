@@ -1322,3 +1322,37 @@ Accept: application/json
 GET {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07/users?pageNumber=1&pageSize=20
 Authorization: Bearer {{memberToken}}
 Accept: application/json
+
+### Login - SystemAdmin
+
+POST https://localhost:7040/api/authentication/login
+Content-Type: application/json
+
+{
+  "tenantPublicId": null,
+  "email": "SEU_EMAIL_DO_SYSTEM_ADMIN",
+  "password": "SUA_SENHA_DO_SYSTEM_ADMIN"
+}
+
+### Authentication - Me - SystemAdmin
+
+GET https://localhost:7040/api/authentication/me
+Authorization: Bearer {{systemAdminToken}}
+
+### Tenants - Listar - Sem token
+
+GET https://localhost:7040/api/tenants
+
+### Tenants - Listar - Member
+
+GET https://localhost:7040/api/tenants
+Authorization: Bearer {{memberToken}}
+
+### Tenants - Listar - SystemAdmin
+
+GET https://localhost:7040/api/tenants
+Authorization: Bearer {{systemAdminToken}}
+
+
+
+

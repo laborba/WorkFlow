@@ -1,6 +1,6 @@
 ﻿using WorkFlow.Application.Abstractions.Persistence;
-using WorkFlow.Domain.Entities;
 using WorkFlow.Application.Common.Pagination;
+using WorkFlow.Domain.Entities;
 using WorkFlow.Domain.Enums;
 
 namespace WorkFlow.UnitTests.Application.Users.Fakes;
@@ -22,11 +22,13 @@ internal sealed class FakeUserRepository : IUserRepository
     public Guid? CheckedPublicId { get; private set; }
 
     public IReadOnlyCollection<User> UsersToReturn { get; set; } =
-    Array.Empty<User>();
+        Array.Empty<User>();
 
     public long? CheckedGetByEmailTenantId { get; private set; }
 
     public string? CheckedGetByEmail { get; private set; }
+
+    public string? CheckedGetSystemAdminByEmail { get; private set; }
 
     public int TotalCountToReturn { get; set; }
 
@@ -46,7 +48,6 @@ internal sealed class FakeUserRepository : IUserRepository
 
     public Guid? CheckedTrackedPublicId { get; private set; }
 
-    
     public Task<bool> ExistsByEmailAsync(
         long tenantId,
         string email,
@@ -71,6 +72,17 @@ internal sealed class FakeUserRepository : IUserRepository
             tenantId;
 
         CheckedGetByEmail =
+            email;
+
+        return Task.FromResult(
+            UserToReturn);
+    }
+
+    public Task<User?> GetSystemAdminByEmailAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        CheckedGetSystemAdminByEmail =
             email;
 
         return Task.FromResult(

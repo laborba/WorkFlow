@@ -7,4 +7,7 @@ public static class AuthorizationPolicyNames
 
     public const string TenantAdmin =
         "TenantAdmin";
+
+    public const string SystemAdmin =
+        "SystemAdmin";
 }

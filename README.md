@@ -56,10 +56,12 @@ Atualmente estão implementados:
 ### Autenticação e autorização
 
 - login de usuários vinculados a uma empresa;
+- login global de `SystemAdmin` sem vínculo com Tenant;
 - autenticação baseada em JWT Bearer;
 - geração de access token assinado;
 - validação de assinatura, `Issuer`, `Audience` e expiração;
-- identificação do Tenant dentro do token;
+- identificação do Tenant dentro do token para usuários vinculados a uma empresa;
+- tokens de `SystemAdmin` não possuem a claim `tenant_public_id`;
 - identificação do perfil do usuário através de claims;
 - login com e-mail case-insensitive;
 - isolamento multi-tenant durante a autenticação;
@@ -69,14 +71,28 @@ Atualmente estão implementados:
 - endpoint protegido para consulta do usuário autenticado;
 - autorização baseada em policies;
 - policy `TenantAccess` para garantir acesso somente ao Tenant autenticado;
-- policy `TenantAdmin` para operações administrativas;
+- policy `TenantAdmin` para operações administrativas da empresa;
+- policy `SystemAdmin` para operações administrativas globais da plataforma;
 - proteção contra acesso entre Tenants;
 - endpoints administrativos de usuários restritos a `TenantAdmin`;
-- endpoints de consulta de usuários restritos ao Tenant autenticado.
+- endpoints de consulta de usuários restritos ao Tenant autenticado;
+- endpoints administrativos de Tenant restritos a `SystemAdmin`;
+- criação inicial controlada de `SystemAdmin` através de bootstrap configurado por User Secrets;
+- bootstrap de `SystemAdmin` idempotente e desabilitável após o provisionamento inicial.
 
-O login atual é destinado a usuários vinculados a um Tenant.
+O login possui dois contextos:
 
-A autenticação específica de `SystemAdmin`, que não pertence a um Tenant, será implementada separadamente.
+```text
+Usuário vinculado a Tenant
+→ TenantPublicId informado
+→ TenantAdmin, ProjectManager ou Member
+→ JWT contém tenant_public_id
+
+SystemAdmin
+→ TenantPublicId ausente
+→ autenticação global
+→ JWT não contém tenant_public_id
+```
 
 ### Persistência
 
@@ -92,7 +108,7 @@ A autenticação específica de `SystemAdmin`, que não pertence a um Tenant, se
 Última validação local:
 
 ```text
-585 testes automatizados aprovados
+606 testes automatizados aprovados
 0 falhas
 ```
 
@@ -100,25 +116,40 @@ A solução possui testes unitários e testes de integração.
 
 A autenticação e autorização possuem testes cobrindo, entre outros cenários:
 
-- login válido;
+- login válido de usuários vinculados a Tenant;
 - credenciais inválidas;
 - usuário inativo;
 - empresa inativa;
 - isolamento entre Tenants;
 - busca de usuário por e-mail normalizado;
+- login global de `SystemAdmin`; 
+- credenciais inválidas de `SystemAdmin`;
+- bloqueio de `SystemAdmin` inativo;
 - geração de JWT;
 - claims do token;
 - assinatura do token;
 - validação de Issuer e Audience;
 - rejeição de token assinado com chave incorreta;
+- JWT de usuários de Tenant com claim `tenant_public_id`;
+- JWT de `SystemAdmin` sem claim `tenant_public_id`;
+- rejeição de JWT inconsistente entre perfil e Tenant;
+- consulta de `/api/authentication/me` para usuários de Tenant;
+- consulta de `/api/authentication/me` para `SystemAdmin`;
 - acesso ao Tenant correto;
 - bloqueio de acesso a outro Tenant;
 - ausência da claim de Tenant;
 - claim de Tenant inválida;
 - rota sem Tenant;
 - Tenant inválido na rota;
-- autorização de TenantAdmin;
-- bloqueio de operações administrativas para Member.
+- autorização de `TenantAdmin`;
+- autorização de `SystemAdmin`;
+- bloqueio de operações administrativas para `Member`;
+- bootstrap inicial de `SystemAdmin`;
+- bootstrap desabilitado;
+- bootstrap idempotente;
+- validação das configurações do bootstrap;
+- busca case-insensitive de `SystemAdmin` por e-mail;
+- unicidade case-insensitive de e-mail de `SystemAdmin`.
 
 ---
 
@@ -286,11 +317,16 @@ Atualmente estão implementadas:
 ```text
 TenantAccess
 TenantAdmin
+SystemAdmin
 ```
 
 A policy `TenantAccess` garante que o `TenantPublicId` presente no JWT corresponda ao Tenant informado na rota.
 
 A policy `TenantAdmin` restringe operações administrativas a usuários com perfil `TenantAdmin`.
+
+A policy `SystemAdmin` restringe operações administrativas globais da plataforma a usuários com perfil `SystemAdmin`.
+
+Atualmente, os endpoints administrativos de Tenant são protegidos pela policy `SystemAdmin`.
 
 Permissões específicas por projeto e regras de autorização mais avançadas serão adicionadas conforme os respectivos módulos forem implementados.
 
@@ -968,7 +1004,31 @@ Exemplo de resposta:
 POST /api/authentication/login
 ```
 
-Exemplo:
+O endpoint de login atende dois contextos diferentes:
+
+```text
+Usuário vinculado a Tenant
+→ informa TenantPublicId
+
+SystemAdmin
+→ não informa TenantPublicId
+```
+
+---
+
+### Login de usuário vinculado a Tenant
+
+Usuários com os perfis:
+
+```text
+TenantAdmin
+ProjectManager
+Member
+```
+
+pertencem obrigatoriamente a um Tenant.
+
+Exemplo de requisição:
 
 ```json
 {
@@ -978,12 +1038,14 @@ Exemplo:
 }
 ```
 
-O login atual exige:
+Nesse cenário, o login utiliza:
 
 ```text
 TenantPublicId
-+ e-mail
-+ senha
++
+e-mail
++
+senha
 ```
 
 O `TenantPublicId` é necessário porque o mesmo endereço de e-mail pode existir em empresas diferentes.
@@ -1002,7 +1064,115 @@ são tratados como o mesmo e-mail dentro daquele Tenant.
 
 O usuário somente pode autenticar através da empresa à qual pertence.
 
-Conhecer o e-mail e a senha de um usuário não permite autenticá-lo utilizando outro `TenantPublicId`.
+Conhecer o e-mail e a senha de um usuário não permite autenticá-lo utilizando o `TenantPublicId` de outra empresa.
+
+Exemplo de resposta válida:
+
+```json
+{
+  "accessToken": "eyJ...",
+  "expiresAt": "2026-08-31T18:00:00Z",
+  "userPublicId": "00000000-0000-0000-0000-000000000000",
+  "tenantPublicId": "00000000-0000-0000-0000-000000000000",
+  "name": "Usuário Teste",
+  "email": "usuario@empresa.com",
+  "role": 4
+}
+```
+
+O JWT de um usuário vinculado a Tenant contém as claims:
+
+```text
+sub
+email
+name
+role
+tenant_public_id
+```
+
+---
+
+### Login de SystemAdmin
+
+O `SystemAdmin` representa um administrador global da plataforma WorkFlow.
+
+Ele não pertence a nenhum Tenant.
+
+Para esse perfil, o login é realizado com:
+
+```text
+TenantPublicId = null
++
+e-mail
++
+senha
+```
+
+Exemplo de requisição:
+
+```json
+{
+  "tenantPublicId": null,
+  "email": "admin@workflow.com",
+  "password": "uma senha longa e segura"
+}
+```
+
+Nesse cenário, o backend procura exclusivamente uma conta que possua:
+
+```text
+TenantId = null
+Role = SystemAdmin
+```
+
+Usuários vinculados a um Tenant não podem ser encontrados por esse fluxo de autenticação.
+
+Exemplo de resposta válida:
+
+```json
+{
+  "accessToken": "eyJ...",
+  "expiresAt": "2026-08-31T18:00:00Z",
+  "userPublicId": "00000000-0000-0000-0000-000000000000",
+  "tenantPublicId": null,
+  "name": "Administrador do Sistema",
+  "email": "admin@workflow.com",
+  "role": 1
+}
+```
+
+O JWT do `SystemAdmin` contém as claims:
+
+```text
+sub
+email
+name
+role
+```
+
+O token de `SystemAdmin` não contém:
+
+```text
+tenant_public_id
+```
+
+A geração do JWT valida a consistência entre o perfil do usuário e o Tenant.
+
+As regras são:
+
+```text
+SystemAdmin
+→ não pode possuir Tenant no token
+
+TenantAdmin
+ProjectManager
+Member
+→ precisam possuir Tenant no token
+```
+
+---
+
+### Erros de autenticação
 
 Quando o e-mail não existe ou a senha está incorreta, a API retorna a mesma resposta:
 
@@ -1020,14 +1190,14 @@ Um usuário inativo com senha correta retorna:
 Authentication.UserInactive
 ```
 
-Porém, se a senha desse usuário estiver incorreta, a resposta continua sendo:
+Porém, se a senha estiver incorreta, mesmo que a conta esteja inativa, a resposta continua sendo:
 
 ```text
 401 Unauthorized
 Authentication.InvalidCredentials
 ```
 
-Uma empresa inexistente retorna:
+Para usuários vinculados a Tenant, uma empresa inexistente retorna:
 
 ```text
 404 Not Found
@@ -1041,21 +1211,11 @@ Uma empresa inativa retorna:
 Tenants.Inactive
 ```
 
-Exemplo de resposta para login válido:
+---
 
-```json
-{
-  "accessToken": "eyJ...",
-  "expiresAt": "2026-08-31T18:00:00Z",
-  "userPublicId": "00000000-0000-0000-0000-000000000000",
-  "tenantPublicId": "00000000-0000-0000-0000-000000000000",
-  "name": "Usuário Teste",
-  "email": "usuario@empresa.com",
-  "role": 4
-}
-```
+### Access token
 
-O access token atual possui duração configurável.
+O access token possui duração configurável.
 
 No ambiente de desenvolvimento, a configuração utilizada atualmente é:
 
@@ -1063,15 +1223,28 @@ No ambiente de desenvolvimento, a configuração utilizada atualmente é:
 60 minutos
 ```
 
-O token contém claims referentes a:
+O token é assinado utilizando:
 
 ```text
-sub
-email
-name
-role
-tenant_public_id
+HMAC SHA-256
 ```
+
+A API valida:
+
+```text
+Issuer
+Audience
+assinatura
+expiração
+```
+
+O tempo adicional de tolerância para expiração está configurado como:
+
+```text
+ClockSkew = Zero
+```
+
+Portanto, tokens expirados não são aceitos além do horário configurado.
 
 A chave utilizada para assinatura do JWT não é armazenada no repositório.
 
@@ -1097,37 +1270,15 @@ A requisição deve enviar:
 Authorization: Bearer <accessToken>
 ```
 
-Exemplo:
-
-```http
-GET /api/authentication/me
-Authorization: Bearer eyJ...
-```
-
 O token é validado antes da execução do endpoint.
 
-São validados:
-
-```text
-assinatura
-Issuer
-Audience
-expiração
-```
-
-Uma requisição sem token retorna:
+Uma requisição sem token válido retorna:
 
 ```text
 401 Unauthorized
 ```
 
-Um token inválido também retorna:
-
-```text
-401 Unauthorized
-```
-
-Exemplo de resposta:
+Para um usuário vinculado a Tenant, a resposta possui:
 
 ```json
 {
@@ -1139,10 +1290,146 @@ Exemplo de resposta:
 }
 ```
 
+Para um `SystemAdmin`, a resposta possui:
+
+```json
+{
+  "userPublicId": "00000000-0000-0000-0000-000000000000",
+  "tenantPublicId": null,
+  "name": "Administrador do Sistema",
+  "email": "admin@workflow.com",
+  "role": 1
+}
+```
+
+O endpoint também valida a consistência entre o perfil e a claim de Tenant.
+
+Portanto:
+
+```text
+SystemAdmin sem tenant_public_id
+→ válido
+
+SystemAdmin com tenant_public_id
+→ inválido
+
+TenantAdmin sem tenant_public_id
+→ inválido
+
+ProjectManager sem tenant_public_id
+→ inválido
+
+Member sem tenant_public_id
+→ inválido
+```
+
 Atualmente esse endpoint utiliza as informações já validadas presentes nas claims do JWT.
 
 ---
 
+### Provisionamento inicial de SystemAdmin
+
+O primeiro `SystemAdmin` pode ser criado através de um bootstrap controlado na inicialização da API.
+
+As configurações do bootstrap são fornecidas fora do código-fonte, utilizando:
+
+```text
+User Secrets
+ou
+variáveis de ambiente
+```
+
+As credenciais reais não devem ser versionadas no repositório.
+
+Quando o bootstrap está habilitado:
+
+```text
+Aplicação inicia
+↓
+valida as configurações
+↓
+aplica a política de senha
+↓
+procura o SystemAdmin pelo e-mail normalizado
+```
+
+Se o administrador já existir:
+
+```text
+nenhum novo usuário é criado
+nenhuma senha é alterada
+```
+
+Se ainda não existir:
+
+```text
+senha
+↓
+PasswordHasher
+↓
+PasswordHash
+↓
+User com TenantId = null
+↓
+Role = SystemAdmin
+↓
+PostgreSQL
+```
+
+O bootstrap é idempotente.
+
+Após o provisionamento inicial, ele pode ser desabilitado e a senha removida da configuração.
+
+O bootstrap não é um endpoint HTTP e não permite cadastro público de `SystemAdmin`.
+
+---
+
+### Autorização de SystemAdmin
+
+A API possui a policy:
+
+```text
+SystemAdmin
+```
+
+Ela exige:
+
+```text
+usuário autenticado
++
+Role = SystemAdmin
+```
+
+Os endpoints administrativos globais de Tenant são protegidos por essa policy.
+
+Atualmente isso inclui:
+
+```http
+POST /api/tenants
+
+GET /api/tenants
+
+GET /api/tenants/{publicId}
+
+PUT /api/tenants/{publicId}
+
+PATCH /api/tenants/{publicId}/status
+```
+
+O comportamento esperado é:
+
+```text
+Sem token
+→ 401 Unauthorized
+
+Usuário autenticado sem perfil SystemAdmin
+→ 403 Forbidden
+
+SystemAdmin autenticado
+→ operação permitida
+```
+
+O futuro fluxo público de cadastro de empresas do WorkFlow SaaS será tratado separadamente e não utilizará esses endpoints administrativos como cadastro público.
 # Tratamento de erros
 
 A API utiliza códigos de erro estáveis.
@@ -1395,55 +1682,93 @@ Alguns princípios e recursos adotados no projeto:
 - autenticação utiliza JWT Bearer;
 - tokens possuem assinatura criptográfica;
 - `Issuer`, `Audience`, assinatura e expiração são validados;
+- `ClockSkew` está configurado como zero;
 - tokens expirados não são aceitos;
 - isolamento de Tenant ocorre no backend;
-- o Tenant autenticado é identificado através do token;
-- a claim `tenant_public_id` identifica o Tenant do usuário autenticado;
-- a claim de perfil identifica o papel global do usuário;
-- a policy `TenantAccess` valida o Tenant autenticado contra o Tenant da rota;
-- a policy `TenantAdmin` protege operações administrativas;
-- identificadores públicos não são usados como autorização;
+- identificadores públicos não são utilizados como autorização;
 - conhecer um `PublicId` não concede acesso ao recurso;
+- a claim de perfil identifica o papel global do usuário;
+- usuários vinculados a Tenant possuem a claim `tenant_public_id`;
+- tokens de `SystemAdmin` não possuem a claim `tenant_public_id`;
+- a geração do JWT valida a consistência entre perfil e Tenant;
+- a policy `TenantAccess` valida o Tenant autenticado contra o Tenant da rota;
+- a policy `TenantAdmin` protege operações administrativas dentro de uma empresa;
+- a policy `SystemAdmin` protege operações administrativas globais da plataforma;
+- endpoints administrativos de Tenant são restritos a `SystemAdmin`;
+- endpoints administrativos de usuários exigem `TenantAccess` e `TenantAdmin`;
+- consultas de usuários exigem `TenantAccess`;
 - requisições sem autenticação em endpoints protegidos retornam `401 Unauthorized`;
 - usuários autenticados sem autorização retornam `403 Forbidden`;
 - respostas de autenticação evitam revelar desnecessariamente a existência de usuários;
 - respostas da API evitam exposição de informações internas;
-- histórico importante deverá ser preservado;
-- operações críticas deverão possuir testes;
-- logs não deverão armazenar senhas, tokens ou secrets.
+- logs não deverão armazenar senhas, tokens completos ou secrets;
+- operações críticas deverão possuir testes automatizados;
+- histórico importante deverá ser preservado.
 
-O login e a autenticação JWT já estão implementados para usuários vinculados a um Tenant.
-
-O access token atual transporta informações como:
+O login suporta atualmente dois contextos:
 
 ```text
-UserPublicId
-TenantPublicId
-Name
-Email
-Role
+Usuário vinculado a Tenant
+→ TenantPublicId obrigatório
+→ JWT com tenant_public_id
+
+SystemAdmin
+→ TenantPublicId ausente
+→ JWT sem tenant_public_id
 ```
 
-O conhecimento ou alteração manual dessas informações não é suficiente para produzir um token válido, pois a assinatura JWT é verificada pela API.
+A API impede a geração de tokens inconsistentes:
 
-A autorização inicial já utiliza:
+```text
+SystemAdmin + Tenant
+→ inválido
+
+TenantAdmin sem Tenant
+→ inválido
+
+ProjectManager sem Tenant
+→ inválido
+
+Member sem Tenant
+→ inválido
+```
+
+A autorização atualmente utiliza:
 
 ```text
 Roles
 Policies
 TenantAccess
 TenantAdmin
+SystemAdmin
 ```
+
+O `SystemAdmin` pode ser provisionado inicialmente através de um bootstrap controlado por configuração segura.
+
+As credenciais do bootstrap:
+
+```text
+não são armazenadas no código-fonte
+não são versionadas
+```
+
+Durante o desenvolvimento local, podem ser fornecidas através de:
+
+```text
+User Secrets
+```
+
+O bootstrap é idempotente e pode ser desabilitado após a criação inicial da conta administrativa.
 
 A autorização continuará sendo evoluída com:
 
 ```text
 Permissões por projeto
-Regras administrativas adicionais
+Participação em projetos
 Permissões específicas por recurso
+Responsabilidade pelo recurso
+Estado do domínio
 ```
-
-A autenticação específica de `SystemAdmin` também será tratada separadamente.
 
 Funcionalidades futuras de segurança incluem:
 
@@ -1454,9 +1779,6 @@ MFA
 Recuperação segura de conta
 Revogação e gestão de sessões
 ```
-
----
-
 # Domínio planejado
 
 As principais entidades identificadas são:
@@ -1703,12 +2025,16 @@ Essa camada ainda não está implementada.
 
 - [x] Autenticação
 - [x] Login
+- [x] Login global de `SystemAdmin`
 - [x] Tokens
 - [x] Autorização inicial
 - [x] Policies
 - [x] Isolamento de Tenant por JWT
 - [x] Policy `TenantAccess`
 - [x] Policy `TenantAdmin`
+- [x] Policy `SystemAdmin`
+- [x] Proteção dos endpoints administrativos de Tenant
+- [x] Bootstrap inicial de `SystemAdmin`
 - [ ] Permissões por projeto
 - [ ] Rate limiting
 - [ ] MFA
@@ -1844,6 +2170,7 @@ Revisão
 Commit
 ```
 
+
 Último estado validado:
 
 ```text
@@ -1851,11 +2178,16 @@ Commit
 Entity Framework Core 10
 PostgreSQL
 Autenticação JWT Bearer
+Login de usuários por Tenant
+Login global de SystemAdmin
 Autorização baseada em policies
 Isolamento multi-tenant por JWT
 Policy TenantAccess
 Policy TenantAdmin
-585 testes automatizados aprovados
+Policy SystemAdmin
+Endpoints administrativos de Tenant protegidos
+Bootstrap inicial de SystemAdmin
+606 testes automatizados aprovados
 ```
 
 ---

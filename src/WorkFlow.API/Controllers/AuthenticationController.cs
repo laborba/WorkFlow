@@ -115,9 +115,9 @@ public sealed class AuthenticationController :
     [Authorize]
     [HttpGet("me")]
     [ProducesResponseType<CurrentUserResponse>(
-        StatusCodes.Status200OK)]
+    StatusCodes.Status200OK)]
     [ProducesResponseType(
-        StatusCodes.Status401Unauthorized)]
+    StatusCodes.Status401Unauthorized)]
     public ActionResult<CurrentUserResponse> Me()
     {
         var userPublicIdValue =
@@ -143,9 +143,6 @@ public sealed class AuthenticationController :
         if (!Guid.TryParse(
                 userPublicIdValue,
                 out var userPublicId) ||
-            !Guid.TryParse(
-                tenantPublicIdValue,
-                out var tenantPublicId) ||
             string.IsNullOrWhiteSpace(name) ||
             string.IsNullOrWhiteSpace(email) ||
             !Enum.TryParse<UserRole>(
@@ -153,6 +150,29 @@ public sealed class AuthenticationController :
                 out var role))
         {
             return Unauthorized();
+        }
+
+        Guid? tenantPublicId = null;
+
+        if (role == UserRole.SystemAdmin)
+        {
+            if (!string.IsNullOrWhiteSpace(
+                    tenantPublicIdValue))
+            {
+                return Unauthorized();
+            }
+        }
+        else
+        {
+            if (!Guid.TryParse(
+                    tenantPublicIdValue,
+                    out var parsedTenantPublicId))
+            {
+                return Unauthorized();
+            }
+
+            tenantPublicId =
+                parsedTenantPublicId;
         }
 
         return Ok(

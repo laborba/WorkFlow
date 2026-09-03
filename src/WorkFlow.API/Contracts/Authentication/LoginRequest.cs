@@ -1,6 +1,6 @@
 ﻿namespace WorkFlow.API.Contracts.Authentication;
 
 public sealed record LoginRequest(
-    Guid TenantPublicId,
+    Guid? TenantPublicId,
     string Email,
     string Password);

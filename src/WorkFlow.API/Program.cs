@@ -9,6 +9,7 @@ using WorkFlow.Application;
 using WorkFlow.Application.Abstractions.Security;
 using WorkFlow.Domain.Enums;
 using WorkFlow.Infrastructure;
+using WorkFlow.API.Bootstrap;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +27,10 @@ builder.Services.AddProblemDetails();
 builder.Services.Configure<JwtOptions>(
     builder.Configuration.GetSection(
         JwtOptions.SectionName));
+
+builder.Services.Configure<SystemAdminBootstrapOptions>(
+    builder.Configuration.GetSection(
+        SystemAdminBootstrapOptions.SectionName));
 
 var jwtOptions =
     builder.Configuration
@@ -89,6 +94,16 @@ builder.Services.AddAuthorization(options =>
             policy.RequireRole(
                 UserRole.TenantAdmin.ToString());
         });
+
+    options.AddPolicy(
+        AuthorizationPolicyNames.SystemAdmin,
+        policy =>
+        {
+            policy.RequireAuthenticatedUser();
+
+            policy.RequireRole(
+                UserRole.SystemAdmin.ToString());
+        });
 });
 
 builder.Services.AddScoped<
@@ -100,6 +115,9 @@ var connectionString =
     ?? throw new InvalidOperationException(
         "A string de conexão 'PostgreSQL' não foi configurada.");
 
+builder.Services.AddScoped<
+    SystemAdminBootstrapper>();
+
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(connectionString);
 
@@ -108,6 +126,17 @@ builder.Services.AddScoped<
     JwtAccessTokenGenerator>();
 
 var app = builder.Build();
+
+using (var scope =
+    app.Services.CreateScope())
+{
+    var systemAdminBootstrapper =
+        scope.ServiceProvider
+            .GetRequiredService<
+                SystemAdminBootstrapper>();
+
+    await systemAdminBootstrapper.ExecuteAsync();
+}
 
 app.UseExceptionHandler();
 

@@ -50,6 +50,23 @@ public sealed class UserRepository : IUserRepository
                 cancellationToken);
     }
 
+    public Task<User?> GetSystemAdminByEmailAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedEmail =
+            EmailNormalizer.Normalize(email);
+
+        return _context.Users
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                user =>
+                    user.TenantId == null &&
+                    user.Role == UserRole.SystemAdmin &&
+                    user.NormalizedEmail == normalizedEmail,
+                cancellationToken);
+    }
+
     public Task<User?> GetByPublicIdAsync(
         long tenantId,
         Guid publicId,

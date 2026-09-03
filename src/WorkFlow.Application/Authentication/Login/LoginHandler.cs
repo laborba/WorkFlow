@@ -30,7 +30,8 @@ public sealed class LoginHandler
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        if (command.TenantPublicId == Guid.Empty)
+        if (command.TenantPublicId.HasValue &&
+            command.TenantPublicId.Value == Guid.Empty)
         {
             throw new ArgumentException(
                 "O PublicId da empresa não pode estar vazio.",
@@ -51,9 +52,55 @@ public sealed class LoginHandler
                 nameof(command.Password));
         }
 
+        if (!command.TenantPublicId.HasValue)
+        {
+            var systemAdmin =
+                await _userRepository.GetSystemAdminByEmailAsync(
+                    command.Email,
+                    cancellationToken);
+
+            if (systemAdmin is null)
+            {
+                return Result<LoginResult>.Failure(
+                    AuthenticationErrors.InvalidCredentials);
+            }
+
+            var passwordIsValid =
+                _passwordHasher.Verify(
+                    command.Password,
+                    systemAdmin.PasswordHash);
+
+            if (!passwordIsValid)
+            {
+                return Result<LoginResult>.Failure(
+                    AuthenticationErrors.InvalidCredentials);
+            }
+
+            if (!systemAdmin.IsActive)
+            {
+                return Result<LoginResult>.Failure(
+                    AuthenticationErrors.UserInactive);
+            }
+
+            var token =
+                _accessTokenGenerator.Generate(
+                    systemAdmin,
+                    null);
+
+            return Result<LoginResult>.Success(
+                new LoginResult(
+                    token.AccessToken,
+                    token.ExpiresAt,
+                    systemAdmin.PublicId,
+                    null,
+                    systemAdmin.Name,
+                    systemAdmin.Email,
+                    systemAdmin.Role));
+        }
+
         var tenant =
             await _tenantRepository.GetByPublicIdAsync(
-                command.TenantPublicId,
+                command.TenantPublicId.Value,
                 cancellationToken);
 
         if (tenant is null)
@@ -80,12 +127,12 @@ public sealed class LoginHandler
                 AuthenticationErrors.InvalidCredentials);
         }
 
-        var passwordIsValid =
+        var userPasswordIsValid =
             _passwordHasher.Verify(
                 command.Password,
                 user.PasswordHash);
 
-        if (!passwordIsValid)
+        if (!userPasswordIsValid)
         {
             return Result<LoginResult>.Failure(
                 AuthenticationErrors.InvalidCredentials);
@@ -97,15 +144,15 @@ public sealed class LoginHandler
                 AuthenticationErrors.UserInactive);
         }
 
-        var token =
+        var userToken =
             _accessTokenGenerator.Generate(
                 user,
                 tenant.PublicId);
 
         return Result<LoginResult>.Success(
             new LoginResult(
-                token.AccessToken,
-                token.ExpiresAt,
+                userToken.AccessToken,
+                userToken.ExpiresAt,
                 user.PublicId,
                 tenant.PublicId,
                 user.Name,

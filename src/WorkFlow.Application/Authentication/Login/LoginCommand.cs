@@ -1,6 +1,6 @@
 ﻿namespace WorkFlow.Application.Authentication.Login;
 
 public sealed record LoginCommand(
-    Guid TenantPublicId,
+    Guid? TenantPublicId,
     string Email,
     string Password);

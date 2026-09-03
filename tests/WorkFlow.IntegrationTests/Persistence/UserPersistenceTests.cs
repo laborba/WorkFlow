@@ -1398,4 +1398,185 @@ GetByEmailAsync_ShouldReturnUser_WhenEmailDiffersOnlyByCase()
 
         await transaction.RollbackAsync();
     }
+
+    [Fact]
+    public async Task
+    GetSystemAdminByEmailAsync_ShouldReturnSystemAdmin_WhenEmailDiffersOnlyByCase()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var email =
+            $"admin-{uniqueValue}@test.local";
+
+        var tenant =
+            new Tenant(
+                "Empresa de Teste",
+                $"registration-{uniqueValue}",
+                $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(tenant);
+
+        await context.SaveChangesAsync();
+
+        var tenantUser =
+            new User(
+                tenant.Id,
+                "Usuário do Tenant",
+                email,
+                "tenant-user-password-hash",
+                UserRole.Member);
+
+        var systemAdmin =
+            new User(
+                null,
+                "Administrador do Sistema",
+                email.ToUpperInvariant(),
+                "system-admin-password-hash",
+                UserRole.SystemAdmin);
+
+        context.Users.Add(tenantUser);
+        context.Users.Add(systemAdmin);
+
+        await context.SaveChangesAsync();
+
+        var systemAdminPublicId =
+            systemAdmin.PublicId;
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new UserRepository(context);
+
+        var result =
+            await repository.GetSystemAdminByEmailAsync(
+                email);
+
+        Assert.NotNull(
+            result);
+
+        Assert.Equal(
+            systemAdminPublicId,
+            result!.PublicId);
+
+        Assert.Null(
+            result.TenantId);
+
+        Assert.Equal(
+            UserRole.SystemAdmin,
+            result.Role);
+
+        Assert.Equal(
+            email.ToUpperInvariant(),
+            result.Email);
+
+        Assert.Equal(
+            "system-admin-password-hash",
+            result.PasswordHash);
+
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task
+    GetSystemAdminByEmailAsync_ShouldReturnNull_WhenOnlyTenantUserExists()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant =
+            new Tenant(
+                "Empresa de Teste",
+                $"registration-{uniqueValue}",
+                $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(tenant);
+
+        await context.SaveChangesAsync();
+
+        var email =
+            $"usuario-{uniqueValue}@test.local";
+
+        var tenantUser =
+            new User(
+                tenant.Id,
+                "Usuário do Tenant",
+                email,
+                "tenant-user-password-hash",
+                UserRole.TenantAdmin);
+
+        context.Users.Add(tenantUser);
+
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new UserRepository(context);
+
+        var result =
+            await repository.GetSystemAdminByEmailAsync(
+                email);
+
+        Assert.Null(
+            result);
+
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task
+    SaveChanges_ShouldThrow_WhenSystemAdminEmailDiffersOnlyByCase()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var email =
+            $"admin-{uniqueValue}@test.local";
+
+        var firstSystemAdmin =
+            new User(
+                null,
+                "Primeiro Administrador",
+                email,
+                "first-password-hash",
+                UserRole.SystemAdmin);
+
+        var secondSystemAdmin =
+            new User(
+                null,
+                "Segundo Administrador",
+                email.ToUpperInvariant(),
+                "second-password-hash",
+                UserRole.SystemAdmin);
+
+        context.Users.Add(firstSystemAdmin);
+
+        await context.SaveChangesAsync();
+
+        context.Users.Add(secondSystemAdmin);
+
+        await Assert.ThrowsAsync<DbUpdateException>(
+            () => context.SaveChangesAsync());
+
+        await transaction.RollbackAsync();
+    }
 }
