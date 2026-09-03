@@ -1,10 +1,10 @@
 ﻿namespace WorkFlow.Application.Abstractions.Persistence;
 
-public interface IUnitOfWork
+public interface IUnitOfWorkTransaction : IAsyncDisposable
 {
-    Task<IUnitOfWorkTransaction> BeginTransactionAsync(
+    Task CommitAsync(
         CancellationToken cancellationToken = default);
 
-    Task<int> SaveChangesAsync(
+    Task RollbackAsync(
         CancellationToken cancellationToken = default);
 }

@@ -9,6 +9,11 @@ public static class UserErrors
             "Users.NotFound",
             "O usuário informado não foi encontrado.");
 
+    public static Error Inactive { get; } =
+        new(
+            "Users.Inactive",
+            "Não é possível realizar esta operação porque o usuário está desativado.");
+
     public static Error EmailAlreadyExists { get; } =
         new(
             "Users.EmailAlreadyExists",

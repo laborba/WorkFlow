@@ -48,6 +48,17 @@ public sealed class WorkFlowDbContext : DbContext, IUnitOfWork
     public DbSet<ProjectHistory> ProjectHistories =>
         Set<ProjectHistory>();
 
+    public async Task<IUnitOfWorkTransaction> BeginTransactionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var transaction =
+            await Database.BeginTransactionAsync(
+                cancellationToken);
+
+        return new EfCoreUnitOfWorkTransaction(
+            transaction);
+    }
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {

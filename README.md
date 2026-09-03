@@ -53,6 +53,25 @@ Atualmente estão implementados:
 - filtro por perfil;
 - filtro por status ativo/inativo.
 
+### Projetos
+
+- criação de projetos dentro de um Tenant;
+- criação permitida para `TenantAdmin` e `ProjectManager`;
+- bloqueio de criação por `Member`;
+- isolamento do projeto pelo Tenant autenticado;
+- identificação do criador através do JWT;
+- o cliente não pode escolher arbitrariamente o usuário criador;
+- validação do estado atual do Tenant e do usuário criador;
+- bloqueio de criação em Tenant inativo;
+- bloqueio de criação por usuário inativo;
+- projeto criado inicialmente com status `Planning`;
+- nome, descrição e prazo opcional;
+- criador adicionado automaticamente como membro ativo do projeto;
+- criação de projeto e membro inicial protegida por transação;
+- rollback em caso de falha durante a persistência;
+- policy `ProjectCreation` para criação por `TenantAdmin` ou `ProjectManager`;
+- combinação das policies `TenantAccess` e `ProjectCreation` no endpoint de criação.
+
 ### Autenticação e autorização
 
 - login de usuários vinculados a uma empresa;
@@ -108,7 +127,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-606 testes automatizados aprovados
+621 testes automatizados aprovados
 0 falhas
 ```
 
@@ -150,6 +169,17 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - validação das configurações do bootstrap;
 - busca case-insensitive de `SystemAdmin` por e-mail;
 - unicidade case-insensitive de e-mail de `SystemAdmin`.
+- criação de projeto por `TenantAdmin`;
+- criação de projeto por `ProjectManager`;
+- bloqueio de criação por `Member`;
+- validação de Tenant inexistente ou inativo na criação de projeto;
+- validação de usuário criador inexistente ou inativo;
+- identificação do criador através do usuário autenticado;
+- inclusão automática do criador como `ProjectMember`;
+- transação durante a criação de projeto e membro inicial;
+- rollback quando a persistência do projeto falha;
+- rollback quando a persistência do membro inicial falha;
+- persistência real de `Project` e `ProjectMember` no PostgreSQL.
 
 ---
 
@@ -318,6 +348,7 @@ Atualmente estão implementadas:
 TenantAccess
 TenantAdmin
 SystemAdmin
+ProjectCreation
 ```
 
 A policy `TenantAccess` garante que o `TenantPublicId` presente no JWT corresponda ao Tenant informado na rota.
@@ -325,6 +356,9 @@ A policy `TenantAccess` garante que o `TenantPublicId` presente no JWT correspon
 A policy `TenantAdmin` restringe operações administrativas a usuários com perfil `TenantAdmin`.
 
 A policy `SystemAdmin` restringe operações administrativas globais da plataforma a usuários com perfil `SystemAdmin`.
+
+A policy `ProjectCreation` permite a criação de projetos para usuários com perfil `TenantAdmin` ou `ProjectManager`.
+Ela é utilizada em conjunto com a policy `TenantAccess`, garantindo que o usuário somente possa criar projetos dentro do próprio Tenant.
 
 Atualmente, os endpoints administrativos de Tenant são protegidos pela policy `SystemAdmin`.
 
@@ -995,6 +1029,145 @@ Exemplo de resposta:
 ```
 
 ---
+
+## Projetos
+
+### Autorização dos endpoints de projetos
+
+A criação de projetos exige as policies:
+
+```text
+TenantAccess
++
+ProjectCreation
+```
+
+A policy `TenantAccess` garante que o Tenant informado na rota corresponda ao Tenant presente no JWT.
+
+A policy `ProjectCreation` permite a criação para:
+
+```text
+TenantAdmin
+ProjectManager
+```
+
+e bloqueia:
+
+```text
+Member
+SystemAdmin
+```
+
+Portanto:
+
+```text
+Sem autenticação
+→ 401 Unauthorized
+
+Usuário autenticado tentando utilizar outro Tenant
+→ 403 Forbidden
+
+Member
+→ 403 Forbidden
+
+TenantAdmin no próprio Tenant
+→ permitido
+
+ProjectManager no próprio Tenant
+→ permitido
+```
+
+---
+
+### Criar projeto
+
+```http
+POST /api/tenants/{tenantPublicId}/projects
+```
+
+Exemplo de requisição:
+
+```json
+{
+  "name": "Novo Projeto",
+  "description": "Descrição do projeto",
+  "dueDate": "2026-12-31T18:00:00Z"
+}
+```
+
+Campos disponíveis:
+
+- `name`: nome do projeto;
+- `description`: descrição opcional;
+- `dueDate`: prazo opcional.
+
+O usuário criador não é informado no corpo da requisição.
+
+Ele é identificado através da claim:
+
+```text
+sub
+```
+
+do JWT autenticado.
+
+Isso impede que o cliente escolha arbitrariamente outro usuário como criador do projeto.
+
+O backend também consulta novamente o usuário no banco para validar:
+
+```text
+usuário pertence ao Tenant
+usuário está ativo
+perfil atual permite criação
+```
+
+O projeto é criado inicialmente com:
+
+```text
+Status = Planning
+ResponsibleUserId = null
+```
+
+O criador é automaticamente adicionado como membro ativo do projeto.
+
+A criação utiliza uma transação para garantir consistência:
+
+```text
+cria Project
+↓
+salva e obtém Project.Id
+↓
+cria ProjectMember para o criador
+↓
+salva membro
+↓
+Commit
+```
+
+Caso alguma gravação falhe:
+
+```text
+Rollback
+```
+
+evitando que um projeto fique persistido sem seu membro inicial.
+
+Exemplo de resposta:
+
+```json
+{
+  "publicId": "00000000-0000-0000-0000-000000000000",
+  "tenantPublicId": "00000000-0000-0000-0000-000000000000",
+  "createdByUserPublicId": "00000000-0000-0000-0000-000000000000",
+  "name": "Novo Projeto",
+  "description": "Descrição do projeto",
+  "status": 1,
+  "dueDate": "2026-12-31T18:00:00Z",
+  "createdAt": "2026-09-03T17:25:59Z"
+}
+```
+
+
 
 ## Autenticação
 
@@ -1694,6 +1867,8 @@ Alguns princípios e recursos adotados no projeto:
 - a policy `TenantAccess` valida o Tenant autenticado contra o Tenant da rota;
 - a policy `TenantAdmin` protege operações administrativas dentro de uma empresa;
 - a policy `SystemAdmin` protege operações administrativas globais da plataforma;
+- a policy `ProjectCreation` permite a criação de projetos para `TenantAdmin` e `ProjectManager`;
+- a criação de projetos combina `TenantAccess` e `ProjectCreation`, garantindo que o usuário crie projetos somente dentro do próprio Tenant;
 - endpoints administrativos de Tenant são restritos a `SystemAdmin`;
 - endpoints administrativos de usuários exigem `TenantAccess` e `TenantAdmin`;
 - consultas de usuários exigem `TenantAccess`;
@@ -1741,6 +1916,7 @@ Policies
 TenantAccess
 TenantAdmin
 SystemAdmin
+ProjectCreation
 ```
 
 O `SystemAdmin` pode ser provisionado inicialmente através de um bootstrap controlado por configuração segura.
@@ -2033,6 +2209,7 @@ Essa camada ainda não está implementada.
 - [x] Policy `TenantAccess`
 - [x] Policy `TenantAdmin`
 - [x] Policy `SystemAdmin`
+- [x] Policy `ProjectCreation`
 - [x] Proteção dos endpoints administrativos de Tenant
 - [x] Bootstrap inicial de `SystemAdmin`
 - [ ] Permissões por projeto
@@ -2045,9 +2222,16 @@ Essa camada ainda não está implementada.
 - [x] Entidade e regras centrais de domínio
 - [x] Membros de projeto no domínio
 - [x] Permissões de projeto no domínio
-- [ ] Casos de uso
-- [ ] Endpoints
-- [ ] Persistência completa dos fluxos
+- [x] Criação de projeto
+- [x] Inclusão automática do criador como membro
+- [x] Autorização de criação por `TenantAdmin` e `ProjectManager`
+- [x] Persistência da criação de projeto e membro inicial
+- [ ] Consulta individual
+- [ ] Listagem
+- [ ] Atualização
+- [ ] Gerenciamento de membros
+- [ ] Gerenciamento de permissões
+- [ ] Fluxos de status
 - [ ] Histórico
 - [ ] Kanban
 
@@ -2185,9 +2369,13 @@ Isolamento multi-tenant por JWT
 Policy TenantAccess
 Policy TenantAdmin
 Policy SystemAdmin
+Policy ProjectCreation
 Endpoints administrativos de Tenant protegidos
 Bootstrap inicial de SystemAdmin
-606 testes automatizados aprovados
+Criação de projetos por TenantAdmin e ProjectManager
+Criador adicionado automaticamente como membro do projeto
+Criação de projeto protegida por transação
+621 testes automatizados aprovados
 ```
 
 ---

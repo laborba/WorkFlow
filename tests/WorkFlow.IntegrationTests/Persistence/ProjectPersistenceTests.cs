@@ -697,4 +697,93 @@ public sealed class ProjectPersistenceTests
 
         await transaction.RollbackAsync();
     }
+
+    [Fact]
+    public async Task
+    Create_ShouldPersistCreatorAsActiveProjectMember()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant =
+            new Tenant(
+                $"Tenant {uniqueValue}",
+                $"REG-{uniqueValue}",
+                $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(
+            tenant);
+
+        await context.SaveChangesAsync();
+
+        var creator =
+            new User(
+                tenant.Id,
+                "Criador do Projeto",
+                $"creator-{uniqueValue}@test.local",
+                "creator-password-hash",
+                UserRole.ProjectManager);
+
+        context.Users.Add(
+            creator);
+
+        await context.SaveChangesAsync();
+
+        var project =
+            new Project(
+                tenant.Id,
+                $"Projeto {uniqueValue}",
+                creator.Id);
+
+        context.Projects.Add(
+            project);
+
+        await context.SaveChangesAsync();
+
+        var projectMember =
+            new ProjectMember(
+                project.Id,
+                creator.Id,
+                creator.Id);
+
+        context.ProjectMembers.Add(
+            projectMember);
+
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var persistedMember =
+            await context.ProjectMembers
+                .SingleAsync(
+                    member =>
+                        member.ProjectId == project.Id &&
+                        member.UserId == creator.Id);
+
+        Assert.Equal(
+            project.Id,
+            persistedMember.ProjectId);
+
+        Assert.Equal(
+            creator.Id,
+            persistedMember.UserId);
+
+        Assert.Equal(
+            creator.Id,
+            persistedMember.AddedByUserId);
+
+        Assert.True(
+            persistedMember.IsActive);
+
+        Assert.Null(
+            persistedMember.RemovedAt);
+
+        await transaction.RollbackAsync();
+    }
 }

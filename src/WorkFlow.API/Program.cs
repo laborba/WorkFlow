@@ -104,6 +104,17 @@ builder.Services.AddAuthorization(options =>
             policy.RequireRole(
                 UserRole.SystemAdmin.ToString());
         });
+
+    options.AddPolicy(
+        AuthorizationPolicyNames.ProjectCreation,
+        policy =>
+        {
+            policy.RequireAuthenticatedUser();
+
+            policy.RequireRole(
+                UserRole.TenantAdmin.ToString(),
+                UserRole.ProjectManager.ToString());
+        });
 });
 
 builder.Services.AddScoped<

@@ -10,4 +10,7 @@ public static class AuthorizationPolicyNames
 
     public const string SystemAdmin =
         "SystemAdmin";
+
+    public const string ProjectCreation =
+        "ProjectCreation";
 }

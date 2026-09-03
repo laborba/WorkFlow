@@ -1,5 +1,10 @@
 @WorkFlow_API_HostAddress = https://localhost:7040
 
+@systemAdminToken = COLE_AQUI_O_ACCESS_TOKEN
+@tenantAdminToken = COLE_AQUI_O_ACCESS_TOKEN
+@projectManagerToken = COLE_AQUI_O_ACCESS_TOKEN
+@memberToken = COLE_AQUI_O_ACCESS_TOKEN
+
 ### Cadastrar empresa
 
 POST {{WorkFlow_API_HostAddress}}/api/tenants
@@ -1006,8 +1011,6 @@ Content-Type: application/json
 
 ### Criar usuário como Member - deve retornar 403 Forbidden
 
-@memberToken = COLE_AQUI_O_ACCESS_TOKEN
-
 POST {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users
 Authorization: Bearer {{memberToken}}
 Content-Type: application/json
@@ -1041,8 +1044,6 @@ Content-Type: application/json
 
 
 ### Criar usuário como TenantAdmin do Tenant correto - deve retornar 201
-
-@tenantAdminToken = COLE_AQUI_O_ACCESS_TOKEN
 
 POST {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users
 Authorization: Bearer {{tenantAdminToken}}
@@ -1353,6 +1354,106 @@ Authorization: Bearer {{memberToken}}
 GET https://localhost:7040/api/tenants
 Authorization: Bearer {{systemAdminToken}}
 
+### Projetos - Criar como TenantAdmin - deve retornar 201 Created
 
+POST {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/projects
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Projeto criado pelo TenantAdmin",
+  "description": "Primeiro teste manual do endpoint de projetos.",
+  "dueDate": "2026-12-31T18:00:00Z"
+}
+
+### Projetos - Criar sem token - deve retornar 401 Unauthorized
+
+POST {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/projects
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Projeto sem autenticação",
+  "description": null,
+  "dueDate": null
+}
+
+### Projetos - Login como Member
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "242cffd3-3bb1-4c99-bf0a-e4efd1655a0b",
+  "email": "criado-pelo-admin@test.local",
+  "password": "uma senha longa e segura"
+}
+
+### Projetos - Criar como Member - deve retornar 403 Forbidden
+
+POST {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/projects
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Projeto criado por Member",
+  "description": null,
+  "dueDate": null
+}
+
+### Projetos - TenantAdmin tentando criar em outro Tenant - deve retornar 403 Forbidden
+
+POST {{WorkFlow_API_HostAddress}}/api/tenants/185f2285-260c-4f28-bdd9-d85496219e07/projects
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Projeto em outro Tenant",
+  "description": null,
+  "dueDate": null
+}
+
+### Projetos - Criar usuário ProjectManager para teste
+
+POST {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/users
+Authorization: Bearer {{projectManagerToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Project Manager API",
+  "email": "project-manager-api@test.local",
+  "password": "uma senha longa e segura",
+  "role": 3
+}
+
+### Projetos - Login como ProjectManager
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "242cffd3-3bb1-4c99-bf0a-e4efd1655a0b",
+  "email": "project-manager-api@test.local",
+  "password": "uma senha longa e segura"
+}
+
+### Projetos - Criar como ProjectManager - deve retornar 201 Created
+
+POST {{WorkFlow_API_HostAddress}}/api/tenants/242cffd3-3bb1-4c99-bf0a-e4efd1655a0b/projects
+Authorization: Bearer {{projectManagerToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Projeto criado pelo ProjectManager",
+  "description": "Projeto criado durante o teste manual.",
+  "dueDate": null
+}
 
 
