@@ -50,6 +50,24 @@ internal sealed class FakeProjectRepository :
             ProjectToReturn);
     }
 
+    public Task<Project?> GetTrackedByPublicIdAsync(
+        long tenantId,
+        Guid publicId,
+        CancellationToken cancellationToken = default)
+    {
+        if (ProjectToReturn is null)
+            return Task.FromResult<Project?>(null);
+
+        if (ProjectToReturn.TenantId != tenantId ||
+            ProjectToReturn.PublicId != publicId)
+        {
+            return Task.FromResult<Project?>(null);
+        }
+
+        return Task.FromResult<Project?>(
+            ProjectToReturn);
+    }
+
     public Task<PagedData<ProjectListItemData>> GetPagedAsync(
         long tenantId,
         long? activeMemberUserId,

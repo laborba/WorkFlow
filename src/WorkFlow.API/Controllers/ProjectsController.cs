@@ -11,6 +11,7 @@ using WorkFlow.Application.Projects.ListProjects;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Enums;
+using WorkFlow.Application.Projects.UpdateProject;
 
 namespace WorkFlow.API.Controllers;
 
@@ -28,10 +29,14 @@ public sealed class ProjectsController :
     private readonly ListProjectsHandler
         _listProjectsHandler;
 
+    private readonly UpdateProjectHandler
+        _updateProjectHandler;
+
     public ProjectsController(
         CreateProjectHandler createProjectHandler,
         GetProjectByPublicIdHandler getProjectByPublicIdHandler,
-        ListProjectsHandler listProjectsHandler)
+        ListProjectsHandler listProjectsHandler,
+        UpdateProjectHandler updateProjectHandler)
     {
         _createProjectHandler =
             createProjectHandler;
@@ -41,6 +46,9 @@ public sealed class ProjectsController :
 
         _listProjectsHandler =
             listProjectsHandler;
+
+        _updateProjectHandler =
+            updateProjectHandler;
     }
 
     [Authorize(
@@ -345,6 +353,110 @@ public sealed class ProjectsController :
 
         var response =
             new GetProjectByPublicIdResponse(
+                project.PublicId,
+                project.TenantPublicId,
+                project.CreatedByUserPublicId,
+                project.ResponsibleUserPublicId,
+                project.Name,
+                project.Description,
+                project.Status,
+                project.DueDate,
+                project.CreatedAt,
+                project.UpdatedAt,
+                project.ArchivedAt);
+
+        return Ok(
+            response);
+    }
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpPut("{projectPublicId:guid}")]
+    [ProducesResponseType<UpdateProjectResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<UpdateProjectResponse>> Update(
+        Guid tenantPublicId,
+        Guid projectPublicId,
+        [FromBody] UpdateProjectRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var userPublicId))
+        {
+            return Unauthorized();
+        }
+
+        var command =
+            new UpdateProjectCommand(
+                tenantPublicId,
+                projectPublicId,
+                userPublicId,
+                request.Name,
+                request.Description,
+                request.DueDate);
+
+        var result =
+            await _updateProjectHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound ||
+                error == UserErrors.NotFound ||
+                error == ProjectErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            if (error == TenantErrors.Inactive ||
+                error == ProjectErrors.Archived)
+            {
+                return Conflict(
+                    errorResponse);
+            }
+
+            if (error == UserErrors.Inactive ||
+                error == ProjectErrors.UpdateNotAllowed)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var project =
+            result.Value!;
+
+        var response =
+            new UpdateProjectResponse(
                 project.PublicId,
                 project.TenantPublicId,
                 project.CreatedByUserPublicId,

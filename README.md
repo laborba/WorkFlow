@@ -96,7 +96,18 @@ Atualmente estão implementados:
 - ordenação padrão por projetos mais recentes;
 - dados do responsável são resolvidos na própria consulta de persistência, evitando consultas adicionais por projeto;
 - contagem e paginação são aplicadas somente após as regras de Tenant, participação e filtros;
-- listagem sem resultados retorna `200 OK` com coleção vazia.
+- listagem sem resultados retorna `200 OK` com coleção vazia;
+- atualização dos dados básicos do projeto;
+- atualização de nome, descrição e prazo;
+- possibilidade de remover o prazo enviando `DueDate = null`;
+- `TenantAdmin` pode atualizar qualquer projeto do próprio Tenant;
+- `ProjectManager` pode atualizar somente projetos nos quais possua participação ativa;
+- `Member` não pode atualizar projetos;
+- `SystemAdmin` não possui acesso operacional à atualização de projetos de Tenant;
+- projetos concluídos (`Completed`) continuam permitindo atualização dos dados básicos;
+- projetos arquivados (`Archived`) não podem ser atualizados;
+- status e responsável não são alterados pelo endpoint de atualização;
+- atualização utiliza entidade rastreada pelo Entity Framework Core e persiste as alterações através do `UnitOfWork`.
 
 ### Autenticação e autorização
 
@@ -153,7 +164,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-676 testes automatizados aprovados
+704 testes automatizados aprovados
 0 falhas
 ```
 
@@ -235,7 +246,23 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - validação de status inválido;
 - validação de responsável com identificador público vazio;
 - listagem vazia quando nenhum projeto estiver visível;
-- testes reais da consulta paginada de projetos contra PostgreSQL.
+- testes reais da consulta paginada de projetos contra PostgreSQL;
+- atualização de projeto por `TenantAdmin`;
+- atualização de projeto por `ProjectManager` com participação ativa;
+- bloqueio de atualização para `ProjectManager` sem participação ativa;
+- bloqueio de atualização para `Member`;
+- atualização de projetos concluídos;
+- bloqueio de atualização de projetos arquivados;
+- validação de Tenant inexistente ou inativo durante a atualização;
+- validação de usuário solicitante inexistente ou inativo;
+- validação de projeto inexistente;
+- validação dos identificadores públicos obrigatórios;
+- validação de nome vazio;
+- atualização e remoção de prazo;
+- resolução do criador e do responsável na resposta da atualização;
+- isolamento da busca do projeto pelo Tenant;
+- persistência real das alterações do projeto no PostgreSQL;
+- testes da camada HTTP para sucesso, autenticação, autorização e conflitos da atualização.
 
 ---
 
@@ -1179,6 +1206,79 @@ Na listagem, projetos sem participação ativa simplesmente não são retornados
 
 Projetos arquivados continuam consultáveis individualmente seguindo as mesmas regras de autorização.
 
+A atualização dos dados básicos do projeto também utiliza:
+
+```text
+TenantAccess
+```
+
+e aplica autorização específica no backend.
+
+As regras atuais de atualização são:
+
+```text
+TenantAdmin
+→ pode atualizar qualquer projeto do próprio Tenant
+
+ProjectManager
+→ pode atualizar somente se possuir participação ativa no projeto
+
+Member
+→ não pode atualizar projetos
+
+SystemAdmin
+→ não possui acesso operacional a projetos de Tenant
+```
+
+Para atualização por `ProjectManager`, participação ativa significa:
+
+```text
+ProjectMember.RemovedAt == null
+```
+
+Projetos nos estados:
+
+```text
+Planning
+InProgress
+Paused
+Completed
+```
+
+podem ter seus dados básicos atualizados.
+
+Projetos com status:
+
+```text
+Archived
+```
+
+não podem ser atualizados.
+
+Nesse caso, a API retorna:
+
+```text
+409 Conflict
+Projects.Archived
+```
+
+Um `ProjectManager` sem participação ativa ou um `Member` recebe:
+
+```text
+403 Forbidden
+Projects.UpdateNotAllowed
+```
+
+O endpoint de atualização altera somente:
+
+```text
+Name
+Description
+DueDate
+```
+
+O status e o responsável do projeto não são alterados por esse endpoint.
+
 O conhecimento do `PublicId` de um projeto não concede acesso ao recurso.
 
 ---
@@ -1484,6 +1584,127 @@ Id DESC
 ```
 
 mantendo os projetos mais recentes primeiro e uma ordenação determinística para paginação.
+
+---
+
+### Atualizar projeto
+
+```http
+PUT /api/tenants/{tenantPublicId}/projects/{projectPublicId}
+```
+
+A atualização exige:
+
+```text
+TenantAccess
+```
+
+e aplica as regras de autorização específicas do projeto no backend.
+
+As regras atuais são:
+
+```text
+TenantAdmin
+→ pode atualizar qualquer projeto do próprio Tenant
+
+ProjectManager
+→ pode atualizar somente se possuir participação ativa no projeto
+
+Member
+→ não pode atualizar projetos
+
+SystemAdmin
+→ não possui acesso operacional aos projetos do Tenant
+```
+
+Para `ProjectManager`, participação ativa significa:
+
+```text
+ProjectMember.RemovedAt == null
+```
+
+Campos disponíveis para atualização:
+
+```text
+name
+description
+dueDate
+```
+
+Exemplo de requisição:
+
+```json
+{
+  "name": "Projeto Atualizado",
+  "description": "Descrição atualizada",
+  "dueDate": "2027-01-31T18:00:00Z"
+}
+```
+
+O campo `dueDate` pode ser removido enviando:
+
+```json
+{
+  "name": "Projeto Atualizado",
+  "description": "Descrição atualizada",
+  "dueDate": null
+}
+```
+
+Este endpoint não altera:
+
+```text
+Status
+ResponsibleUser
+CreatedByUser
+```
+
+Alterações de status e responsável serão tratadas por casos de uso específicos.
+
+Projetos nos estados:
+
+```text
+Planning
+InProgress
+Paused
+Completed
+```
+
+podem ter seus dados básicos atualizados.
+
+Projetos `Archived` não podem ser atualizados.
+
+Nesse caso, a API retorna:
+
+```text
+409 Conflict
+Projects.Archived
+```
+
+Um `ProjectManager` sem participação ativa ou um `Member` recebe:
+
+```text
+403 Forbidden
+Projects.UpdateNotAllowed
+```
+
+Exemplo de resposta:
+
+```json
+{
+  "publicId": "00000000-0000-0000-0000-000000000000",
+  "tenantPublicId": "00000000-0000-0000-0000-000000000000",
+  "createdByUserPublicId": "00000000-0000-0000-0000-000000000000",
+  "responsibleUserPublicId": null,
+  "name": "Projeto Atualizado",
+  "description": "Descrição atualizada",
+  "status": 1,
+  "dueDate": "2027-01-31T18:00:00Z",
+  "createdAt": "2026-09-08T12:00:00Z",
+  "updatedAt": "2026-09-08T15:00:00Z",
+  "archivedAt": null
+}
+```
 
 ---
 
@@ -1944,6 +2165,8 @@ Authentication.UserInactive
 Projects.NotFound
 Projects.CreationNotAllowed
 Projects.ViewNotAllowed
+Projects.UpdateNotAllowed
+Projects.Archived
 
 Validation.InvalidArgument
 ```
@@ -2131,7 +2354,7 @@ Os arquivos possuem responsabilidades separadas:
 → cadastro, consulta, listagem, atualização, status e perfil de usuários
 
 04-Projects.http
-→ criação, consulta individual, listagem, filtros e autorização de projetos
+→ criação, consulta individual, listagem, atualização, filtros e autorização de projetos
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -2244,6 +2467,13 @@ Alguns princípios e recursos adotados no projeto:
 - projetos sem autorização não são incluídos na resposta nem na contagem total;
 - a filtragem por participação ocorre no backend antes da paginação;
 - projetos arquivados não aparecem na listagem padrão e precisam ser solicitados explicitamente através do filtro de status;
+- a atualização dos dados básicos de projetos exige `TenantAccess`;
+- `TenantAdmin` pode atualizar qualquer projeto do próprio Tenant;
+- `ProjectManager` somente pode atualizar projetos nos quais possua participação ativa;
+- `Member` não pode atualizar projetos;
+- projetos concluídos podem ter seus dados básicos atualizados;
+- projetos arquivados não podem ser atualizados;
+- status e responsável não são alterados pelo endpoint de atualização de dados básicos;
 - usuários removidos do projeto perdem o acesso concedido pela participação;
 - usuários desativados no Tenant não podem consultar projetos;
 - `SystemAdmin` não possui acesso operacional aos projetos de um Tenant;
@@ -2315,7 +2545,7 @@ User Secrets
 
 O bootstrap é idempotente e pode ser desabilitado após a criação inicial da conta administrativa.
 
-A autorização por projeto já possui regras baseadas em participação ativa para consulta individual e listagem.
+A autorização por projeto já possui regras baseadas em participação ativa para consulta individual, listagem e atualização.
 
 Ela continuará sendo evoluída com:
 
@@ -2623,7 +2853,7 @@ Essa camada ainda não está implementada.
 - [x] Filtro por responsável
 - [x] Autorização da listagem por participação ativa
 - [x] Exclusão de projetos arquivados da listagem padrão
-- [ ] Atualização
+- [x] Atualização
 - [ ] Gerenciamento de membros
 - [ ] Gerenciamento de permissões
 - [ ] Fluxos de status
@@ -2783,9 +3013,17 @@ Busca de projetos por nome ou descrição
 Filtro de projetos por status
 Filtro de projetos por responsável
 Paginação da listagem de projetos
+Atualização dos dados básicos de projetos
+TenantAdmin pode atualizar qualquer projeto do próprio Tenant
+ProjectManager pode atualizar projetos com participação ativa
+Member não pode atualizar projetos
+Projetos Completed permitem atualização dos dados básicos
+Projetos Archived bloqueiam atualização
+Atualização de nome, descrição e prazo
+Remoção de prazo através de DueDate null
 SystemAdmin não possui acesso operacional aos projetos de Tenant
 Requisições HTTP manuais organizadas por módulo
-676 testes automatizados aprovados
+704 testes automatizados aprovados
 0 falhas
 ```
 

@@ -247,6 +247,151 @@ Authorization: Bearer {{tenantAdminToken}}
 Accept: application/json
 
 ### ============================================================
+### PROJECTS — ATUALIZAÇÃO
+###
+### Regras:
+### - TenantAdmin pode atualizar qualquer projeto do próprio Tenant.
+### - ProjectManager pode atualizar somente projetos em que possui participação ativa.
+### - Member não pode atualizar projetos nesta vertical.
+### - Projetos Archived não podem ser atualizados.
+### - Status e responsável não são alterados por este endpoint.
+### ============================================================
+
+### Projects - TenantAdmin atualizar projeto do próprio Tenant - deve retornar 200 OK
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Projeto TenantAdmin atualizado",
+  "description": "Descrição atualizada pelo TenantAdmin.",
+  "dueDate": "2027-01-31T18:00:00Z"
+}
+
+
+### Projects - Confirmar atualização do projeto do TenantAdmin - deve retornar dados atualizados
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - ProjectManager atualizar projeto com participação ativa - deve retornar 200 OK
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}
+Authorization: Bearer {{projectManagerToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Projeto ProjectManager atualizado",
+  "description": "Descrição atualizada pelo ProjectManager.",
+  "dueDate": "2027-02-28T18:00:00Z"
+}
+
+
+### Projects - Confirmar atualização do projeto do ProjectManager - deve retornar dados atualizados
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}
+Authorization: Bearer {{projectManagerToken}}
+Accept: application/json
+
+
+### Projects - TenantAdmin remover prazo do projeto enviando null - deve retornar 200 OK
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Projeto TenantAdmin atualizado",
+  "description": "Projeto sem prazo definido.",
+  "dueDate": null
+}
+
+
+### Projects - Confirmar remoção do prazo - DueDate deve retornar null
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Member tentando atualizar projeto - deve retornar 403 Forbidden
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Tentativa de alteração por Member",
+  "description": null,
+  "dueDate": null
+}
+
+
+### Projects - SystemAdmin tentando atualizar projeto operacional - deve retornar 403 Forbidden
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Tentativa de alteração por SystemAdmin",
+  "description": null,
+  "dueDate": null
+}
+
+
+### Projects - TenantAdmin tentando atualizar projeto através de outro Tenant - deve retornar 403 Forbidden
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/projects/{{projetoTenantAdminPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Tentativa de alteração através de outro Tenant",
+  "description": null,
+  "dueDate": null
+}
+
+
+### Projects - Usuário de outro Tenant tentando atualizar projeto - deve retornar 403 Forbidden
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}
+Authorization: Bearer {{otherTenantToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Tentativa de alteração por outro Tenant",
+  "description": null,
+  "dueDate": null
+}
+
+
+### Projects - Atualizar projeto inexistente - deve retornar 404 Not Found
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/11111111-1111-1111-1111-111111111111
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Projeto inexistente",
+  "description": null,
+  "dueDate": null
+}
+
+
+### Projects - Atualizar com nome vazio - deve retornar 400 Bad Request
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "   ",
+  "description": "Esta alteração não deve ser persistida.",
+  "dueDate": null
+}
+
+### ============================================================
 ### PROJECTS — DADOS DE APOIO
 ###
 ### Não execute novamente sem necessidade.

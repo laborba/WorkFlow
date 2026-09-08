@@ -16,6 +16,7 @@ using WorkFlow.UnitTests.Application.Tenants.Fakes;
 using WorkFlow.UnitTests.Application.Users.Fakes;
 using WorkFlow.UnitTests.Common;
 using WorkFlow.Application.Projects.ListProjects;
+using WorkFlow.Application.Projects.UpdateProject;
 
 namespace WorkFlow.UnitTests.API.Projects;
 
@@ -94,7 +95,8 @@ public sealed class ProjectsControllerTests
             new ProjectsController(
                 handler,
                 getProjectByPublicIdHandler,
-                listProjectsHandler);
+                listProjectsHandler,
+                CreateUnusedUpdateProjectHandler());
 
         var identity =
             new ClaimsIdentity(
@@ -236,7 +238,8 @@ Create_ShouldReturnUnauthorized_WhenUserPublicIdClaimIsMissing()
             new ProjectsController(
                 createProjectHandler,
                 getProjectByPublicIdHandler,
-                listProjectsHandler);
+                listProjectsHandler,
+                CreateUnusedUpdateProjectHandler());
 
         controller.ControllerContext =
             new ControllerContext
@@ -350,7 +353,8 @@ GetByPublicId_ShouldUseAuthenticatedUserAndReturnProject_WhenDataIsValid()
             new ProjectsController(
                 createProjectHandler,
                 getProjectByPublicIdHandler,
-                listProjectsHandler);
+                listProjectsHandler,
+                CreateUnusedUpdateProjectHandler());
 
         var identity =
             new ClaimsIdentity(
@@ -484,7 +488,8 @@ GetByPublicId_ShouldUseAuthenticatedUserAndReturnProject_WhenDataIsValid()
             new ProjectsController(
                 createProjectHandler,
                 getProjectByPublicIdHandler,
-                listProjectsHandler);
+                listProjectsHandler,
+                CreateUnusedUpdateProjectHandler());
 
         controller.ControllerContext =
             new ControllerContext
@@ -574,7 +579,8 @@ GetByPublicId_ShouldReturnNotFound_WhenProjectDoesNotExist()
             new ProjectsController(
                 createProjectHandler,
                 getProjectByPublicIdHandler,
-                listProjectsHandler);
+                listProjectsHandler,
+                CreateUnusedUpdateProjectHandler());
 
         var identity =
             new ClaimsIdentity(
@@ -698,7 +704,8 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterCannotViewProject()
             new ProjectsController(
                 createProjectHandler,
                 getProjectByPublicIdHandler,
-                listProjectsHandler);
+                listProjectsHandler,
+                CreateUnusedUpdateProjectHandler());
 
         var identity =
             new ClaimsIdentity(
@@ -809,7 +816,8 @@ GetByPublicId_ShouldReturnConflict_WhenTenantIsInactive()
             new ProjectsController(
                 createProjectHandler,
                 getProjectByPublicIdHandler,
-                listProjectsHandler);
+                listProjectsHandler,
+                CreateUnusedUpdateProjectHandler());
 
         var identity =
             new ClaimsIdentity(
@@ -921,7 +929,8 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterIsInactive()
             new ProjectsController(
                 createProjectHandler,
                 getProjectByPublicIdHandler,
-                listProjectsHandler);
+                listProjectsHandler,
+                CreateUnusedUpdateProjectHandler());
 
         var identity =
             new ClaimsIdentity(
@@ -1052,6 +1061,29 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterIsInactive()
             100);
 
         return project;
+    }
+
+    private static UpdateProjectHandler
+    CreateUnusedUpdateProjectHandler()
+    {
+        var tenantRepository =
+            new FakeTenantRepository();
+
+        var userRepository =
+            new FakeUserRepository();
+
+        var projectRepository =
+            new FakeProjectRepository();
+
+        var projectMemberRepository =
+            new FakeProjectMemberRepository();
+
+        return new UpdateProjectHandler(
+            tenantRepository,
+            userRepository,
+            projectRepository,
+            projectMemberRepository,
+            new FakeUnitOfWork());
     }
 
 }

@@ -18,4 +18,14 @@ public static class ProjectErrors
         new(
             "Projects.ViewNotAllowed",
             "O usuário informado não possui permissão para visualizar este projeto.");
+
+    public static Error UpdateNotAllowed { get; } =
+        new(
+            "Projects.UpdateNotAllowed",
+            "O usuário informado não possui permissão para atualizar este projeto.");
+
+    public static Error Archived { get; } =
+        new(
+            "Projects.Archived",
+            "Não é possível alterar um projeto arquivado.");
 }

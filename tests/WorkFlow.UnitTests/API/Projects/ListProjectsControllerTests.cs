@@ -17,6 +17,7 @@ using WorkFlow.UnitTests.Application.Projects.Fakes;
 using WorkFlow.UnitTests.Application.Tenants.Fakes;
 using WorkFlow.UnitTests.Application.Users.Fakes;
 using WorkFlow.UnitTests.Common;
+using WorkFlow.Application.Projects.UpdateProject;
 
 namespace WorkFlow.UnitTests.API.Projects;
 
@@ -390,7 +391,8 @@ public sealed class ListProjectsControllerTests
         return new ProjectsController(
             createProjectHandler,
             getProjectByPublicIdHandler,
-            listProjectsHandler);
+            listProjectsHandler,
+            CreateUnusedUpdateProjectHandler());
     }
 
     private static void SetAuthenticatedUser(
@@ -452,5 +454,28 @@ public sealed class ListProjectsControllerTests
             84);
 
         return user;
+    }
+
+    private static UpdateProjectHandler
+    CreateUnusedUpdateProjectHandler()
+    {
+        var tenantRepository =
+            new FakeTenantRepository();
+
+        var userRepository =
+            new FakeUserRepository();
+
+        var projectRepository =
+            new FakeProjectRepository();
+
+        var projectMemberRepository =
+            new FakeProjectMemberRepository();
+
+        return new UpdateProjectHandler(
+            tenantRepository,
+            userRepository,
+            projectRepository,
+            projectMemberRepository,
+            new FakeUnitOfWork());
     }
 }

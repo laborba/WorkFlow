@@ -31,6 +31,19 @@ public sealed class ProjectRepository : IProjectRepository
                 cancellationToken);
     }
 
+    public async Task<Project?> GetTrackedByPublicIdAsync(
+        long tenantId,
+        Guid publicId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.Projects
+            .SingleOrDefaultAsync(
+                project =>
+                    project.TenantId == tenantId &&
+                    project.PublicId == publicId,
+                cancellationToken);
+    }
+
     public async Task<PagedData<ProjectListItemData>> GetPagedAsync(
         long tenantId,
         long? activeMemberUserId,
