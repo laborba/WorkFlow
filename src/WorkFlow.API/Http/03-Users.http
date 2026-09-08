@@ -1,0 +1,780 @@
+﻿### ============================================================
+### USERS — CADASTRO
+### Requer TenantAdmin do próprio Tenant
+### ============================================================
+
+### Users - Cadastrar usuário no Tenant principal
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Teste HTTP",
+  "email": "usuario-http@test.local",
+  "password": "uma senha longa e segura",
+  "role": 4
+}
+
+
+### Users - Tentar cadastrar e-mail duplicado na mesma empresa
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Duplicado",
+  "email": "segundo-usuario-update@test.local",
+  "password": "uma senha longa e segura",
+  "role": 4
+}
+
+
+### Users - Cadastrar usuário em Tenant inexistente
+POST {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/users
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário sem Empresa",
+  "email": "sem-empresa@test.local",
+  "password": "uma senha longa e segura",
+  "role": 4
+}
+
+
+### Users - Tentar cadastrar SystemAdmin dentro de Tenant
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Administrador do Sistema",
+  "email": "system-admin-tenant@test.local",
+  "password": "uma senha longa e segura",
+  "role": 1
+}
+
+
+### Users - Cadastrar usuário com senha abaixo do mínimo
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Senha Curta",
+  "email": "senha-curta@test.local",
+  "password": "12345678901234",
+  "role": 4
+}
+
+
+### Users - Cadastrar usuário em Tenant inativo
+### Pré-requisito:
+### executar "Tenants - Desativar Tenant principal para testar operações com Tenant inativo"
+### em 02-Tenants.http
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Empresa Inativa",
+  "email": "empresa-inativa@test.local",
+  "password": "uma senha longa e segura",
+  "role": 4
+}
+
+
+### ============================================================
+### USERS — CONSULTA INDIVIDUAL
+### Usuários do Tenant podem consultar usuários do próprio Tenant
+### ============================================================
+
+### Users - Consultar usuário pelo PublicId
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{usuarioConsultaPublicId}}
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Consultar usuário inexistente
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/11111111-1111-1111-1111-111111111111
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Consultar usuário em Tenant inexistente
+GET {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/users/{{usuarioConsultaPublicId}}
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Tentar consultar usuário através de outro Tenant
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/users/{{usuarioConsultaPublicId}}
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### ============================================================
+### USERS — LISTAGEM
+### Usuários do Tenant podem listar usuários do próprio Tenant
+### ============================================================
+
+### Users - Listar usuários
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Listar usuários com paginação
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users?pageNumber=1&pageSize=1
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Listar usuários filtrando por Member
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users?role=4
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Listar usuários filtrando por ProjectManager
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users?role=3
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Listar usuários ativos
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users?isActive=true
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Listar usuários inativos
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users?isActive=false
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Pesquisar usuário pelo nome
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users?search=segundo
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Pesquisar usuário pelo e-mail
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users?search=SEGUNDO-USUARIO
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Listar com número de página inválido
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users?pageNumber=0
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Listar com tamanho de página acima do limite
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users?pageSize=101
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Listar com perfil inválido
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users?role=99
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Listar usuários de Tenant inexistente
+GET {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/users
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### ============================================================
+### USERS — ATUALIZAÇÃO
+### Requer TenantAdmin do próprio Tenant
+### ============================================================
+
+### Users - Atualizar usuário existente
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Segundo Usuário Atualizado",
+  "email": "segundo-usuario-update@test.local"
+}
+
+
+### Users - Confirmar atualização do usuário
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Users - Atualizar usuário inexistente
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/11111111-1111-1111-1111-111111111111
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Inexistente",
+  "email": "usuario-inexistente@test.local"
+}
+
+
+### Users - Atualizar usuário em Tenant inexistente
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/users/{{segundoUsuarioPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Atualizado",
+  "email": "usuario-atualizado@test.local"
+}
+
+
+### Users - Atualizar usuário através de outro Tenant
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/users/{{segundoUsuarioPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Tentativa Entre Empresas",
+  "email": "tentativa-entre-empresas@test.local"
+}
+
+
+### Users - Atualizar usuário com nome vazio
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "   ",
+  "email": "segundo-usuario-update@test.local"
+}
+
+
+### Users - Atualizar usuário com e-mail vazio
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Segundo Usuário Teste",
+  "email": "   "
+}
+
+
+### Users - Atualizar mantendo o mesmo e-mail normalizado
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Segundo Usuário Mesmo Email",
+  "email": "SEGUNDO-USUARIO-UPDATE@TEST.LOCAL"
+}
+
+
+### Users - Atualizar usuário com PublicId vazio
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Teste",
+  "email": "usuario-publicid-vazio@test.local"
+}
+
+
+### Users - Atualizar usuário com TenantPublicId vazio
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/00000000-0000-0000-0000-000000000000/users/{{segundoUsuarioPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Teste",
+  "email": "usuario-tenant-vazio@test.local"
+}
+
+
+### Users - Atualizar usuário em Tenant inativo
+### Pré-requisito:
+### executar "Tenants - Desativar Tenant principal para testar operações com Tenant inativo"
+### em 02-Tenants.http
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Não Deve Atualizar",
+  "email": "usuario-inativo-update@test.local"
+}
+
+
+### ============================================================
+### USERS — ALTERAÇÃO DE STATUS
+### Requer TenantAdmin do próprio Tenant
+### ============================================================
+
+### Users - Desativar usuário
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}/status
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+
+### Users - Confirmar usuário desativado
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Users - Reativar usuário
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}/status
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": true
+}
+
+
+### Users - Alterar status de usuário inexistente
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/11111111-1111-1111-1111-111111111111/status
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+
+### Users - Alterar status de usuário através de outro Tenant
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/users/{{segundoUsuarioPublicId}}/status
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+
+### Users - Alterar status de usuário em Tenant inexistente
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/users/{{segundoUsuarioPublicId}}/status
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+
+### Users - Alterar status com UserPublicId vazio
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/00000000-0000-0000-0000-000000000000/status
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+
+### Users - Alterar status com TenantPublicId vazio
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/00000000-0000-0000-0000-000000000000/users/{{segundoUsuarioPublicId}}/status
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+
+### Users - Alterar status em Tenant inativo
+### Pré-requisito:
+### executar "Tenants - Desativar Tenant principal para testar operações com Tenant inativo"
+### em 02-Tenants.http
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}/status
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+
+### ============================================================
+### USERS — ALTERAÇÃO DE PERFIL
+### Requer TenantAdmin do próprio Tenant
+###
+### Roles:
+### 1 = SystemAdmin
+### 2 = TenantAdmin
+### 3 = ProjectManager
+### 4 = Member
+### ============================================================
+
+### Users - Alterar perfil para ProjectManager
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}/role
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": 3
+}
+
+
+### Users - Alterar perfil para valor inválido
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}/role
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": 99
+}
+
+
+### Users - Tentar alterar perfil para SystemAdmin
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}/role
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": 1
+}
+
+
+### Users - Alterar perfil de usuário inexistente
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/11111111-1111-1111-1111-111111111111/role
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": 4
+}
+
+
+### Users - Alterar perfil de usuário em Tenant inexistente
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/users/{{segundoUsuarioPublicId}}/role
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": 4
+}
+
+
+### Users - Alterar perfil de usuário através de outro Tenant
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/users/{{segundoUsuarioPublicId}}/role
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": 4
+}
+
+
+### Users - Alterar perfil com UserPublicId vazio
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/00000000-0000-0000-0000-000000000000/role
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": 4
+}
+
+
+### Users - Alterar perfil com TenantPublicId vazio
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/00000000-0000-0000-0000-000000000000/users/{{segundoUsuarioPublicId}}/role
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": 4
+}
+
+
+### Users - Alterar perfil em Tenant inativo
+### Pré-requisito:
+### executar "Tenants - Desativar Tenant principal para testar operações com Tenant inativo"
+### em 02-Tenants.http
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}/role
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": 4
+}
+
+
+### Users - Restaurar perfil do segundo usuário para Member
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}/role
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": 4
+}
+
+
+### ============================================================
+### USERS — AUTORIZAÇÃO
+### ============================================================
+
+### Users - Criar usuário sem token - deve retornar 401 Unauthorized
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Teste Sem Token",
+  "email": "sem-token@test.local",
+  "password": "uma senha longa e segura",
+  "role": 4
+}
+
+
+### Users - Member tentando criar usuário - deve retornar 403 Forbidden
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Teste Member Sem Permissão",
+  "email": "member-sem-permissao@test.local",
+  "password": "uma senha longa e segura",
+  "role": 4
+}
+
+
+### Users - TenantAdmin tentando criar usuário em outro Tenant - deve retornar 403 Forbidden
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/users
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Tentativa Outro Tenant",
+  "email": "tentativa-outro-tenant@test.local",
+  "password": "uma senha longa e segura",
+  "role": 4
+}
+
+
+### Users - Consultar usuário sem token - deve retornar 401 Unauthorized
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}
+Accept: application/json
+
+
+### Users - Member consultando usuário do próprio Tenant - deve retornar 200 OK
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Member tentando consultar usuário de outro Tenant - deve retornar 403 Forbidden
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/users/{{segundoUsuarioPublicId}}
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Listar usuários sem token - deve retornar 401 Unauthorized
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users?pageNumber=1&pageSize=20
+Accept: application/json
+
+
+### Users - Member listando usuários do próprio Tenant - deve retornar 200 OK
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users?pageNumber=1&pageSize=20
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Member tentando listar usuários de outro Tenant - deve retornar 403 Forbidden
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/users?pageNumber=1&pageSize=20
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Users - Atualizar usuário sem token - deve retornar 401 Unauthorized
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Segundo Usuário Teste",
+  "email": "segundo-usuario-update@test.local"
+}
+
+
+### Users - Member tentando atualizar usuário - deve retornar 403 Forbidden
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Segundo Usuário Teste",
+  "email": "segundo-usuario-update@test.local"
+}
+
+
+### Users - Alterar status sem token - deve retornar 401 Unauthorized
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+
+### Users - Member tentando alterar status - deve retornar 403 Forbidden
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}/status
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+
+### Users - Alterar perfil sem token - deve retornar 401 Unauthorized
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}/role
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": 3
+}
+
+
+### Users - Member tentando alterar perfil - deve retornar 403 Forbidden
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{segundoUsuarioPublicId}}/role
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": 3
+}
+
+
+### ============================================================
+### USERS — DADOS DE APOIO PARA TESTES MANUAIS
+###
+### Não execute novamente sem necessidade.
+### Estes usuários já podem existir no banco atual.
+### ============================================================
+
+### Users - Criar usuário usado no login TenantAdmin
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Login API",
+  "email": "login-api@test.local",
+  "password": "uma senha longa e segura",
+  "role": 2
+}
+
+
+### Users - Criar usuário usado no login Member
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Usuário Member API",
+  "email": "criado-pelo-admin@test.local",
+  "password": "uma senha longa e segura",
+  "role": 4
+}
+
+
+### Users - Criar usuário usado no login ProjectManager
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Project Manager API",
+  "email": "project-manager-api@test.local",
+  "password": "uma senha longa e segura",
+  "role": 3
+}
+
+
+### ============================================================
+### USERS — APOIO PARA TESTES DE LOGIN COM USUÁRIO INATIVO
+###
+### ATENÇÃO:
+### Estas requisições alteram o usuário usado como TenantAdmin.
+### Use somente quando for executar o cenário correspondente
+### em 01-Authentication.http.
+### ============================================================
+
+### Users - Desativar usuário principal para testar login de usuário inativo
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{usuarioPrincipalPublicId}}/status
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+
+### Users - Reativar usuário principal após teste de login
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/users/{{usuarioPrincipalPublicId}}/status
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": true
+}

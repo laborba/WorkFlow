@@ -81,6 +81,20 @@ public sealed class UserRepository : IUserRepository
                 cancellationToken);
     }
 
+    public Task<User?> GetByIdAsync(
+        long tenantId,
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        return _context.Users
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                user =>
+                    user.TenantId == tenantId &&
+                    user.Id == userId,
+                cancellationToken);
+    }
+
     public Task<User?> GetTrackedByPublicIdAsync(
         long tenantId,
         Guid publicId,

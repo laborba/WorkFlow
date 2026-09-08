@@ -48,6 +48,12 @@ internal sealed class FakeUserRepository : IUserRepository
 
     public Guid? CheckedTrackedPublicId { get; private set; }
 
+    public Dictionary<long, User> UsersByIdToReturn { get; } = new();
+
+    public List<long> CheckedGetByIdTenantIds { get; } = new();
+
+    public List<long> CheckedUserIds { get; } = new();
+
     public Task<bool> ExistsByEmailAsync(
         long tenantId,
         string email,
@@ -102,6 +108,31 @@ internal sealed class FakeUserRepository : IUserRepository
 
         return Task.FromResult(
             UserToReturn);
+    }
+
+    public Task<User?> GetByIdAsync(
+        long tenantId,
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        CheckedGetByIdTenantIds.Add(
+            tenantId);
+
+        CheckedUserIds.Add(
+            userId);
+
+        if (!UsersByIdToReturn.TryGetValue(
+                userId,
+                out var user))
+        {
+            return Task.FromResult<User?>(null);
+        }
+
+        if (user.TenantId != tenantId)
+            return Task.FromResult<User?>(null);
+
+        return Task.FromResult<User?>(
+            user);
     }
 
     public Task<User?> GetTrackedByPublicIdAsync(

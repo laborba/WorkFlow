@@ -8,6 +8,25 @@ internal sealed class FakeProjectRepository :
 {
     public Project? AddedProject { get; private set; }
 
+    public Project? ProjectToReturn { get; set; }
+
+    public Task<Project?> GetByPublicIdAsync(
+        long tenantId,
+        Guid publicId,
+        CancellationToken cancellationToken = default)
+    {
+        if (ProjectToReturn is null)
+            return Task.FromResult<Project?>(null);
+
+        if (ProjectToReturn.TenantId != tenantId ||
+            ProjectToReturn.PublicId != publicId)
+        {
+            return Task.FromResult<Project?>(null);
+        }
+
+        return Task.FromResult<Project?>(ProjectToReturn);
+    }
+
     public Task AddAsync(
         Project project,
         CancellationToken cancellationToken = default)

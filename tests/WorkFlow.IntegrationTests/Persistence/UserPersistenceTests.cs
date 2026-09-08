@@ -1579,4 +1579,87 @@ GetByEmailAsync_ShouldReturnUser_WhenEmailDiffersOnlyByCase()
 
         await transaction.RollbackAsync();
     }
+
+    [Fact]
+    public async Task
+    GetByIdAsync_ShouldReturnUserOnlyForSpecifiedTenant()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var firstTenant =
+            new Tenant(
+                "Primeira Empresa",
+                $"registration-first-{uniqueValue}",
+                $"first-{uniqueValue}@test.local");
+
+        var secondTenant =
+            new Tenant(
+                "Segunda Empresa",
+                $"registration-second-{uniqueValue}",
+                $"second-{uniqueValue}@test.local");
+
+        context.Tenants.AddRange(
+            firstTenant,
+            secondTenant);
+
+        await context.SaveChangesAsync();
+
+        var user =
+            new User(
+                secondTenant.Id,
+                "Usuário da Segunda Empresa",
+                $"user-{uniqueValue}@test.local",
+                "password-hash-for-test",
+                UserRole.Member);
+
+        context.Users.Add(
+            user);
+
+        await context.SaveChangesAsync();
+
+        var userId =
+            user.Id;
+
+        var userPublicId =
+            user.PublicId;
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new UserRepository(
+                context);
+
+        var userFromCorrectTenant =
+            await repository.GetByIdAsync(
+                secondTenant.Id,
+                userId);
+
+        var userFromOtherTenant =
+            await repository.GetByIdAsync(
+                firstTenant.Id,
+                userId);
+
+        Assert.NotNull(
+            userFromCorrectTenant);
+
+        Assert.Equal(
+            userPublicId,
+            userFromCorrectTenant!.PublicId);
+
+        Assert.Equal(
+            secondTenant.Id,
+            userFromCorrectTenant.TenantId);
+
+        Assert.Null(
+            userFromOtherTenant);
+
+        await transaction.RollbackAsync();
+    }
 }

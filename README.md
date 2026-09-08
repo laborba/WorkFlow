@@ -16,7 +16,7 @@ O projeto possui três objetivos principais:
 
 ## Estado atual
 
-O backend já possui uma base funcional para gerenciamento de empresas e usuários.
+O backend já possui uma base funcional para gerenciamento de empresas, usuários e projetos.
 
 Atualmente estão implementados:
 
@@ -70,7 +70,17 @@ Atualmente estão implementados:
 - criação de projeto e membro inicial protegida por transação;
 - rollback em caso de falha durante a persistência;
 - policy `ProjectCreation` para criação por `TenantAdmin` ou `ProjectManager`;
-- combinação das policies `TenantAccess` e `ProjectCreation` no endpoint de criação.
+- combinação das policies `TenantAccess` e `ProjectCreation` no endpoint de criação;
+- consulta individual de projeto por `PublicId`;
+- consulta sempre isolada pelo Tenant informado na rota;
+- `TenantAdmin` pode consultar qualquer projeto do próprio Tenant;
+- `ProjectManager` pode consultar somente projetos nos quais seja membro ativo;
+- `Member` pode consultar somente projetos nos quais seja membro ativo;
+- `SystemAdmin` não possui acesso operacional aos projetos de um Tenant;
+- projeto arquivado continua consultável pelo `TenantAdmin` e por membros ativos;
+- usuário removido do projeto perde o acesso baseado em participação;
+- usuário desativado no Tenant não pode acessar o projeto;
+- resposta da consulta utiliza `PublicId` para criador e responsável, sem expor identificadores internos.
 
 ### Autenticação e autorização
 
@@ -127,7 +137,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-621 testes automatizados aprovados
+648 testes automatizados aprovados
 0 falhas
 ```
 
@@ -180,6 +190,20 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - rollback quando a persistência do projeto falha;
 - rollback quando a persistência do membro inicial falha;
 - persistência real de `Project` e `ProjectMember` no PostgreSQL.
+- consulta individual de projeto por `PublicId`;
+- isolamento da consulta pelo Tenant;
+- consulta de projeto por `TenantAdmin`;
+- consulta de projeto por `ProjectManager` membro ativo;
+- consulta de projeto por `Member` membro ativo;
+- bloqueio de consulta para usuário sem participação ativa;
+- consulta de projeto arquivado por membro ativo;
+- validação de Tenant inexistente ou inativo na consulta;
+- validação de usuário solicitante inexistente ou inativo;
+- resolução do criador e do responsável através de identificadores internos sem expô-los pela API;
+- consulta de `Project` por `PublicId` limitada ao Tenant no PostgreSQL;
+- verificação de participação ativa em projeto no PostgreSQL;
+- bloqueio de participação após remoção do `ProjectMember`;
+- consulta de usuário por `Id` limitada ao Tenant no PostgreSQL.
 
 ---
 
@@ -1058,7 +1082,7 @@ Member
 SystemAdmin
 ```
 
-Portanto:
+Portanto, na criação:
 
 ```text
 Sem autenticação
@@ -1070,12 +1094,58 @@ Usuário autenticado tentando utilizar outro Tenant
 Member
 → 403 Forbidden
 
+SystemAdmin
+→ 403 Forbidden
+
 TenantAdmin no próprio Tenant
 → permitido
 
 ProjectManager no próprio Tenant
 → permitido
 ```
+
+A consulta individual utiliza:
+
+```text
+TenantAccess
+```
+
+e aplica as permissões específicas do projeto no handler.
+
+As regras atuais são:
+
+```text
+TenantAdmin
+→ pode consultar qualquer projeto do próprio Tenant
+
+ProjectManager
+→ pode consultar somente se for membro ativo do projeto
+
+Member
+→ pode consultar somente se for membro ativo do projeto
+
+SystemAdmin
+→ não possui acesso operacional a projetos de Tenant
+```
+
+Estar no mesmo Tenant não é suficiente para `ProjectManager` ou `Member`.
+
+O usuário precisa possuir uma participação ativa em:
+
+```text
+ProjectMember
+```
+
+Caso contrário:
+
+```text
+403 Forbidden
+Projects.ViewNotAllowed
+```
+
+Projetos arquivados continuam consultáveis seguindo as mesmas regras de autorização.
+
+O conhecimento do `PublicId` de um projeto não concede acesso ao recurso.
 
 ---
 
@@ -1780,13 +1850,50 @@ dotnet run --project src/WorkFlow.API
 
 Durante o desenvolvimento, a documentação OpenAPI/Swagger pode ser utilizada para explorar os endpoints disponíveis.
 
-Também existe o arquivo:
+As requisições HTTP utilizadas nos testes manuais estão organizadas por módulo:
 
 ```text
-WorkFlow.API.http
+src/WorkFlow.API/Http
+│
+├── 01-Authentication.http
+├── 02-Tenants.http
+├── 03-Users.http
+├── 04-Projects.http
+├── http-client.env.json
+└── http-client.env.json.user
 ```
 
-utilizado para executar requisições HTTP manualmente durante o desenvolvimento.
+Os arquivos possuem responsabilidades separadas:
+
+```text
+01-Authentication.http
+→ login, autenticação e consulta de /me
+
+02-Tenants.http
+→ cadastro, consulta, atualização, status e listagem de Tenants
+
+03-Users.http
+→ cadastro, consulta, listagem, atualização, status e perfil de usuários
+
+04-Projects.http
+→ criação, consulta e autorização de projetos
+```
+
+As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
+
+```text
+http-client.env.json
+```
+
+Valores locais ou sensíveis, como access tokens, ficam em:
+
+```text
+http-client.env.json.user
+```
+
+O arquivo `http-client.env.json.user` não é versionado pelo Git.
+
+Tokens JWT reais, senhas e outros secrets não devem ser adicionados aos arquivos `.http` versionados.
 
 ---
 
@@ -1869,6 +1976,15 @@ Alguns princípios e recursos adotados no projeto:
 - a policy `SystemAdmin` protege operações administrativas globais da plataforma;
 - a policy `ProjectCreation` permite a criação de projetos para `TenantAdmin` e `ProjectManager`;
 - a criação de projetos combina `TenantAccess` e `ProjectCreation`, garantindo que o usuário crie projetos somente dentro do próprio Tenant;
+- a consulta individual de projetos exige `TenantAccess`;
+- `TenantAdmin` pode consultar qualquer projeto do próprio Tenant;
+- `ProjectManager` e `Member` somente podem consultar projetos nos quais possuam participação ativa;
+- o backend valida a participação através de `ProjectMember`;
+- estar no mesmo Tenant não concede automaticamente acesso a um projeto;
+- projetos arquivados continuam sujeitos às mesmas regras de autorização de consulta;
+- usuários removidos do projeto perdem o acesso concedido pela participação;
+- usuários desativados no Tenant não podem consultar projetos;
+- `SystemAdmin` não possui acesso operacional aos projetos de um Tenant;
 - endpoints administrativos de Tenant são restritos a `SystemAdmin`;
 - endpoints administrativos de usuários exigem `TenantAccess` e `TenantAdmin`;
 - consultas de usuários exigem `TenantAccess`;
@@ -1936,11 +2052,13 @@ User Secrets
 
 O bootstrap é idempotente e pode ser desabilitado após a criação inicial da conta administrativa.
 
-A autorização continuará sendo evoluída com:
+A autorização por projeto já possui uma primeira regra baseada em participação ativa para consulta individual.
+
+Ela continuará sendo evoluída com:
 
 ```text
-Permissões por projeto
-Participação em projetos
+Permissões específicas por projeto
+Gerenciamento de membros
 Permissões específicas por recurso
 Responsabilidade pelo recurso
 Estado do domínio
@@ -2226,7 +2344,10 @@ Essa camada ainda não está implementada.
 - [x] Inclusão automática do criador como membro
 - [x] Autorização de criação por `TenantAdmin` e `ProjectManager`
 - [x] Persistência da criação de projeto e membro inicial
-- [ ] Consulta individual
+- [x] Consulta individual por `PublicId`
+- [x] Autorização de consulta por participação ativa no projeto
+- [x] Isolamento da consulta pelo Tenant
+- [x] Consulta de projeto arquivado respeitando as permissões atuais
 - [ ] Listagem
 - [ ] Atualização
 - [ ] Gerenciamento de membros
@@ -2375,7 +2496,15 @@ Bootstrap inicial de SystemAdmin
 Criação de projetos por TenantAdmin e ProjectManager
 Criador adicionado automaticamente como membro do projeto
 Criação de projeto protegida por transação
-621 testes automatizados aprovados
+Consulta individual de projetos por PublicId
+Consulta de projetos isolada pelo Tenant
+TenantAdmin pode consultar qualquer projeto do próprio Tenant
+ProjectManager e Member dependem de participação ativa no projeto
+Projetos arquivados permanecem consultáveis conforme as regras de autorização
+SystemAdmin não possui acesso operacional aos projetos de Tenant
+Requisições HTTP manuais organizadas por módulo
+648 testes automatizados aprovados
+0 falhas
 ```
 
 ---

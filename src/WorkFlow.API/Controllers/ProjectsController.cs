@@ -6,6 +6,7 @@ using WorkFlow.API.Contracts.Common;
 using WorkFlow.API.Contracts.Projects;
 using WorkFlow.Application.Projects;
 using WorkFlow.Application.Projects.CreateProject;
+using WorkFlow.Application.Projects.GetProjectByPublicId;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 
@@ -19,11 +20,18 @@ public sealed class ProjectsController :
     private readonly CreateProjectHandler
         _createProjectHandler;
 
+    private readonly GetProjectByPublicIdHandler
+        _getProjectByPublicIdHandler;
+
     public ProjectsController(
-        CreateProjectHandler createProjectHandler)
+        CreateProjectHandler createProjectHandler,
+        GetProjectByPublicIdHandler getProjectByPublicIdHandler)
     {
         _createProjectHandler =
             createProjectHandler;
+
+        _getProjectByPublicIdHandler =
+            getProjectByPublicIdHandler;
     }
 
     [Authorize(
@@ -125,6 +133,106 @@ public sealed class ProjectsController :
             $"/api/tenants/" +
             $"{response.TenantPublicId}/projects/" +
             $"{response.PublicId}",
+            response);
+    }
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpGet("{projectPublicId:guid}")]
+    [ProducesResponseType<GetProjectByPublicIdResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<GetProjectByPublicIdResponse>>
+        GetByPublicId(
+            Guid tenantPublicId,
+            Guid projectPublicId,
+            CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var userPublicId))
+        {
+            return Unauthorized();
+        }
+
+        var query =
+            new GetProjectByPublicIdQuery(
+                tenantPublicId,
+                projectPublicId,
+                userPublicId);
+
+        var result =
+            await _getProjectByPublicIdHandler.HandleAsync(
+                query,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound ||
+                error == UserErrors.NotFound ||
+                error == ProjectErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            if (error == TenantErrors.Inactive)
+            {
+                return Conflict(
+                    errorResponse);
+            }
+
+            if (error == UserErrors.Inactive ||
+                error == ProjectErrors.ViewNotAllowed)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var project =
+            result.Value!;
+
+        var response =
+            new GetProjectByPublicIdResponse(
+                project.PublicId,
+                project.TenantPublicId,
+                project.CreatedByUserPublicId,
+                project.ResponsibleUserPublicId,
+                project.Name,
+                project.Description,
+                project.Status,
+                project.DueDate,
+                project.CreatedAt,
+                project.UpdatedAt,
+                project.ArchivedAt);
+
+        return Ok(
             response);
     }
 }

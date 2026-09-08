@@ -1,0 +1,277 @@
+﻿### ============================================================
+### TENANTS — CADASTRO
+### Requer SystemAdmin
+### ============================================================
+
+### Tenants - Cadastrar empresa
+POST {{WorkFlow_API_HostAddress}}/api/tenants
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Empresa Teste HTTP",
+  "registrationNumber": "REG-API-CRIACAO-001",
+  "email": "empresa-api@test.local",
+  "phone": "(47) 99999-9999"
+}
+
+
+### Tenants - Cadastrar empresa com nome vazio - deve retornar 400 Bad Request
+POST {{WorkFlow_API_HostAddress}}/api/tenants
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": " ",
+  "registrationNumber": "REG-INVALIDO-001",
+  "email": "invalida@test.local"
+}
+
+
+### ============================================================
+### TENANTS — CONSULTA INDIVIDUAL
+### Requer SystemAdmin
+### ============================================================
+
+### Tenants - Consultar Tenant secundário
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### Tenants - Consultar empresa inexistente - deve retornar 404 Not Found
+GET {{WorkFlow_API_HostAddress}}/api/tenants/11111111-1111-1111-1111-111111111111
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### ============================================================
+### TENANTS — ALTERAÇÃO DE STATUS
+### Requer SystemAdmin
+### ============================================================
+
+### Tenants - Desativar Tenant secundário
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/status
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+
+### Tenants - Consultar Tenant secundário desativado
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### Tenants - Reativar Tenant secundário
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/status
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": true
+}
+
+
+### Tenants - Alterar status de empresa inexistente - deve retornar 404 Not Found
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/status
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+
+### Tenants - Alterar status com PublicId vazio - deve retornar 400 Bad Request
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/00000000-0000-0000-0000-000000000000/status
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+
+### ============================================================
+### TENANTS — ATUALIZAÇÃO
+### Requer SystemAdmin
+### ============================================================
+
+### Tenants - Atualizar Tenant secundário
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Empresa Testes Atualizada",
+  "email": "empresa-atualizada@test.local",
+  "phone": "(47) 98888-7777"
+}
+
+
+### Tenants - Consultar Tenant secundário após atualização
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### Tenants - Atualizar empresa inexistente - deve retornar 404 Not Found
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Empresa Inexistente",
+  "email": "inexistente@test.local",
+  "phone": null
+}
+
+
+### Tenants - Atualizar empresa com nome vazio - deve retornar 400 Bad Request
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "   ",
+  "email": "empresa-atualizada@test.local",
+  "phone": "(47) 98888-7777"
+}
+
+
+### Tenants - Atualizar empresa com e-mail vazio - deve retornar 400 Bad Request
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Empresa Testes Atualizada",
+  "email": "   ",
+  "phone": "(47) 98888-7777"
+}
+
+
+### Tenants - Remover telefone da empresa
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Empresa Testes Atualizada",
+  "email": "empresa-atualizada@test.local",
+  "phone": null
+}
+
+
+### Tenants - Confirmar remoção do telefone
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### ============================================================
+### TENANTS — LISTAGEM
+### Requer SystemAdmin
+### ============================================================
+
+### Tenants - Listar empresas com paginação padrão
+GET {{WorkFlow_API_HostAddress}}/api/tenants
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### Tenants - Listar segunda página de empresas
+GET {{WorkFlow_API_HostAddress}}/api/tenants?pageNumber=2&pageSize=2
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### Tenants - Pesquisar empresa pelo nome
+GET {{WorkFlow_API_HostAddress}}/api/tenants?search=atualizada
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### Tenants - Listar somente empresas inativas
+GET {{WorkFlow_API_HostAddress}}/api/tenants?isActive=false
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### Tenants - Listar empresas com número de página inválido - deve retornar 400 Bad Request
+GET {{WorkFlow_API_HostAddress}}/api/tenants?pageNumber=0&pageSize=20
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### Tenants - Listar empresas com tamanho de página acima do limite - deve retornar 400 Bad Request
+GET {{WorkFlow_API_HostAddress}}/api/tenants?pageNumber=1&pageSize=101
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### ============================================================
+### TENANTS — AUTORIZAÇÃO
+### Endpoints administrativos são exclusivos de SystemAdmin
+### ============================================================
+
+### Tenants - Listar sem token - deve retornar 401 Unauthorized
+GET {{WorkFlow_API_HostAddress}}/api/tenants
+Accept: application/json
+
+
+### Tenants - Listar como Member - deve retornar 403 Forbidden
+GET {{WorkFlow_API_HostAddress}}/api/tenants
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Tenants - Listar como SystemAdmin - deve retornar 200 OK
+GET {{WorkFlow_API_HostAddress}}/api/tenants
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### ============================================================
+### TENANTS — APOIO PARA TESTES DE OUTROS MÓDULOS
+###
+### ATENÇÃO:
+### Estas requisições alteram o estado do Tenant principal.
+### Sempre execute a reativação depois do teste correspondente.
+### ============================================================
+
+### Tenants - Desativar Tenant principal para testar operações com Tenant inativo
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/status
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": false
+}
+
+
+### Tenants - Reativar Tenant principal após testes com Tenant inativo
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/status
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "isActive": true
+}

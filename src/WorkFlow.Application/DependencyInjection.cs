@@ -10,8 +10,9 @@ using WorkFlow.Application.Users.ListUsers;
 using WorkFlow.Application.Users.UpdateUser;
 using WorkFlow.Application.Users.ChangeUserStatus;
 using WorkFlow.Application.Users.ChangeUserRole;
-using WorkFlow.Application.Authentication.Login;
 using WorkFlow.Application.Projects.CreateProject;
+using WorkFlow.Application.Projects.GetProjectByPublicId;
+using WorkFlow.Application.Authentication.Login;
 
 namespace WorkFlow.Application;
 
@@ -33,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<ChangeUserRoleHandler>();
         services.AddScoped<CreateProjectHandler>();
         services.AddScoped<LoginHandler>();
+        services.AddScoped<GetProjectByPublicIdHandler>();
 
         return services;
     }

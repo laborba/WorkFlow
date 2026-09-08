@@ -25,6 +25,11 @@ public interface IUserRepository
         Guid publicId,
         CancellationToken cancellationToken = default);
 
+    Task<User?> GetByIdAsync(
+    long tenantId,
+    long userId,
+    CancellationToken cancellationToken = default);
+
     Task<User?> GetTrackedByPublicIdAsync(
         long tenantId,
         Guid publicId,

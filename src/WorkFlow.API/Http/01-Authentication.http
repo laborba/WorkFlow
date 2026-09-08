@@ -1,0 +1,248 @@
+﻿### ============================================================
+### AUTENTICAÇÃO — LOGINS PRINCIPAIS
+### ============================================================
+
+### Login - TenantAdmin
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "{{tenantPrincipalPublicId}}",
+  "email": "login-api@test.local",
+  "password": "uma senha longa e segura"
+}
+
+
+### Login - ProjectManager
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "{{tenantPrincipalPublicId}}",
+  "email": "project-manager-api@test.local",
+  "password": "uma senha longa e segura"
+}
+
+
+### Login - Member
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "{{tenantPrincipalPublicId}}",
+  "email": "criado-pelo-admin@test.local",
+  "password": "uma senha longa e segura"
+}
+
+
+### Login - SystemAdmin
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": null,
+  "email": "SEU_EMAIL_DO_SYSTEM_ADMIN",
+  "password": "SUA_SENHA_DO_SYSTEM_ADMIN"
+}
+
+### Login - Usuário de outro Tenant
+
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "{{tenantSecundarioPublicId}}",
+  "email": "usuario-teste-api@test.local",
+  "password": "uma senha longa e segura"
+}
+
+
+### ============================================================
+### AUTENTICAÇÃO — /ME
+### ============================================================
+
+### Authentication - Me - TenantAdmin
+GET {{WorkFlow_API_HostAddress}}/api/authentication/me
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Authentication - Me - ProjectManager
+GET {{WorkFlow_API_HostAddress}}/api/authentication/me
+Authorization: Bearer {{projectManagerToken}}
+Accept: application/json
+
+
+### Authentication - Me - Member
+GET {{WorkFlow_API_HostAddress}}/api/authentication/me
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Authentication - Me - SystemAdmin
+GET {{WorkFlow_API_HostAddress}}/api/authentication/me
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### Authentication - Me - Sem token - deve retornar 401 Unauthorized
+GET {{WorkFlow_API_HostAddress}}/api/authentication/me
+Accept: application/json
+
+
+### Authentication - Me - Token inválido - deve retornar 401 Unauthorized
+GET {{WorkFlow_API_HostAddress}}/api/authentication/me
+Authorization: Bearer token-invalido
+Accept: application/json
+
+
+### ============================================================
+### AUTENTICAÇÃO — CREDENCIAIS INVÁLIDAS
+### ============================================================
+
+### Login - Senha incorreta
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "{{tenantPrincipalPublicId}}",
+  "email": "login-api@test.local",
+  "password": "senha-incorreta"
+}
+
+
+### Login - E-mail inexistente
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "{{tenantPrincipalPublicId}}",
+  "email": "nao-existe@test.local",
+  "password": "qualquer-senha"
+}
+
+
+### Login - Outro Tenant com credenciais do Tenant principal
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "{{tenantSecundarioPublicId}}",
+  "email": "login-api@test.local",
+  "password": "uma senha longa e segura"
+}
+
+
+### ============================================================
+### AUTENTICAÇÃO — VALIDAÇÕES
+### ============================================================
+
+### Login - TenantPublicId vazio
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "00000000-0000-0000-0000-000000000000",
+  "email": "login-api@test.local",
+  "password": "uma senha longa e segura"
+}
+
+
+### Login - E-mail vazio
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "{{tenantPrincipalPublicId}}",
+  "email": "   ",
+  "password": "uma senha longa e segura"
+}
+
+
+### Login - Senha vazia
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "{{tenantPrincipalPublicId}}",
+  "email": "login-api@test.local",
+  "password": "   "
+}
+
+
+### Login - E-mail com capitalização diferente
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "{{tenantPrincipalPublicId}}",
+  "email": "LOGIN-API@TEST.LOCAL",
+  "password": "uma senha longa e segura"
+}
+
+
+### ============================================================
+### AUTENTICAÇÃO — ESTADOS INATIVOS
+### ============================================================
+
+### Login - Usuário inativo
+### Pré-requisito: desativar primeiro o usuário login-api@test.local em 03-Users.http
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "{{tenantPrincipalPublicId}}",
+  "email": "login-api@test.local",
+  "password": "uma senha longa e segura"
+}
+
+
+### Login - Usuário inativo com senha incorreta
+### Pré-requisito: desativar primeiro o usuário login-api@test.local em 03-Users.http
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "{{tenantPrincipalPublicId}}",
+  "email": "login-api@test.local",
+  "password": "senha-incorreta"
+}
+
+
+### Login - Tenant inexistente
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  "email": "login-api@test.local",
+  "password": "uma senha longa e segura"
+}
+
+
+### Login - Tenant inativo
+### Pré-requisito: desativar primeiro o Tenant principal em 02-Tenants.http
+POST {{WorkFlow_API_HostAddress}}/api/authentication/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantPublicId": "{{tenantPrincipalPublicId}}",
+  "email": "login-api@test.local",
+  "password": "uma senha longa e segura"
+}

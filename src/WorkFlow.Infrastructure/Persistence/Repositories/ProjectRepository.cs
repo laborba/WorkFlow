@@ -1,4 +1,5 @@
-﻿using WorkFlow.Application.Abstractions.Persistence;
+﻿using Microsoft.EntityFrameworkCore;
+using WorkFlow.Application.Abstractions.Persistence;
 using WorkFlow.Domain.Entities;
 
 namespace WorkFlow.Infrastructure.Persistence.Repositories;
@@ -11,6 +12,20 @@ public sealed class ProjectRepository : IProjectRepository
         WorkFlowDbContext context)
     {
         _context = context;
+    }
+
+    public async Task<Project?> GetByPublicIdAsync(
+        long tenantId,
+        Guid publicId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.Projects
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                project =>
+                    project.TenantId == tenantId &&
+                    project.PublicId == publicId,
+                cancellationToken);
     }
 
     public async Task AddAsync(
