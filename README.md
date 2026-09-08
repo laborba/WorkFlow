@@ -80,7 +80,23 @@ Atualmente estão implementados:
 - projeto arquivado continua consultável pelo `TenantAdmin` e por membros ativos;
 - usuário removido do projeto perde o acesso baseado em participação;
 - usuário desativado no Tenant não pode acessar o projeto;
-- resposta da consulta utiliza `PublicId` para criador e responsável, sem expor identificadores internos.
+- resposta da consulta utiliza `PublicId` para criador e responsável, sem expor identificadores internos;
+- listagem paginada de projetos do Tenant;
+- `TenantAdmin` pode listar todos os projetos do próprio Tenant;
+- `ProjectManager` pode listar somente projetos nos quais possua participação ativa;
+- `Member` pode listar somente projetos nos quais possua participação ativa;
+- projetos sem autorização simplesmente não aparecem na listagem;
+- participação ativa é determinada por `ProjectMember.RemovedAt == null`;
+- projetos arquivados ficam fora da listagem normal por padrão;
+- projetos arquivados podem ser consultados explicitamente através do filtro de status;
+- busca case-insensitive por nome ou descrição do projeto;
+- filtro por status;
+- filtro por responsável através de `ResponsibleUserPublicId`;
+- paginação com tamanho máximo de 100 itens;
+- ordenação padrão por projetos mais recentes;
+- dados do responsável são resolvidos na própria consulta de persistência, evitando consultas adicionais por projeto;
+- contagem e paginação são aplicadas somente após as regras de Tenant, participação e filtros;
+- listagem sem resultados retorna `200 OK` com coleção vazia.
 
 ### Autenticação e autorização
 
@@ -137,7 +153,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-648 testes automatizados aprovados
+676 testes automatizados aprovados
 0 falhas
 ```
 
@@ -151,7 +167,7 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - empresa inativa;
 - isolamento entre Tenants;
 - busca de usuário por e-mail normalizado;
-- login global de `SystemAdmin`; 
+- login global de `SystemAdmin`;
 - credenciais inválidas de `SystemAdmin`;
 - bloqueio de `SystemAdmin` inativo;
 - geração de JWT;
@@ -178,7 +194,7 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - bootstrap idempotente;
 - validação das configurações do bootstrap;
 - busca case-insensitive de `SystemAdmin` por e-mail;
-- unicidade case-insensitive de e-mail de `SystemAdmin`.
+- unicidade case-insensitive de e-mail de `SystemAdmin`;
 - criação de projeto por `TenantAdmin`;
 - criação de projeto por `ProjectManager`;
 - bloqueio de criação por `Member`;
@@ -189,7 +205,7 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - transação durante a criação de projeto e membro inicial;
 - rollback quando a persistência do projeto falha;
 - rollback quando a persistência do membro inicial falha;
-- persistência real de `Project` e `ProjectMember` no PostgreSQL.
+- persistência real de `Project` e `ProjectMember` no PostgreSQL;
 - consulta individual de projeto por `PublicId`;
 - isolamento da consulta pelo Tenant;
 - consulta de projeto por `TenantAdmin`;
@@ -203,7 +219,23 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - consulta de `Project` por `PublicId` limitada ao Tenant no PostgreSQL;
 - verificação de participação ativa em projeto no PostgreSQL;
 - bloqueio de participação após remoção do `ProjectMember`;
-- consulta de usuário por `Id` limitada ao Tenant no PostgreSQL.
+- consulta de usuário por `Id` limitada ao Tenant no PostgreSQL;
+- listagem paginada de projetos;
+- listagem completa para `TenantAdmin`;
+- restrição da listagem de `ProjectManager` e `Member` por participação ativa;
+- exclusão de participações removidas da listagem;
+- isolamento da listagem entre Tenants;
+- exclusão de projetos arquivados da listagem padrão;
+- consulta explícita de projetos arquivados por status;
+- busca case-insensitive por nome ou descrição;
+- filtro de projetos por responsável;
+- retorno dos dados públicos do responsável na listagem;
+- paginação e contagem total da listagem;
+- validação de número e tamanho de página;
+- validação de status inválido;
+- validação de responsável com identificador público vazio;
+- listagem vazia quando nenhum projeto estiver visível;
+- testes reais da consulta paginada de projetos contra PostgreSQL.
 
 ---
 
@@ -349,6 +381,7 @@ Contém implementações relacionadas à infraestrutura:
 - implementação do serviço de hash de senha.
 
 ---
+
 ## WorkFlow.API
 
 É a camada de entrada HTTP da aplicação.
@@ -694,7 +727,6 @@ Um usuário autenticado sem o perfil necessário para uma operação administrat
 ```
 
 ---
-
 
 ### Criar usuário dentro de uma empresa
 
@@ -1104,13 +1136,13 @@ ProjectManager no próprio Tenant
 → permitido
 ```
 
-A consulta individual utiliza:
+A consulta individual e a listagem utilizam:
 
 ```text
 TenantAccess
 ```
 
-e aplica as permissões específicas do projeto no handler.
+e aplicam as regras específicas de acesso aos projetos no backend.
 
 As regras atuais são:
 
@@ -1136,14 +1168,16 @@ O usuário precisa possuir uma participação ativa em:
 ProjectMember
 ```
 
-Caso contrário:
+Na consulta individual, caso contrário:
 
 ```text
 403 Forbidden
 Projects.ViewNotAllowed
 ```
 
-Projetos arquivados continuam consultáveis seguindo as mesmas regras de autorização.
+Na listagem, projetos sem participação ativa simplesmente não são retornados.
+
+Projetos arquivados continuam consultáveis individualmente seguindo as mesmas regras de autorização.
 
 O conhecimento do `PublicId` de um projeto não concede acesso ao recurso.
 
@@ -1237,7 +1271,221 @@ Exemplo de resposta:
 }
 ```
 
+---
 
+### Consultar projeto por PublicId
+
+```http
+GET /api/tenants/{tenantPublicId}/projects/{projectPublicId}
+```
+
+A consulta exige:
+
+```text
+TenantAccess
+```
+
+Regras:
+
+```text
+TenantAdmin
+→ pode consultar qualquer projeto do próprio Tenant
+
+ProjectManager
+→ precisa possuir participação ativa
+
+Member
+→ precisa possuir participação ativa
+```
+
+Participação ativa significa:
+
+```text
+ProjectMember.RemovedAt == null
+```
+
+Caso um `ProjectManager` ou `Member` não possua participação ativa:
+
+```text
+403 Forbidden
+Projects.ViewNotAllowed
+```
+
+Projetos arquivados continuam consultáveis segundo as mesmas regras.
+
+A resposta utiliza apenas identificadores públicos para relações externas.
+
+Exemplo:
+
+```json
+{
+  "publicId": "00000000-0000-0000-0000-000000000000",
+  "tenantPublicId": "00000000-0000-0000-0000-000000000000",
+  "createdByUserPublicId": "00000000-0000-0000-0000-000000000000",
+  "responsibleUserPublicId": null,
+  "name": "Projeto de Teste",
+  "description": "Descrição do projeto",
+  "status": 1,
+  "dueDate": "2026-12-31T18:00:00Z",
+  "createdAt": "2026-09-08T12:00:00Z",
+  "updatedAt": null,
+  "archivedAt": null
+}
+```
+
+---
+
+### Listar projetos
+
+```http
+GET /api/tenants/{tenantPublicId}/projects
+```
+
+A listagem exige:
+
+```text
+TenantAccess
+```
+
+e aplica as regras de visibilidade dos projetos no backend.
+
+Regras atuais:
+
+```text
+TenantAdmin
+→ visualiza todos os projetos do próprio Tenant
+
+ProjectManager
+→ visualiza somente projetos nos quais possui participação ativa
+
+Member
+→ visualiza somente projetos nos quais possui participação ativa
+
+SystemAdmin
+→ não possui acesso operacional aos projetos do Tenant
+```
+
+Para `ProjectManager` e `Member`, participação ativa significa:
+
+```text
+ProjectMember.RemovedAt == null
+```
+
+Projetos nos quais o usuário não possui autorização simplesmente não aparecem na listagem.
+
+A restrição de acesso é aplicada antes da contagem e da paginação.
+
+Parâmetros disponíveis:
+
+```text
+pageNumber
+pageSize
+search
+status
+responsibleUserPublicId
+```
+
+Regras de paginação:
+
+```text
+pageNumber >= 1
+pageSize entre 1 e 100
+```
+
+A busca utiliza:
+
+```text
+Name
+Description
+```
+
+sem diferenciação entre letras maiúsculas e minúsculas.
+
+O filtro `status` utiliza os valores atuais de `ProjectStatus`:
+
+```text
+1 = Planning
+2 = InProgress
+3 = Paused
+4 = Completed
+5 = Archived
+```
+
+Projetos `Archived` ficam fora da listagem padrão.
+
+Para consultar projetos arquivados explicitamente:
+
+```http
+GET /api/tenants/{tenantPublicId}/projects?status=5
+```
+
+O filtro por responsável utiliza:
+
+```text
+responsibleUserPublicId
+```
+
+Um identificador válido que não corresponda a nenhum responsável retorna uma listagem vazia, e não um erro de usuário inexistente.
+
+Exemplo:
+
+```http
+GET /api/tenants/{tenantPublicId}/projects?pageNumber=1&pageSize=20&search=api&status=2
+```
+
+Exemplo de resposta:
+
+```json
+{
+  "items": [
+    {
+      "publicId": "00000000-0000-0000-0000-000000000000",
+      "name": "Projeto API",
+      "description": "Descrição do projeto",
+      "status": 2,
+      "responsibleUserPublicId": "00000000-0000-0000-0000-000000000000",
+      "responsibleUserName": "Usuário Responsável",
+      "dueDate": "2026-12-31T18:00:00Z",
+      "createdAt": "2026-09-08T12:00:00Z",
+      "updatedAt": null,
+      "archivedAt": null
+    }
+  ],
+  "pageNumber": 1,
+  "pageSize": 20,
+  "totalCount": 1,
+  "totalPages": 1
+}
+```
+
+Projetos sem responsável retornam:
+
+```json
+{
+  "responsibleUserPublicId": null,
+  "responsibleUserName": null
+}
+```
+
+Quando nenhum projeto estiver visível:
+
+```text
+200 OK
+items = []
+totalCount = 0
+totalPages = 0
+```
+
+A ordenação padrão da persistência utiliza:
+
+```text
+CreatedAt DESC
+Id DESC
+```
+
+mantendo os projetos mais recentes primeiro e uma ordenação determinística para paginação.
+
+---
 
 ## Autenticação
 
@@ -1673,6 +1921,9 @@ SystemAdmin autenticado
 ```
 
 O futuro fluxo público de cadastro de empresas do WorkFlow SaaS será tratado separadamente e não utilizará esses endpoints administrativos como cadastro público.
+
+---
+
 # Tratamento de erros
 
 A API utiliza códigos de erro estáveis.
@@ -1689,6 +1940,10 @@ Users.SystemAdminCannotBelongToTenant
 
 Authentication.InvalidCredentials
 Authentication.UserInactive
+
+Projects.NotFound
+Projects.CreationNotAllowed
+Projects.ViewNotAllowed
 
 Validation.InvalidArgument
 ```
@@ -1876,7 +2131,7 @@ Os arquivos possuem responsabilidades separadas:
 → cadastro, consulta, listagem, atualização, status e perfil de usuários
 
 04-Projects.http
-→ criação, consulta e autorização de projetos
+→ criação, consulta individual, listagem, filtros e autorização de projetos
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -1952,6 +2207,7 @@ Os testes permanecerão no projeto durante toda sua evolução.
 Futuramente serão executados automaticamente através de CI/CD antes de novas versões serem publicadas.
 
 ---
+
 # Segurança
 
 Alguns princípios e recursos adotados no projeto:
@@ -1982,6 +2238,12 @@ Alguns princípios e recursos adotados no projeto:
 - o backend valida a participação através de `ProjectMember`;
 - estar no mesmo Tenant não concede automaticamente acesso a um projeto;
 - projetos arquivados continuam sujeitos às mesmas regras de autorização de consulta;
+- a listagem de projetos também exige `TenantAccess`;
+- `TenantAdmin` pode listar todos os projetos do próprio Tenant;
+- `ProjectManager` e `Member` somente recebem na listagem projetos nos quais possuam participação ativa;
+- projetos sem autorização não são incluídos na resposta nem na contagem total;
+- a filtragem por participação ocorre no backend antes da paginação;
+- projetos arquivados não aparecem na listagem padrão e precisam ser solicitados explicitamente através do filtro de status;
 - usuários removidos do projeto perdem o acesso concedido pela participação;
 - usuários desativados no Tenant não podem consultar projetos;
 - `SystemAdmin` não possui acesso operacional aos projetos de um Tenant;
@@ -2033,6 +2295,7 @@ TenantAccess
 TenantAdmin
 SystemAdmin
 ProjectCreation
+Participação ativa em ProjectMember
 ```
 
 O `SystemAdmin` pode ser provisionado inicialmente através de um bootstrap controlado por configuração segura.
@@ -2052,7 +2315,7 @@ User Secrets
 
 O bootstrap é idempotente e pode ser desabilitado após a criação inicial da conta administrativa.
 
-A autorização por projeto já possui uma primeira regra baseada em participação ativa para consulta individual.
+A autorização por projeto já possui regras baseadas em participação ativa para consulta individual e listagem.
 
 Ela continuará sendo evoluída com:
 
@@ -2073,6 +2336,9 @@ MFA
 Recuperação segura de conta
 Revogação e gestão de sessões
 ```
+
+---
+
 # Domínio planejado
 
 As principais entidades identificadas são:
@@ -2099,6 +2365,8 @@ ProjectHistory
 O módulo de projetos deverá contemplar:
 
 - criação;
+- consulta individual;
+- listagem;
 - membros;
 - responsável;
 - permissões;
@@ -2110,15 +2378,13 @@ O módulo de projetos deverá contemplar:
 - arquivamento;
 - histórico.
 
-Status planejados incluem:
+Status atuais incluem:
 
 ```text
 Planning
 InProgress
 Paused
-Validation
 Completed
-Cancelled
 Archived
 ```
 
@@ -2330,6 +2596,8 @@ Essa camada ainda não está implementada.
 - [x] Policy `ProjectCreation`
 - [x] Proteção dos endpoints administrativos de Tenant
 - [x] Bootstrap inicial de `SystemAdmin`
+- [x] Autorização inicial de consulta de projetos por participação ativa
+- [x] Autorização da listagem de projetos por participação ativa
 - [ ] Permissões por projeto
 - [ ] Rate limiting
 - [ ] MFA
@@ -2348,7 +2616,13 @@ Essa camada ainda não está implementada.
 - [x] Autorização de consulta por participação ativa no projeto
 - [x] Isolamento da consulta pelo Tenant
 - [x] Consulta de projeto arquivado respeitando as permissões atuais
-- [ ] Listagem
+- [x] Listagem
+- [x] Paginação da listagem
+- [x] Busca por nome ou descrição
+- [x] Filtro por status
+- [x] Filtro por responsável
+- [x] Autorização da listagem por participação ativa
+- [x] Exclusão de projetos arquivados da listagem padrão
 - [ ] Atualização
 - [ ] Gerenciamento de membros
 - [ ] Gerenciamento de permissões
@@ -2475,7 +2749,6 @@ Revisão
 Commit
 ```
 
-
 Último estado validado:
 
 ```text
@@ -2501,9 +2774,18 @@ Consulta de projetos isolada pelo Tenant
 TenantAdmin pode consultar qualquer projeto do próprio Tenant
 ProjectManager e Member dependem de participação ativa no projeto
 Projetos arquivados permanecem consultáveis conforme as regras de autorização
+Listagem paginada de projetos
+TenantAdmin lista todos os projetos do próprio Tenant
+ProjectManager e Member listam somente projetos com participação ativa
+Projetos arquivados ficam ocultos da listagem padrão
+Projetos arquivados podem ser listados explicitamente por status
+Busca de projetos por nome ou descrição
+Filtro de projetos por status
+Filtro de projetos por responsável
+Paginação da listagem de projetos
 SystemAdmin não possui acesso operacional aos projetos de Tenant
 Requisições HTTP manuais organizadas por módulo
-648 testes automatizados aprovados
+676 testes automatizados aprovados
 0 falhas
 ```
 

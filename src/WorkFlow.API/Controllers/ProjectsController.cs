@@ -7,8 +7,10 @@ using WorkFlow.API.Contracts.Projects;
 using WorkFlow.Application.Projects;
 using WorkFlow.Application.Projects.CreateProject;
 using WorkFlow.Application.Projects.GetProjectByPublicId;
+using WorkFlow.Application.Projects.ListProjects;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
+using WorkFlow.Domain.Enums;
 
 namespace WorkFlow.API.Controllers;
 
@@ -23,15 +25,22 @@ public sealed class ProjectsController :
     private readonly GetProjectByPublicIdHandler
         _getProjectByPublicIdHandler;
 
+    private readonly ListProjectsHandler
+        _listProjectsHandler;
+
     public ProjectsController(
         CreateProjectHandler createProjectHandler,
-        GetProjectByPublicIdHandler getProjectByPublicIdHandler)
+        GetProjectByPublicIdHandler getProjectByPublicIdHandler,
+        ListProjectsHandler listProjectsHandler)
     {
         _createProjectHandler =
             createProjectHandler;
 
         _getProjectByPublicIdHandler =
             getProjectByPublicIdHandler;
+
+        _listProjectsHandler =
+            listProjectsHandler;
     }
 
     [Authorize(
@@ -133,6 +142,122 @@ public sealed class ProjectsController :
             $"/api/tenants/" +
             $"{response.TenantPublicId}/projects/" +
             $"{response.PublicId}",
+            response);
+    }
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpGet]
+    [ProducesResponseType<ListProjectsResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ListProjectsResponse>> List(
+        Guid tenantPublicId,
+        [FromQuery] ListProjectsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var userPublicId))
+        {
+            return Unauthorized();
+        }
+
+        ProjectStatus? status =
+            request.Status.HasValue
+                ? (ProjectStatus)request.Status.Value
+                : null;
+
+        var query =
+            new ListProjectsQuery(
+                tenantPublicId,
+                userPublicId,
+                request.PageNumber,
+                request.PageSize,
+                request.Search,
+                status,
+                request.ResponsibleUserPublicId);
+
+        var result =
+            await _listProjectsHandler.HandleAsync(
+                query,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound ||
+                error == UserErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            if (error == TenantErrors.Inactive)
+            {
+                return Conflict(
+                    errorResponse);
+            }
+
+            if (error == UserErrors.Inactive)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var projects =
+            result.Value!;
+
+        var items =
+            projects.Items
+                .Select(project =>
+                    new ProjectListItemResponse(
+                        project.PublicId,
+                        project.Name,
+                        project.Description,
+                        project.Status,
+                        project.ResponsibleUserPublicId,
+                        project.ResponsibleUserName,
+                        project.DueDate,
+                        project.CreatedAt,
+                        project.UpdatedAt,
+                        project.ArchivedAt))
+                .ToArray();
+
+        var response =
+            new ListProjectsResponse(
+                items,
+                projects.PageNumber,
+                projects.PageSize,
+                projects.TotalCount,
+                projects.TotalPages);
+
+        return Ok(
             response);
     }
 

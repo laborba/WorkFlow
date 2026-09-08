@@ -136,6 +136,115 @@ GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/project
 Authorization: Bearer {{otherTenantToken}}
 Accept: application/json
 
+### ============================================================
+### PROJECTS — LISTAGEM
+###
+### Regras:
+### - TenantAdmin vê todos os projetos do próprio Tenant.
+### - ProjectManager e Member veem somente projetos com participação ativa.
+### - Projetos Archived não aparecem por padrão.
+### - Projetos Archived podem ser consultados com status=5.
+### ============================================================
+
+### Projects - TenantAdmin listar projetos do próprio Tenant - deve retornar 200 OK
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - ProjectManager listar projetos - deve retornar somente projetos com participação ativa
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects
+Authorization: Bearer {{projectManagerToken}}
+Accept: application/json
+
+
+### Projects - Member listar projetos sem participação - deve retornar 200 OK com lista vazia
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Projects - Listar sem token - deve retornar 401 Unauthorized
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects
+Accept: application/json
+
+
+### Projects - SystemAdmin tentando listar projetos operacionais - deve retornar 403 Forbidden
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### Projects - TenantAdmin tentando listar através de outro Tenant - deve retornar 403 Forbidden
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/projects
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Usuário de outro Tenant tentando listar projetos - deve retornar 403 Forbidden
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects
+Authorization: Bearer {{otherTenantToken}}
+Accept: application/json
+
+
+### Projects - Listar com paginação - primeira página com um projeto
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects?pageNumber=1&pageSize=1
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Listar com paginação - segunda página com um projeto
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects?pageNumber=2&pageSize=1
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Buscar projeto por nome - deve retornar projeto correspondente
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects?search=ProjectManager
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Buscar projeto inexistente - deve retornar 200 OK com lista vazia
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects?search=PROJETO-QUE-NAO-EXISTE-999999
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Filtrar por status Planning - deve retornar somente status 1
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects?status=1
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Filtrar por status Archived - deve retornar somente status 5 ou lista vazia
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects?status=5
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Filtrar por responsável inexistente - deve retornar 200 OK com lista vazia
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects?responsibleUserPublicId=11111111-1111-1111-1111-111111111111
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - PageNumber inválido - deve retornar 400 Bad Request
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects?pageNumber=0&pageSize=20
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - PageSize acima do máximo - deve retornar 400 Bad Request
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects?pageNumber=1&pageSize=101
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Status inválido - deve retornar 400 Bad Request
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects?status=99
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
 
 ### ============================================================
 ### PROJECTS — DADOS DE APOIO
@@ -168,4 +277,3 @@ Accept: application/json
   "description": "Projeto criado para validar acesso do membro ativo.",
   "dueDate": "2026-12-31T18:00:00Z"
 }
-

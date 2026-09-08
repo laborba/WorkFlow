@@ -15,6 +15,7 @@ using WorkFlow.UnitTests.Application.Projects.Fakes;
 using WorkFlow.UnitTests.Application.Tenants.Fakes;
 using WorkFlow.UnitTests.Application.Users.Fakes;
 using WorkFlow.UnitTests.Common;
+using WorkFlow.Application.Projects.ListProjects;
 
 namespace WorkFlow.UnitTests.API.Projects;
 
@@ -83,10 +84,17 @@ public sealed class ProjectsControllerTests
                 projectRepository,
                 projectMemberRepository);
 
+        var listProjectsHandler =
+            new ListProjectsHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository);
+
         var controller =
             new ProjectsController(
                 handler,
-                getProjectByPublicIdHandler);
+                getProjectByPublicIdHandler,
+                listProjectsHandler);
 
         var identity =
             new ClaimsIdentity(
@@ -189,7 +197,7 @@ public sealed class ProjectsControllerTests
 
     [Fact]
     public async Task
-    Create_ShouldReturnUnauthorized_WhenUserPublicIdClaimIsMissing()
+Create_ShouldReturnUnauthorized_WhenUserPublicIdClaimIsMissing()
     {
         var tenantRepository =
             new FakeTenantRepository();
@@ -218,10 +226,54 @@ public sealed class ProjectsControllerTests
                 projectRepository,
                 projectMemberRepository);
 
+        var listProjectsHandler =
+            new ListProjectsHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository);
+
         var controller =
             new ProjectsController(
                 createProjectHandler,
-                getProjectByPublicIdHandler);
+                getProjectByPublicIdHandler,
+                listProjectsHandler);
+
+        controller.ControllerContext =
+            new ControllerContext
+            {
+                HttpContext =
+                    new DefaultHttpContext
+                    {
+                        User =
+                            new ClaimsPrincipal(
+                                new ClaimsIdentity(
+                                    authenticationType: "Test"))
+                    }
+            };
+
+        var request =
+            new CreateProjectRequest(
+                "Projeto de Teste",
+                "Descrição do projeto",
+                null);
+
+        var result =
+            await controller.Create(
+                Guid.NewGuid(),
+                request,
+                CancellationToken.None);
+
+        Assert.IsType<UnauthorizedResult>(
+            result.Result);
+
+        Assert.Null(
+            tenantRepository.CheckedPublicId);
+
+        Assert.Null(
+            userRepository.CheckedGetByPublicIdTenantId);
+
+        Assert.Null(
+            projectRepository.AddedProject);
     }
 
     [Fact]
@@ -288,10 +340,17 @@ GetByPublicId_ShouldUseAuthenticatedUserAndReturnProject_WhenDataIsValid()
                 projectRepository,
                 projectMemberRepository);
 
+        var listProjectsHandler =
+            new ListProjectsHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository);
+
         var controller =
             new ProjectsController(
                 createProjectHandler,
-                getProjectByPublicIdHandler);
+                getProjectByPublicIdHandler,
+                listProjectsHandler);
 
         var identity =
             new ClaimsIdentity(
@@ -415,10 +474,17 @@ GetByPublicId_ShouldUseAuthenticatedUserAndReturnProject_WhenDataIsValid()
                 projectRepository,
                 projectMemberRepository);
 
+        var listProjectsHandler =
+            new ListProjectsHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository);
+
         var controller =
             new ProjectsController(
                 createProjectHandler,
-                getProjectByPublicIdHandler);
+                getProjectByPublicIdHandler,
+                listProjectsHandler);
 
         controller.ControllerContext =
             new ControllerContext
@@ -498,10 +564,17 @@ GetByPublicId_ShouldReturnNotFound_WhenProjectDoesNotExist()
                 projectRepository,
                 projectMemberRepository);
 
+        var listProjectsHandler =
+            new ListProjectsHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository);
+
         var controller =
             new ProjectsController(
                 createProjectHandler,
-                getProjectByPublicIdHandler);
+                getProjectByPublicIdHandler,
+                listProjectsHandler);
 
         var identity =
             new ClaimsIdentity(
@@ -615,10 +688,17 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterCannotViewProject()
                 projectRepository,
                 projectMemberRepository);
 
+        var listProjectsHandler =
+             new ListProjectsHandler(
+                 tenantRepository,
+                 userRepository,
+                 projectRepository);
+
         var controller =
             new ProjectsController(
                 createProjectHandler,
-                getProjectByPublicIdHandler);
+                getProjectByPublicIdHandler,
+                listProjectsHandler);
 
         var identity =
             new ClaimsIdentity(
@@ -719,10 +799,17 @@ GetByPublicId_ShouldReturnConflict_WhenTenantIsInactive()
                 projectRepository,
                 projectMemberRepository);
 
+        var listProjectsHandler =
+            new ListProjectsHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository);
+
         var controller =
             new ProjectsController(
                 createProjectHandler,
-                getProjectByPublicIdHandler);
+                getProjectByPublicIdHandler,
+                listProjectsHandler);
 
         var identity =
             new ClaimsIdentity(
@@ -824,10 +911,17 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterIsInactive()
                 projectRepository,
                 projectMemberRepository);
 
+        var listProjectsHandler =
+            new ListProjectsHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository);
+
         var controller =
             new ProjectsController(
                 createProjectHandler,
-                getProjectByPublicIdHandler);
+                getProjectByPublicIdHandler,
+                listProjectsHandler);
 
         var identity =
             new ClaimsIdentity(
