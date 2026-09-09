@@ -118,7 +118,18 @@ Atualmente estão implementados:
 - não pode existir mais de uma participação ativa do mesmo usuário no mesmo projeto;
 - uma participação removida permanece preservada no histórico e não impede uma nova participação futura;
 - o usuário autenticado que realizou a inclusão é registrado em `AddedByUserId`;
-- a inclusão de um membro passa imediatamente a conceder o acesso baseado em participação ativa.
+- a inclusão de um membro passa imediatamente a conceder o acesso baseado em participação ativa;
+- listagem paginada dos membros ativos de um projeto;
+- `TenantAdmin` pode listar membros de qualquer projeto do próprio Tenant;
+- `ProjectManager` e `Member` podem listar membros somente quando possuem participação ativa no projeto;
+- somente participações com `ProjectMember.RemovedAt == null` são retornadas;
+- participações removidas permanecem preservadas no histórico, mas não aparecem na listagem operacional;
+- projetos arquivados continuam permitindo a consulta de membros conforme as regras normais de autorização;
+- busca case-insensitive de membros por nome ou e-mail;
+- paginação com tamanho máximo de 100 itens;
+- ordenação estável por data de inclusão e identificador interno;
+- a consulta resolve os dados do membro e do usuário responsável pela inclusão diretamente na persistência;
+- a resposta expõe somente identificadores públicos, incluindo `UserPublicId` e `AddedByUserPublicId`.
 
 ### Autenticação e autorização
 
@@ -175,7 +186,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-734 testes automatizados aprovados
+762 testes automatizados aprovados
 0 falhas
 ```
 
@@ -286,7 +297,20 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - persistência real de `ProjectMember` no PostgreSQL;
 - restrição única para uma participação ativa por projeto e usuário;
 - possibilidade de nova participação depois da remoção da participação anterior;
-- testes da camada HTTP para autenticação, autorização, duplicidade e recursos inexistentes na inclusão de membros.
+- testes da camada HTTP para autenticação, autorização, duplicidade e recursos inexistentes na inclusão de membros;
+- listagem paginada dos membros ativos de um projeto;
+- listagem por `TenantAdmin` sem necessidade de participação ativa;
+- listagem por `ProjectManager` e `Member` com participação ativa;
+- bloqueio da listagem para `ProjectManager` ou `Member` sem participação ativa;
+- consulta de membros de projeto arquivado;
+- exclusão de participações removidas da listagem;
+- busca case-insensitive de membros por nome ou e-mail;
+- paginação e ordenação estável da listagem de membros;
+- resolução de `AddedByUserPublicId` diretamente na consulta de persistência;
+- validação de Tenant, usuário solicitante e projeto durante a listagem;
+- validação de número e tamanho de página;
+- testes reais da listagem de membros contra PostgreSQL;
+- testes da camada HTTP para sucesso, autenticação, autorização e recursos inexistentes na listagem de membros.
 
 ---
 
@@ -1833,6 +1857,135 @@ A inclusão de um usuário como membro ativo passa a conceder imediatamente o ac
 
 ---
 
+### Listar membros do projeto
+
+```http
+GET /api/tenants/{tenantPublicId}/projects/{projectPublicId}/members
+```
+
+A consulta exige:
+
+```text
+TenantAccess
+```
+
+e aplica as regras de visibilidade do projeto no backend.
+
+As regras atuais são:
+
+```text
+TenantAdmin
+→ pode listar membros de qualquer projeto do próprio Tenant
+
+ProjectManager
+→ pode listar somente quando possui participação ativa no projeto
+
+Member
+→ pode listar somente quando possui participação ativa no projeto
+
+SystemAdmin
+→ não possui acesso operacional aos projetos do Tenant
+```
+
+Para `ProjectManager` e `Member`, participação ativa significa:
+
+```text
+ProjectMember.RemovedAt == null
+```
+
+Caso não exista participação ativa:
+
+```text
+403 Forbidden
+Projects.ViewNotAllowed
+```
+
+A listagem retorna somente participações ativas.
+
+Participações removidas permanecem armazenadas para histórico, porém não aparecem na listagem operacional.
+
+Projetos arquivados continuam permitindo consulta dos membros, respeitando as mesmas regras de autorização.
+
+Parâmetros disponíveis:
+
+```text
+pageNumber
+pageSize
+search
+```
+
+Regras de paginação:
+
+```text
+pageNumber >= 1
+pageSize entre 1 e 100
+```
+
+A busca utiliza:
+
+```text
+User.Name
+User.Email
+```
+
+sem diferenciação entre letras maiúsculas e minúsculas.
+
+Exemplo:
+
+```http
+GET /api/tenants/{tenantPublicId}/projects/{projectPublicId}/members?pageNumber=1&pageSize=20&search=lucas
+```
+
+Exemplo de resposta:
+
+```json
+{
+  "items": [
+    {
+      "userPublicId": "00000000-0000-0000-0000-000000000000",
+      "name": "Usuário do Projeto",
+      "email": "usuario@empresa.com",
+      "role": 4,
+      "addedAt": "2026-09-09T12:00:00Z",
+      "addedByUserPublicId": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+  "pageNumber": 1,
+  "pageSize": 20,
+  "totalCount": 1,
+  "totalPages": 1
+}
+```
+
+A resposta não expõe identificadores internos como:
+
+```text
+ProjectMember.Id
+ProjectId
+UserId
+AddedByUserId
+```
+
+A ordenação utilizada é:
+
+```text
+AddedAt ASC
+Id ASC
+```
+
+garantindo uma paginação determinística e mantendo os membros na ordem em que foram adicionados ao projeto.
+
+Quando nenhum membro corresponder à consulta:
+
+```text
+200 OK
+items = []
+totalCount = 0
+totalPages = 0
+```
+
+---
+
 ## Autenticação
 
 ### Realizar login
@@ -2482,7 +2635,7 @@ Os arquivos possuem responsabilidades separadas:
 → cadastro, consulta, listagem, atualização, status e perfil de usuários
 
 04-Projects.http
-→ criação, consulta individual, listagem, atualização, membros, filtros e autorização de projetos
+→ criação, consulta individual, listagem, atualização, inclusão e listagem de membros, filtros e autorização de projetos
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -2610,6 +2763,12 @@ Alguns princípios e recursos adotados no projeto:
 - projetos arquivados não aceitam novos membros;
 - o banco impede mais de uma participação ativa para o mesmo projeto e usuário;
 - participações removidas são preservadas para histórico e permitem nova inclusão futura;
+- a listagem de membros também exige `TenantAccess`;
+- `TenantAdmin` pode listar membros de qualquer projeto do próprio Tenant;
+- `ProjectManager` e `Member` somente podem listar membros quando possuem participação ativa no projeto;
+- somente participações ativas são retornadas pela listagem operacional;
+- projetos arquivados continuam permitindo consulta de membros conforme as regras de autorização;
+- dados internos de `ProjectMember` não são expostos pela API;
 - usuários removidos do projeto perdem o acesso concedido pela participação;
 - usuários desativados no Tenant não podem consultar projetos;
 - `SystemAdmin` não possui acesso operacional aos projetos de um Tenant;
@@ -2681,7 +2840,7 @@ User Secrets
 
 O bootstrap é idempotente e pode ser desabilitado após a criação inicial da conta administrativa.
 
-A autorização por projeto já possui regras baseadas em participação ativa para consulta individual, listagem, atualização e inclusão de membros.
+A autorização por projeto já possui regras baseadas em participação ativa para consulta individual, listagem de projetos, atualização, inclusão de membros e listagem de membros.
 
 Ela continuará sendo evoluída com:
 
@@ -2990,7 +3149,7 @@ Essa camada ainda não está implementada.
 - [x] Autorização da listagem por participação ativa
 - [x] Exclusão de projetos arquivados da listagem padrão
 - [x] Atualização
-- [ ] Gerenciamento de membros — inclusão concluída; listagem e remoção pendentes
+- [ ] Gerenciamento de membros — inclusão e listagem concluídas; remoção pendente
 - [ ] Gerenciamento de permissões
 - [ ] Fluxos de status
 - [ ] Histórico
@@ -3164,9 +3323,16 @@ Member não pode adicionar membros
 Participações ativas duplicadas são bloqueadas
 Participações removidas são preservadas e permitem futura reinclusão
 Inclusão de membro registra o usuário responsável pela operação
+Listagem paginada de membros ativos dos projetos
+TenantAdmin pode listar membros de qualquer projeto do próprio Tenant
+ProjectManager e Member podem listar membros quando possuem participação ativa
+Participações removidas não aparecem na listagem operacional
+Busca de membros por nome ou e-mail
+Projetos arquivados permanecem com membros consultáveis conforme autorização
+Listagem expõe somente identificadores públicos das relações
 SystemAdmin não possui acesso operacional aos projetos de Tenant
 Requisições HTTP manuais organizadas por módulo
-734 testes automatizados aprovados
+762 testes automatizados aprovados
 0 falhas
 ```
 
