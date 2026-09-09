@@ -26,6 +26,14 @@ internal sealed class FakeProjectMemberRepository :
 
     public ProjectMember? ActiveMemberToReturn { get; set; }
 
+    public Dictionary<(long ProjectId, long UserId), ProjectMember?>
+        ActiveMembersToReturn
+    { get; } = new();
+
+    public List<(long ProjectId, long UserId)>
+        GetActiveCalls
+    { get; } = new();
+
     public long? LastGetActiveForUpdateProjectId { get; private set; }
 
     public long? LastGetActiveForUpdateUserId { get; private set; }
@@ -69,6 +77,26 @@ internal sealed class FakeProjectMemberRepository :
 
         return Task.FromResult(
             IsActiveMemberResult);
+    }
+
+    public Task<ProjectMember?> GetActiveAsync(
+        long projectId,
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        GetActiveCalls.Add(
+            (projectId, userId));
+
+        if (ActiveMembersToReturn.TryGetValue(
+                (projectId, userId),
+                out var projectMember))
+        {
+            return Task.FromResult(
+                projectMember);
+        }
+
+        return Task.FromResult(
+            ActiveMemberToReturn);
     }
 
     public Task<ProjectMember?> GetActiveForUpdateAsync(

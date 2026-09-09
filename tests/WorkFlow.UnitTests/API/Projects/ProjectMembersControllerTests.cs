@@ -6,6 +6,11 @@ using WorkFlow.API.Contracts.Projects;
 using WorkFlow.API.Controllers;
 using WorkFlow.Application.Projects;
 using WorkFlow.Application.Projects.AddProjectMember;
+using WorkFlow.Application.Projects.GrantProjectMemberPermission;
+using WorkFlow.Application.Projects.ListProjectMemberPermissions;
+using WorkFlow.Application.Projects.ListProjectMembers;
+using WorkFlow.Application.Projects.RemoveProjectMember;
+using WorkFlow.Application.Projects.RevokeProjectMemberPermission;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Entities;
@@ -14,8 +19,6 @@ using WorkFlow.UnitTests.Application.Projects.Fakes;
 using WorkFlow.UnitTests.Application.Tenants.Fakes;
 using WorkFlow.UnitTests.Application.Users.Fakes;
 using WorkFlow.UnitTests.Common;
-using WorkFlow.Application.Projects.ListProjectMembers;
-using WorkFlow.Application.Projects.RemoveProjectMember;
 
 namespace WorkFlow.UnitTests.API.Projects;
 
@@ -531,10 +534,42 @@ public sealed class ProjectMembersControllerTests
                 fixture.ProjectMemberRepository,
                 fixture.UnitOfWork);
 
+        var permissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
+        var grantPermissionHandler =
+            new GrantProjectMemberPermissionHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.ProjectMemberRepository,
+                permissionRepository,
+                fixture.UnitOfWork);
+
+        var listPermissionsHandler =
+            new ListProjectMemberPermissionsHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.ProjectMemberRepository,
+                permissionRepository);
+
+        var revokePermissionHandler =
+            new RevokeProjectMemberPermissionHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.ProjectMemberRepository,
+                permissionRepository,
+                fixture.UnitOfWork);
+
         return new ProjectMembersController(
             addProjectMemberHandler,
             listProjectMembersHandler,
-            removeProjectMemberHandler);
+            removeProjectMemberHandler,
+            grantPermissionHandler,
+            listPermissionsHandler,
+            revokePermissionHandler);
     }
 
     private static void SetAuthenticatedUser(

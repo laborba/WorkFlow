@@ -23,38 +23,27 @@ using WorkFlow.UnitTests.Common;
 
 namespace WorkFlow.UnitTests.API.Projects;
 
-public sealed class RemoveProjectMemberControllerTests
+public sealed class RevokeProjectMemberPermissionControllerTests
 {
     [Fact]
     public async Task
-    Remove_ShouldReturnOk_WhenRequesterIsTenantAdmin()
+    RevokePermission_ShouldReturnOk_WhenRequesterIsTenantAdmin()
     {
         var fixture =
             CreateFixture(
                 UserRole.TenantAdmin);
 
-        var controller =
-            CreateController(
+        var result =
+            await ExecuteAsync(
                 fixture);
 
-        SetAuthenticatedUser(
-            controller,
-            fixture.Requester.PublicId);
-
-        var result =
-            await controller.Remove(
-                fixture.Tenant.PublicId,
-                fixture.Project.PublicId,
-                fixture.TargetUser.PublicId,
-                CancellationToken.None);
-
-        var okResult =
+        var ok =
             Assert.IsType<OkObjectResult>(
                 result.Result);
 
         var response =
-            Assert.IsType<RemoveProjectMemberResponse>(
-                okResult.Value);
+            Assert.IsType<RevokeProjectMemberPermissionResponse>(
+                ok.Value);
 
         Assert.Equal(
             fixture.Project.PublicId,
@@ -64,9 +53,24 @@ public sealed class RemoveProjectMemberControllerTests
             fixture.TargetUser.PublicId,
             response.UserPublicId);
 
+        Assert.Equal(
+            ProjectPermission.EditProject,
+            response.Permission);
+
+        Assert.Equal(
+            fixture.Requester.PublicId,
+            response.RevokedByUserPublicId);
+
         Assert.NotEqual(
             default,
-            response.RemovedAt);
+            response.RevokedAt);
+
+        Assert.False(
+            fixture.TargetPermission.IsActive);
+
+        Assert.Equal(
+            fixture.Requester.Id,
+            fixture.TargetPermission.RevokedByUserId);
 
         Assert.Equal(
             1,
@@ -75,41 +79,41 @@ public sealed class RemoveProjectMemberControllerTests
 
     [Fact]
     public async Task
-    Remove_ShouldReturnOk_WhenRequesterIsActiveProjectManager()
+    RevokePermission_ShouldReturnOk_WhenMemberCanManagePermissions()
     {
         var fixture =
             CreateFixture(
-                UserRole.ProjectManager);
+                UserRole.Member);
 
-        fixture.ProjectMemberRepository
-            .IsActiveMemberResult = true;
-
-        var controller =
-            CreateController(
-                fixture);
-
-        SetAuthenticatedUser(
-            controller,
-            fixture.Requester.PublicId);
+        GrantManagePermissionToRequester(
+            fixture);
 
         var result =
-            await controller.Remove(
-                fixture.Tenant.PublicId,
-                fixture.Project.PublicId,
-                fixture.TargetUser.PublicId,
-                CancellationToken.None);
+            await ExecuteAsync(
+                fixture);
 
         Assert.IsType<OkObjectResult>(
             result.Result);
 
-        Assert.Single(
-            fixture.ProjectMemberRepository
-                .IsActiveMemberCalls);
+        Assert.False(
+            fixture.TargetPermission.IsActive);
+
+        Assert.Contains(
+            (
+                fixture.RequesterProjectMember.Id,
+                ProjectPermission.ManageProjectPermissions
+            ),
+            fixture.PermissionRepository
+                .IsActivePermissionCalls);
+
+        Assert.Equal(
+            1,
+            fixture.UnitOfWork.SaveChangesCallCount);
     }
 
     [Fact]
     public async Task
-    Remove_ShouldReturnUnauthorized_WhenUserClaimIsMissing()
+    RevokePermission_ShouldReturnUnauthorized_WhenUserClaimIsMissing()
     {
         var fixture =
             CreateFixture(
@@ -133,14 +137,18 @@ public sealed class RemoveProjectMemberControllerTests
             };
 
         var result =
-            await controller.Remove(
+            await controller.RevokePermission(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
                 fixture.TargetUser.PublicId,
+                ProjectPermission.EditProject,
                 CancellationToken.None);
 
         Assert.IsType<UnauthorizedResult>(
             result.Result);
+
+        Assert.True(
+            fixture.TargetPermission.IsActive);
 
         Assert.Equal(
             0,
@@ -149,7 +157,7 @@ public sealed class RemoveProjectMemberControllerTests
 
     [Fact]
     public async Task
-    Remove_ShouldReturnNotFound_WhenTenantDoesNotExist()
+    RevokePermission_ShouldReturnNotFound_WhenTenantDoesNotExist()
     {
         var fixture =
             CreateFixture(
@@ -162,22 +170,15 @@ public sealed class RemoveProjectMemberControllerTests
             await ExecuteAsync(
                 fixture);
 
-        var notFound =
-            Assert.IsType<NotFoundObjectResult>(
-                result.Result);
-
-        var error =
-            Assert.IsType<ErrorResponse>(
-                notFound.Value);
-
-        Assert.Equal(
-            TenantErrors.NotFound.Code,
-            error.Code);
+        AssertError(
+            result,
+            StatusCodes.Status404NotFound,
+            TenantErrors.NotFound.Code);
     }
 
     [Fact]
     public async Task
-    Remove_ShouldReturnConflict_WhenTenantIsInactive()
+    RevokePermission_ShouldReturnConflict_WhenTenantIsInactive()
     {
         var fixture =
             CreateFixture(
@@ -189,53 +190,15 @@ public sealed class RemoveProjectMemberControllerTests
             await ExecuteAsync(
                 fixture);
 
-        var conflict =
-            Assert.IsType<ConflictObjectResult>(
-                result.Result);
-
-        var error =
-            Assert.IsType<ErrorResponse>(
-                conflict.Value);
-
-        Assert.Equal(
-            TenantErrors.Inactive.Code,
-            error.Code);
+        AssertError(
+            result,
+            StatusCodes.Status409Conflict,
+            TenantErrors.Inactive.Code);
     }
 
     [Fact]
     public async Task
-    Remove_ShouldReturnForbidden_WhenRequesterIsInactive()
-    {
-        var fixture =
-            CreateFixture(
-                UserRole.TenantAdmin);
-
-        fixture.Requester.Deactivate();
-
-        var result =
-            await ExecuteAsync(
-                fixture);
-
-        var forbidden =
-            Assert.IsType<ObjectResult>(
-                result.Result);
-
-        Assert.Equal(
-            StatusCodes.Status403Forbidden,
-            forbidden.StatusCode);
-
-        var error =
-            Assert.IsType<ErrorResponse>(
-                forbidden.Value);
-
-        Assert.Equal(
-            UserErrors.Inactive.Code,
-            error.Code);
-    }
-
-    [Fact]
-    public async Task
-    Remove_ShouldReturnNotFound_WhenProjectDoesNotExist()
+    RevokePermission_ShouldReturnNotFound_WhenProjectDoesNotExist()
     {
         var fixture =
             CreateFixture(
@@ -248,22 +211,15 @@ public sealed class RemoveProjectMemberControllerTests
             await ExecuteAsync(
                 fixture);
 
-        var notFound =
-            Assert.IsType<NotFoundObjectResult>(
-                result.Result);
-
-        var error =
-            Assert.IsType<ErrorResponse>(
-                notFound.Value);
-
-        Assert.Equal(
-            ProjectErrors.NotFound.Code,
-            error.Code);
+        AssertError(
+            result,
+            StatusCodes.Status404NotFound,
+            ProjectErrors.NotFound.Code);
     }
 
     [Fact]
     public async Task
-    Remove_ShouldReturnForbidden_WhenRequesterIsMember()
+    RevokePermission_ShouldReturnForbidden_WhenRequesterCannotManagePermissions()
     {
         var fixture =
             CreateFixture(
@@ -273,26 +229,19 @@ public sealed class RemoveProjectMemberControllerTests
             await ExecuteAsync(
                 fixture);
 
-        var forbidden =
-            Assert.IsType<ObjectResult>(
-                result.Result);
-
-        Assert.Equal(
+        AssertError(
+            result,
             StatusCodes.Status403Forbidden,
-            forbidden.StatusCode);
+            ProjectMemberPermissionErrors
+                .ManageNotAllowed.Code);
 
-        var error =
-            Assert.IsType<ErrorResponse>(
-                forbidden.Value);
-
-        Assert.Equal(
-            ProjectMemberErrors.RemoveNotAllowed.Code,
-            error.Code);
+        Assert.True(
+            fixture.TargetPermission.IsActive);
     }
 
     [Fact]
     public async Task
-    Remove_ShouldReturnNotFound_WhenTargetUserDoesNotExist()
+    RevokePermission_ShouldReturnNotFound_WhenTargetUserDoesNotExist()
     {
         var fixture =
             CreateFixture(
@@ -307,22 +256,15 @@ public sealed class RemoveProjectMemberControllerTests
             await ExecuteAsync(
                 fixture);
 
-        var notFound =
-            Assert.IsType<NotFoundObjectResult>(
-                result.Result);
-
-        var error =
-            Assert.IsType<ErrorResponse>(
-                notFound.Value);
-
-        Assert.Equal(
-            UserErrors.NotFound.Code,
-            error.Code);
+        AssertError(
+            result,
+            StatusCodes.Status404NotFound,
+            UserErrors.NotFound.Code);
     }
 
     [Fact]
     public async Task
-    Remove_ShouldAllowInactiveTargetUser()
+    RevokePermission_ShouldReturnOk_WhenTargetUserIsInactive()
     {
         var fixture =
             CreateFixture(
@@ -337,42 +279,70 @@ public sealed class RemoveProjectMemberControllerTests
         Assert.IsType<OkObjectResult>(
             result.Result);
 
-        Assert.Equal(
-            1,
-            fixture.UnitOfWork.SaveChangesCallCount);
+        Assert.False(
+            fixture.TargetPermission.IsActive);
     }
 
     [Fact]
     public async Task
-    Remove_ShouldReturnNotFound_WhenTargetHasNoActiveMembership()
+    RevokePermission_ShouldReturnNotFound_WhenTargetIsNotActiveProjectMember()
     {
         var fixture =
             CreateFixture(
                 UserRole.TenantAdmin);
 
         fixture.ProjectMemberRepository
-            .ActiveMemberToReturn = null;
+            .ActiveMembersToReturn
+            .Remove(
+                (
+                    fixture.Project.Id,
+                    fixture.TargetUser.Id
+                ));
 
         var result =
             await ExecuteAsync(
                 fixture);
 
-        var notFound =
-            Assert.IsType<NotFoundObjectResult>(
-                result.Result);
-
-        var error =
-            Assert.IsType<ErrorResponse>(
-                notFound.Value);
-
-        Assert.Equal(
-            ProjectMemberErrors.NotActive.Code,
-            error.Code);
+        AssertError(
+            result,
+            StatusCodes.Status404NotFound,
+            ProjectMemberErrors.NotActive.Code);
     }
 
     [Fact]
     public async Task
-    Remove_ShouldReturnConflict_WhenProjectIsArchived()
+    RevokePermission_ShouldReturnNotFound_WhenPermissionIsNotActive()
+    {
+        var fixture =
+            CreateFixture(
+                UserRole.TenantAdmin);
+
+        fixture.PermissionRepository
+            .ActivePermissionsForUpdateToReturn
+            .Remove(
+                (
+                    fixture.TargetProjectMember.Id,
+                    ProjectPermission.EditProject
+                ));
+
+        var result =
+            await ExecuteAsync(
+                fixture);
+
+        AssertError(
+            result,
+            StatusCodes.Status404NotFound,
+            ProjectMemberPermissionErrors
+                .NotActive.Code);
+
+        Assert.Equal(
+            0,
+            fixture.UnitOfWork.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task
+    RevokePermission_ShouldReturnConflict_WhenProjectIsArchived()
     {
         var fixture =
             CreateFixture(
@@ -384,20 +354,17 @@ public sealed class RemoveProjectMemberControllerTests
             await ExecuteAsync(
                 fixture);
 
-        var conflict =
-            Assert.IsType<ConflictObjectResult>(
-                result.Result);
+        AssertError(
+            result,
+            StatusCodes.Status409Conflict,
+            ProjectErrors.Archived.Code);
 
-        var error =
-            Assert.IsType<ErrorResponse>(
-                conflict.Value);
-
-        Assert.Equal(
-            ProjectErrors.Archived.Code,
-            error.Code);
+        Assert.True(
+            fixture.TargetPermission.IsActive);
     }
 
-    private static async Task<ActionResult<RemoveProjectMemberResponse>>
+    private static async Task<
+        ActionResult<RevokeProjectMemberPermissionResponse>>
         ExecuteAsync(
             Fixture fixture)
     {
@@ -409,11 +376,34 @@ public sealed class RemoveProjectMemberControllerTests
             controller,
             fixture.Requester.PublicId);
 
-        return await controller.Remove(
+        return await controller.RevokePermission(
             fixture.Tenant.PublicId,
             fixture.Project.PublicId,
             fixture.TargetUser.PublicId,
+            ProjectPermission.EditProject,
             CancellationToken.None);
+    }
+
+    private static void AssertError(
+        ActionResult<RevokeProjectMemberPermissionResponse> result,
+        int expectedStatusCode,
+        string expectedCode)
+    {
+        var objectResult =
+            Assert.IsAssignableFrom<ObjectResult>(
+                result.Result);
+
+        Assert.Equal(
+            expectedStatusCode,
+            objectResult.StatusCode);
+
+        var response =
+            Assert.IsType<ErrorResponse>(
+                objectResult.Value);
+
+        Assert.Equal(
+            expectedCode,
+            response.Code);
     }
 
     private static ProjectMembersController CreateController(
@@ -427,7 +417,7 @@ public sealed class RemoveProjectMemberControllerTests
                 fixture.ProjectMemberRepository,
                 fixture.UnitOfWork);
 
-        var listHandler =
+        var listMembersHandler =
             new ListProjectMembersHandler(
                 fixture.TenantRepository,
                 fixture.UserRepository,
@@ -442,16 +432,13 @@ public sealed class RemoveProjectMemberControllerTests
                 fixture.ProjectMemberRepository,
                 fixture.UnitOfWork);
 
-        var permissionRepository =
-            new FakeProjectMemberPermissionRepository();
-
-        var grantPermissionHandler =
+        var grantHandler =
             new GrantProjectMemberPermissionHandler(
                 fixture.TenantRepository,
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
-                permissionRepository,
+                fixture.PermissionRepository,
                 fixture.UnitOfWork);
 
         var listPermissionsHandler =
@@ -460,7 +447,7 @@ public sealed class RemoveProjectMemberControllerTests
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
-                permissionRepository);
+                fixture.PermissionRepository);
 
         var revokePermissionHandler =
             new RevokeProjectMemberPermissionHandler(
@@ -468,14 +455,14 @@ public sealed class RemoveProjectMemberControllerTests
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
-                permissionRepository,
+                fixture.PermissionRepository,
                 fixture.UnitOfWork);
 
         return new ProjectMembersController(
             addHandler,
-            listHandler,
+            listMembersHandler,
             removeHandler,
-            grantPermissionHandler,
+            grantHandler,
             listPermissionsHandler,
             revokePermissionHandler);
     }
@@ -512,7 +499,7 @@ public sealed class RemoveProjectMemberControllerTests
     {
         var tenant =
             new Tenant(
-                "Empresa Remove Member API",
+                "Empresa Revoke Permission API",
                 $"REG-{Guid.NewGuid():N}",
                 $"tenant-{Guid.NewGuid():N}@test.local");
 
@@ -554,6 +541,32 @@ public sealed class RemoveProjectMemberControllerTests
             project,
             100);
 
+        var requesterProjectMember =
+            new ProjectMember(
+                project.Id,
+                requester.Id,
+                requester.Id);
+
+        EntityTestHelper.SetId(
+            requesterProjectMember,
+            1000);
+
+        var targetProjectMember =
+            new ProjectMember(
+                project.Id,
+                targetUser.Id,
+                requester.Id);
+
+        EntityTestHelper.SetId(
+            targetProjectMember,
+            2000);
+
+        var targetPermission =
+            new ProjectMemberPermission(
+                targetProjectMember.Id,
+                ProjectPermission.EditProject,
+                requester.Id);
+
         var tenantRepository =
             new FakeTenantRepository
             {
@@ -578,28 +591,60 @@ public sealed class RemoveProjectMemberControllerTests
             };
 
         var projectMemberRepository =
-            new FakeProjectMemberRepository
-            {
-                ActiveMemberToReturn =
-                    new ProjectMember(
-                        project.Id,
-                        targetUser.Id,
-                        requester.Id)
-            };
+            new FakeProjectMemberRepository();
 
-        var unitOfWork =
-            new TestUnitOfWork();
+        projectMemberRepository
+            .ActiveMembersToReturn[
+                (
+                    project.Id,
+                    targetUser.Id
+                )] =
+                    targetProjectMember;
+
+        var permissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
+        permissionRepository
+            .ActivePermissionsForUpdateToReturn[
+                (
+                    targetProjectMember.Id,
+                    ProjectPermission.EditProject
+                )] =
+                    targetPermission;
 
         return new Fixture(
             tenant,
             requester,
             targetUser,
             project,
+            requesterProjectMember,
+            targetProjectMember,
+            targetPermission,
             tenantRepository,
             userRepository,
             projectRepository,
             projectMemberRepository,
-            unitOfWork);
+            permissionRepository,
+            new TestUnitOfWork());
+    }
+
+    private static void GrantManagePermissionToRequester(
+        Fixture fixture)
+    {
+        fixture.ProjectMemberRepository
+            .ActiveMembersToReturn[
+                (
+                    fixture.Project.Id,
+                    fixture.Requester.Id
+                )] =
+                    fixture.RequesterProjectMember;
+
+        fixture.PermissionRepository
+            .IsActivePermissionResults[
+                (
+                    fixture.RequesterProjectMember.Id,
+                    ProjectPermission.ManageProjectPermissions
+                )] = true;
     }
 
     private sealed class TestUnitOfWork :
@@ -629,9 +674,13 @@ public sealed class RemoveProjectMemberControllerTests
         User Requester,
         User TargetUser,
         Project Project,
+        ProjectMember RequesterProjectMember,
+        ProjectMember TargetProjectMember,
+        ProjectMemberPermission TargetPermission,
         FakeTenantRepository TenantRepository,
         FakeUserRepository UserRepository,
         FakeProjectRepository ProjectRepository,
         FakeProjectMemberRepository ProjectMemberRepository,
+        FakeProjectMemberPermissionRepository PermissionRepository,
         TestUnitOfWork UnitOfWork);
 }

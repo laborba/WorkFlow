@@ -140,6 +140,22 @@ Atualmente estão implementados:
 - participações removidas permanecem preservadas no histórico;
 - um usuário removido perde imediatamente o acesso concedido pela participação;
 - um usuário removido pode ser adicionado novamente futuramente, criando uma nova participação.
+- concessão de permissões específicas para membros de projetos;
+- listagem das permissões ativas de um membro;
+- revogação lógica de permissões;
+- histórico de concessões e revogações preservado;
+- uma permissão revogada pode ser concedida novamente, criando um novo registro histórico;
+- apenas uma concessão ativa da mesma permissão pode existir para a mesma participação;
+- as permissões são vinculadas ao `ProjectMember`, e não diretamente ao usuário;
+- remover e adicionar novamente um usuário ao projeto cria uma nova participação e não reativa permissões antigas;
+- `TenantAdmin` pode gerenciar permissões em qualquer projeto do próprio Tenant;
+- `ProjectManager` e `Member` precisam possuir participação ativa e a permissão `ManageProjectPermissions` para conceder, listar ou revogar permissões;
+- a revogação de `ManageProjectPermissions` produz efeito imediato nas operações protegidas por essa permissão;
+- projetos arquivados permitem consulta de permissões, mas não permitem concessão ou revogação;
+- o usuário alvo precisa possuir participação ativa no projeto;
+- permissões de usuário alvo inativo podem continuar sendo consultadas e revogadas;
+- isolamento das operações de permissões pelo Tenant autenticado.
+
 
 ### Autenticação e autorização
 
@@ -196,7 +212,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-794 testes automatizados aprovados
+901 testes automatizados aprovados
 0 falhas
 ```
 
@@ -334,6 +350,27 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - confirmação de que membro removido deixa de ser considerado participante ativo;
 - possibilidade de reinclusão depois da remoção;
 - testes da camada HTTP para sucesso, autenticação, autorização, conflito e recursos inexistentes na remoção de membros.
+- concessão de permissões específicas para membros de projetos;
+- autorização de concessão por `TenantAdmin`;
+- autorização de `ProjectManager` e `Member` através de participação ativa e `ManageProjectPermissions`;
+- bloqueio de gerenciamento de permissões sem `ManageProjectPermissions`;
+- bloqueio de concessão duplicada da mesma permissão ativa;
+- possibilidade de nova concessão depois da revogação;
+- vínculo das permissões à participação atual em `ProjectMember`;
+- persistência real das permissões no PostgreSQL;
+- restrição única para uma mesma permissão ativa por participação;
+- listagem somente das permissões ativas;
+- resolução de `GrantedByUserPublicId` na persistência;
+- consulta de permissões em projeto arquivado;
+- consulta de permissões de usuário alvo inativo;
+- revogação lógica através de `RevokedAt` e `RevokedByUserId`;
+- revogação permitida quando o usuário alvo está inativo;
+- bloqueio de revogação de permissão inexistente ou já revogada;
+- bloqueio de concessão e revogação em projeto arquivado;
+- confirmação de que uma permissão revogada deixa imediatamente de ser considerada ativa;
+- confirmação de que a revogação de `ManageProjectPermissions` remove imediatamente a capacidade de gerenciar permissões;
+- testes da camada HTTP para concessão, listagem e revogação de permissões;
+- testes de autenticação, autorização, isolamento entre Tenants e recursos inexistentes nas operações de permissões.
 
 ---
 
@@ -517,7 +554,19 @@ Ela é utilizada em conjunto com a policy `TenantAccess`, garantindo que o usuá
 
 Atualmente, os endpoints administrativos de Tenant são protegidos pela policy `SystemAdmin`.
 
-Permissões específicas por projeto e regras de autorização mais avançadas serão adicionadas conforme os respectivos módulos forem implementados.
+O gerenciamento inicial de permissões específicas por projeto já está implementado.
+
+Membros de projeto podem possuir permissões próprias através de `ProjectMemberPermission`.
+
+Atualmente, `ManageProjectPermissions` já participa efetivamente da autorização para concessão, consulta e revogação de permissões.
+
+As regras atuais são:
+
+- `TenantAdmin` pode gerenciar permissões no próprio Tenant sem depender de participação no projeto;
+- `ProjectManager` e `Member` precisam possuir participação ativa no projeto;
+- `ProjectManager` e `Member` também precisam possuir `ManageProjectPermissions`.
+
+As demais permissões existentes no domínio serão integradas progressivamente aos respectivos casos de uso, como edição de projeto, gerenciamento de membros, fluxos de status e tarefas.
 
 ---
 
@@ -2106,6 +2155,96 @@ permanece preservado independentemente da participação atual do usuário.
 
 ---
 
+### Conceder permissão a membro do projeto
+
+`POST /api/tenants/{tenantPublicId}/projects/{projectPublicId}/members/{userPublicId}/permissions`
+
+A operação exige `TenantAccess`.
+
+Regras atuais:
+
+- `TenantAdmin` pode conceder permissões em qualquer projeto do próprio Tenant;
+- `ProjectManager` e `Member` precisam possuir participação ativa no projeto;
+- `ProjectManager` e `Member` precisam possuir `ManageProjectPermissions`;
+- `SystemAdmin` não possui acesso operacional aos projetos de Tenant.
+
+Exemplo de requisição:
+
+    {
+      "permission": 7
+    }
+
+A permissão é vinculada à participação ativa atual do usuário em `ProjectMember`.
+
+O usuário alvo precisa existir no mesmo Tenant, estar ativo e possuir participação ativa no projeto.
+
+Projetos `Archived` não permitem novas concessões.
+
+Não pode existir mais de uma concessão ativa da mesma permissão para a mesma participação.
+
+Nesse caso:
+
+`409 Conflict`
+
+`ProjectMemberPermissions.AlreadyActive`
+
+Uma permissão anteriormente revogada pode ser concedida novamente. A nova concessão cria um novo registro e preserva o histórico anterior.
+
+---
+
+### Listar permissões de membro do projeto
+
+`GET /api/tenants/{tenantPublicId}/projects/{projectPublicId}/members/{userPublicId}/permissions`
+
+A consulta retorna somente permissões ativas da participação atual.
+
+Regras atuais:
+
+- `TenantAdmin` pode consultar permissões em qualquer projeto do próprio Tenant;
+- `ProjectManager` e `Member` precisam possuir participação ativa;
+- `ProjectManager` e `Member` precisam possuir `ManageProjectPermissions`.
+
+Projetos arquivados continuam permitindo a consulta.
+
+O usuário alvo pode estar inativo no Tenant, desde que ainda possua participação ativa no projeto.
+
+Permissões revogadas permanecem preservadas na persistência, mas não aparecem nessa consulta operacional.
+
+---
+
+### Revogar permissão de membro do projeto
+
+`DELETE /api/tenants/{tenantPublicId}/projects/{projectPublicId}/members/{userPublicId}/permissions/{permission}`
+
+Regras atuais:
+
+- `TenantAdmin` pode revogar permissões em qualquer projeto do próprio Tenant;
+- `ProjectManager` e `Member` precisam possuir participação ativa;
+- `ProjectManager` e `Member` precisam possuir `ManageProjectPermissions`.
+
+Projetos `Archived` não permitem revogação.
+
+O usuário alvo pode estar inativo no Tenant.
+
+A revogação é lógica e registra:
+
+- `RevokedAt`;
+- `RevokedByUserId`.
+
+A concessão original permanece preservada.
+
+Tentar revogar uma permissão que não está ativa retorna:
+
+`404 Not Found`
+
+`ProjectMemberPermissions.NotActive`
+
+A revogação produz efeito imediatamente nas operações que utilizam a permissão.
+
+Isso já ocorre com `ManageProjectPermissions`: após sua revogação, `ProjectManager` ou `Member` deixa imediatamente de poder conceder, listar ou revogar permissões do projeto.
+
+---
+
 
 ## Autenticação
 
@@ -2572,6 +2711,10 @@ ProjectMembers.AlreadyActive
 ProjectMembers.RemoveNotAllowed
 ProjectMembers.NotActive
 
+ProjectMemberPermissions.ManageNotAllowed
+ProjectMemberPermissions.AlreadyActive
+ProjectMemberPermissions.NotActive
+
 Validation.InvalidArgument
 ```
 
@@ -2758,7 +2901,7 @@ Os arquivos possuem responsabilidades separadas:
 → cadastro, consulta, listagem, atualização, status e perfil de usuários
 
 04-Projects.http
-→ criação, consulta individual, listagem, atualização, inclusão, listagem e remoção de membros, filtros e autorização de projetos
+→ criação, consulta individual, listagem e atualização de projetos; inclusão, listagem e remoção de membros; concessão, listagem e revogação de permissões; filtros e autorização
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -2901,6 +3044,15 @@ Alguns princípios e recursos adotados no projeto:
 - usuários inativos ainda podem ser removidos dos projetos;
 - participações removidas continuam preservadas para histórico;
 - usuários removidos do projeto perdem imediatamente o acesso concedido pela participação;
+- permissões específicas de projeto são vinculadas ao `ProjectMember`;
+- permissões revogadas permanecem preservadas para histórico;
+- somente uma concessão ativa da mesma permissão pode existir por participação;
+- `TenantAdmin` pode gerenciar permissões nos projetos do próprio Tenant;
+- `ProjectManager` e `Member` somente podem gerenciar permissões quando possuem participação ativa e `ManageProjectPermissions`;
+- `ManageProjectPermissions` já é utilizada efetivamente na autorização de concessão, listagem e revogação de permissões;
+- a revogação de `ManageProjectPermissions` produz efeito imediato;
+- projetos arquivados não permitem concessão ou revogação de permissões, mas permitem consulta;
+- permissões associadas a uma participação removida não são transferidas para uma futura nova participação do mesmo usuário;
 - usuários desativados no Tenant não podem consultar projetos;
 - `SystemAdmin` não possui acesso operacional aos projetos de um Tenant;
 - endpoints administrativos de Tenant são restritos a `SystemAdmin`;
@@ -2971,13 +3123,15 @@ User Secrets
 
 O bootstrap é idempotente e pode ser desabilitado após a criação inicial da conta administrativa.
 
-A autorização por projeto já possui regras baseadas em participação ativa para consulta individual, listagem de projetos, atualização, inclusão, listagem e remoção de membros.
+A autorização por projeto já possui regras baseadas em participação ativa para consulta individual, listagem de projetos, atualização e gerenciamento de membros.
 
-Ela continuará sendo evoluída com:
+O gerenciamento de `ProjectMemberPermission` também está implementado, incluindo concessão, listagem e revogação.
+
+A permissão `ManageProjectPermissions` já participa efetivamente da autorização dessas operações para `ProjectManager` e `Member`.
+
+A autorização continuará sendo evoluída integrando as demais permissões específicas aos respectivos casos de uso.
 
 ```text
-Permissões específicas por projeto
-Gerenciamento de membros
 Permissões específicas por recurso
 Responsabilidade pelo recurso
 Estado do domínio
@@ -3087,27 +3241,66 @@ Cancelled
 
 # Permissões por projeto
 
-Além do papel global do usuário, projetos poderão possuir permissões específicas.
+Além do perfil global, um usuário pode possuir permissões específicas em cada projeto no qual participa.
 
-Exemplos:
+As permissões são associadas a `ProjectMemberPermission`, que pertence a um `ProjectMember`.
 
-```text
-EDIT_PROJECT
-MANAGE_PROJECT_MEMBERS
-MANAGE_PROJECT_PERMISSIONS
+Isso significa que a permissão pertence à participação do usuário naquele projeto, e não globalmente ao usuário.
 
-CREATE_TASK
-EDIT_TASK
-CLAIM_TASK
-ASSIGN_TASK
+As permissões atuais são:
 
-VALIDATE_TASK
-SELF_VALIDATE_TASK
-```
+- `1 = EditProject`
+- `2 = ManageProjectMembers`
+- `3 = ManageProjectPermissions`
+- `4 = CompleteProject`
+- `5 = ReopenProject`
+- `6 = ArchiveProject`
+- `7 = CreateTask`
+- `8 = EditTask`
+- `9 = ClaimTask`
+- `10 = AssignTask`
+- `11 = ManageTaskCollaborators`
+- `12 = CancelTask`
+- `13 = ReopenTask`
+- `14 = ValidateTask`
+- `15 = SelfValidateTask`
 
-Isso permite que um usuário possua capacidades diferentes dependendo do projeto no qual participa.
+O gerenciamento inicial dessas permissões já está implementado através de:
 
----
+- `GrantProjectMemberPermission`;
+- `ListProjectMemberPermissions`;
+- `RevokeProjectMemberPermission`.
+
+A persistência mantém histórico de concessões e revogações.
+
+Uma concessão registra:
+
+- `Permission`;
+- `GrantedAt`;
+- `GrantedByUserId`.
+
+Uma revogação registra:
+
+- `RevokedAt`;
+- `RevokedByUserId`.
+
+A revogação não exclui o registro.
+
+Somente uma mesma permissão ativa pode existir para uma determinada participação.
+
+Depois da revogação, a concessão anterior permanece no histórico e uma nova concessão da mesma permissão pode criar um novo registro ativo.
+
+Se um usuário for removido e posteriormente adicionado novamente ao projeto, o `ProjectMember` antigo permanece no histórico com suas permissões anteriores, enquanto a nova participação não herda automaticamente essas permissões.
+
+Regras atuais para gerenciamento:
+
+- `TenantAdmin` pode conceder, listar e revogar permissões no próprio Tenant;
+- `ProjectManager` e `Member` precisam possuir participação ativa;
+- `ProjectManager` e `Member` precisam possuir `ManageProjectPermissions`.
+
+`ManageProjectPermissions` já é uma permissão operacional efetiva.
+
+As demais permissões serão integradas aos respectivos casos de uso conforme esses módulos forem implementados.
 
 # Notificações
 
@@ -3254,7 +3447,9 @@ Essa camada ainda não está implementada.
 - [x] Bootstrap inicial de `SystemAdmin`
 - [x] Autorização inicial de consulta de projetos por participação ativa
 - [x] Autorização da listagem de projetos por participação ativa
-- [ ] Permissões por projeto
+- [x] Gerenciamento inicial de permissões por projeto
+- [x] Autorização de gerenciamento através de `ManageProjectPermissions`
+- [ ] Integração das demais permissões específicas aos respectivos casos de uso
 - [ ] Rate limiting
 - [ ] MFA
 - [ ] Recuperação de conta
@@ -3281,7 +3476,7 @@ Essa camada ainda não está implementada.
 - [x] Exclusão de projetos arquivados da listagem padrão
 - [x] Atualização
 - [x] Gerenciamento de membros — inclusão, listagem e remoção
-- [ ] Gerenciamento de permissões
+- [x] Gerenciamento de permissões — concessão, listagem e revogação
 - [ ] Fluxos de status
 - [ ] Histórico
 - [ ] Kanban
@@ -3470,9 +3665,20 @@ Usuários inativos podem ser removidos dos projetos
 Membro removido perde imediatamente o acesso baseado em participação
 Participações removidas permanecem preservadas para histórico
 Usuários removidos podem ser adicionados novamente futuramente
+Concessão de permissões específicas a membros de projeto
+Listagem das permissões ativas de membros
+Revogação lógica de permissões
+Histórico de concessão e revogação preservado
+Permissões vinculadas à participação em ProjectMember
+Permissões revogadas podem ser concedidas novamente
+TenantAdmin pode gerenciar permissões em projetos do próprio Tenant
+ProjectManager e Member dependem de participação ativa e ManageProjectPermissions para gerenciar permissões
+ManageProjectPermissions possui efeito efetivo na autorização
+Projetos Archived permitem consulta, mas bloqueiam concessão e revogação de permissões
+Usuários alvo inativos podem ter permissões consultadas e revogadas
 SystemAdmin não possui acesso operacional aos projetos de Tenant
 Requisições HTTP manuais organizadas por módulo
-794 testes automatizados aprovados
+901 testes automatizados aprovados
 0 falhas
 ```
 

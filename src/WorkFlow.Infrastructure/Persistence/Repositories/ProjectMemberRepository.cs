@@ -32,6 +32,21 @@ public sealed class ProjectMemberRepository :
                 cancellationToken);
     }
 
+    public async Task<ProjectMember?> GetActiveAsync(
+        long projectId,
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.ProjectMembers
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                projectMember =>
+                    projectMember.ProjectId == projectId &&
+                    projectMember.UserId == userId &&
+                    projectMember.RemovedAt == null,
+                cancellationToken);
+    }
+
     public async Task<ProjectMember?> GetActiveForUpdateAsync(
         long projectId,
         long userId,

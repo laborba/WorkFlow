@@ -18,6 +18,9 @@ using WorkFlow.Application.Projects.UpdateProject;
 using WorkFlow.Application.Projects.AddProjectMember;
 using WorkFlow.Application.Projects.ListProjectMembers;
 using WorkFlow.Application.Projects.RemoveProjectMember;
+using WorkFlow.Application.Projects.GrantProjectMemberPermission;
+using WorkFlow.Application.Projects.ListProjectMemberPermissions;
+using WorkFlow.Application.Projects.RevokeProjectMemberPermission;
 
 namespace WorkFlow.Application;
 
@@ -45,6 +48,9 @@ public static class DependencyInjection
         services.AddScoped<AddProjectMemberHandler>();
         services.AddScoped<ListProjectMembersHandler>();
         services.AddScoped<RemoveProjectMemberHandler>();
+        services.AddScoped<GrantProjectMemberPermissionHandler>();
+        services.AddScoped<ListProjectMemberPermissionsHandler>();
+        services.AddScoped<RevokeProjectMemberPermissionHandler>();
 
         return services;
     }

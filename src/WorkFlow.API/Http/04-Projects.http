@@ -780,6 +780,391 @@ Accept: application/json
 }
 
 ### ============================================================
+### PROJECTS — PERMISSÕES DE MEMBROS — CONCESSÃO
+###
+### ProjectPermission:
+### 1  = EditProject
+### 2  = ManageProjectMembers
+### 3  = ManageProjectPermissions
+### 4  = CompleteProject
+### 5  = ReopenProject
+### 6  = ArchiveProject
+### 7  = CreateTask
+### 8  = EditTask
+### 9  = ClaimTask
+### 10 = AssignTask
+### 11 = ManageTaskCollaborators
+### 12 = CancelTask
+### 13 = ReopenTask
+### 14 = ValidateTask
+### 15 = SelfValidateTask
+###
+### Regras:
+### - TenantAdmin pode gerenciar permissões sem ser membro do projeto.
+### - ProjectManager e Member precisam ser membros ativos.
+### - ProjectManager e Member também precisam de ManageProjectPermissions.
+### - O alvo precisa ser usuário ativo e membro ativo do projeto.
+### - Projetos Archived não permitem concessão.
+### - Uma mesma permissão ativa não pode ser concedida duas vezes.
+### ============================================================
+
+
+### Projects - Member ativo sem ManageProjectPermissions tentar conceder permissão - deve retornar 403 Forbidden
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 7
+}
+
+
+### Projects - ProjectManager ativo sem ManageProjectPermissions tentar conceder permissão - deve retornar 403 Forbidden
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members/{{usuarioConsultaPublicId}}/permissions
+Authorization: Bearer {{projectManagerToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 7
+}
+
+
+### Projects - TenantAdmin conceder ManageProjectPermissions ao Member - deve retornar 201 Created
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 3
+}
+
+
+### Projects - Member com ManageProjectPermissions conceder CreateTask a si mesmo - deve retornar 201 Created
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 7
+}
+
+
+### Projects - Conceder novamente a mesma permissão ativa - deve retornar 409 Conflict
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 7
+}
+
+
+### Projects - Conceder permissão para usuário sem participação ativa no projeto - deve retornar 404 Not Found
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{usuarioConsultaPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 1
+}
+
+
+### Projects - Conceder permissão para usuário inexistente - deve retornar 404 Not Found
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/11111111-1111-1111-1111-111111111111/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 1
+}
+
+
+### Projects - Conceder permissão inválida - deve retornar 400 Bad Request
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 999
+}
+
+
+### Projects - Conceder permissão sem token - deve retornar 401 Unauthorized
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 1
+}
+
+
+### Projects - SystemAdmin tentar conceder permissão operacional - deve retornar 403 Forbidden
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 1
+}
+
+
+### Projects - TenantAdmin tentar conceder permissão através de outro Tenant - deve retornar 403 Forbidden
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 1
+}
+
+
+### Projects - Usuário de outro Tenant tentar conceder permissão - deve retornar 403 Forbidden
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{otherTenantToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 1
+}
+
+
+### Projects - Conceder permissão em projeto inexistente - deve retornar 404 Not Found
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/11111111-1111-1111-1111-111111111111/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 1
+}
+
+
+### Projects - Conceder permissão com UserPublicId vazio - deve retornar 400 Bad Request
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/00000000-0000-0000-0000-000000000000/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 1
+}
+
+### ============================================================
+### PROJECTS — PERMISSÕES DE MEMBROS — LISTAGEM
+###
+### Regras:
+### - TenantAdmin pode consultar permissões sem ser membro do projeto.
+### - ProjectManager e Member precisam ser membros ativos.
+### - ProjectManager e Member precisam possuir ManageProjectPermissions.
+### - Somente permissões ativas são retornadas.
+### - Permissões revogadas não aparecem.
+### - Projeto Archived permite leitura de permissões.
+### ============================================================
+
+
+### Projects - TenantAdmin listar permissões do Member - deve retornar 200 OK
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Member com ManageProjectPermissions listar próprias permissões - deve retornar 200 OK
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Projects - ProjectManager sem ManageProjectPermissions listar permissões - deve retornar 403 Forbidden
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members/{{usuarioConsultaPublicId}}/permissions
+Authorization: Bearer {{projectManagerToken}}
+Accept: application/json
+
+
+### Projects - TenantAdmin listar permissões de membro sem permissões ativas - deve retornar 200 OK com lista vazia
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members/{{usuarioConsultaPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Listar permissões sem token - deve retornar 401 Unauthorized
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Accept: application/json
+
+
+### Projects - SystemAdmin tentar listar permissões operacionais - deve retornar 403 Forbidden
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### Projects - TenantAdmin tentar listar permissões através de outro Tenant - deve retornar 403 Forbidden
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Usuário de outro Tenant tentar listar permissões - deve retornar 403 Forbidden
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{otherTenantToken}}
+Accept: application/json
+
+
+### Projects - Listar permissões de projeto inexistente - deve retornar 404 Not Found
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/11111111-1111-1111-1111-111111111111/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Listar permissões de usuário inexistente - deve retornar 404 Not Found
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/11111111-1111-1111-1111-111111111111/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Listar permissões de usuário sem participação ativa - deve retornar 404 Not Found
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{usuarioConsultaPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Listar permissões com UserPublicId vazio - deve retornar 400 Bad Request
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/00000000-0000-0000-0000-000000000000/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+### ============================================================
+### PROJECTS — PERMISSÕES DE MEMBROS — REVOGAÇÃO
+###
+### Regras:
+### - TenantAdmin pode revogar permissões sem ser membro do projeto.
+### - ProjectManager e Member precisam ser membros ativos.
+### - ProjectManager e Member precisam possuir ManageProjectPermissions.
+### - O usuário alvo pode estar inativo.
+### - O alvo precisa possuir participação ativa no projeto.
+### - Somente permissões ativas podem ser revogadas.
+### - Projeto Archived não permite revogação.
+### - Uma permissão revogada pode ser concedida novamente no futuro.
+### ============================================================
+
+
+### Projects - Member com ManageProjectPermissions revogar própria CreateTask - deve retornar 200 OK
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/7
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Projects - TenantAdmin listar permissões após revogar CreateTask - deve retornar apenas ManageProjectPermissions
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Revogar novamente CreateTask já revogada - deve retornar 404 Not Found
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/7
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - TenantAdmin conceder novamente CreateTask após revogação - deve retornar 201 Created
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 7
+}
+
+
+### Projects - TenantAdmin listar permissões após nova concessão - deve retornar ManageProjectPermissions e CreateTask
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Member revogar própria ManageProjectPermissions - deve retornar 200 OK
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/3
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Projects - Member sem ManageProjectPermissions tentar listar permissões - deve retornar 403 Forbidden
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Projects - Member sem ManageProjectPermissions tentar revogar CreateTask - deve retornar 403 Forbidden
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/7
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Projects - ProjectManager sem ManageProjectPermissions tentar revogar permissão - deve retornar 403 Forbidden
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members/{{usuarioConsultaPublicId}}/permissions/1
+Authorization: Bearer {{projectManagerToken}}
+Accept: application/json
+
+
+### Projects - Revogar permissão inválida - deve retornar 400 Bad Request
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/999
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Revogar permissão sem token - deve retornar 401 Unauthorized
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/7
+Accept: application/json
+
+
+### Projects - SystemAdmin tentar revogar permissão operacional - deve retornar 403 Forbidden
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/7
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### Projects - TenantAdmin tentar revogar permissão através de outro Tenant - deve retornar 403 Forbidden
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/7
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Usuário de outro Tenant tentar revogar permissão - deve retornar 403 Forbidden
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/7
+Authorization: Bearer {{otherTenantToken}}
+Accept: application/json
+
+
+### Projects - Revogar permissão em projeto inexistente - deve retornar 404 Not Found
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/11111111-1111-1111-1111-111111111111/members/{{memberUserPublicId}}/permissions/7
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - TenantAdmin revogar CreateTask para limpar estado do teste - deve retornar 200 OK
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/7
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - TenantAdmin listar permissões após limpeza - deve retornar lista vazia
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+### ============================================================
 ### PROJECTS — DADOS DE APOIO
 ###
 ### Não execute novamente sem necessidade.
