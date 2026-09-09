@@ -11,6 +11,11 @@ public interface IProjectMemberRepository
         long userId,
         CancellationToken cancellationToken = default);
 
+    Task<ProjectMember?> GetActiveForUpdateAsync(
+        long projectId,
+        long userId,
+        CancellationToken cancellationToken = default);
+
     Task<PagedData<ProjectMemberListItemData>> GetPagedAsync(
         long projectId,
         int pageNumber,

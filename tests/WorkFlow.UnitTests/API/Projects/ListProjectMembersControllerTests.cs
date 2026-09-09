@@ -17,6 +17,7 @@ using WorkFlow.UnitTests.Application.Projects.Fakes;
 using WorkFlow.UnitTests.Application.Tenants.Fakes;
 using WorkFlow.UnitTests.Application.Users.Fakes;
 using WorkFlow.UnitTests.Common;
+using WorkFlow.Application.Projects.RemoveProjectMember;
 
 namespace WorkFlow.UnitTests.API.Projects;
 
@@ -382,15 +383,18 @@ public sealed class ListProjectMembersControllerTests
     }
 
     private static ProjectMembersController CreateController(
-        Fixture fixture)
+    Fixture fixture)
     {
+        var unitOfWork =
+            new FakeUnitOfWork();
+
         var addProjectMemberHandler =
             new AddProjectMemberHandler(
                 fixture.TenantRepository,
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
-                new FakeUnitOfWork());
+                unitOfWork);
 
         var listProjectMembersHandler =
             new ListProjectMembersHandler(
@@ -399,9 +403,18 @@ public sealed class ListProjectMembersControllerTests
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository);
 
+        var removeProjectMemberHandler =
+            new RemoveProjectMemberHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.ProjectMemberRepository,
+                unitOfWork);
+
         return new ProjectMembersController(
             addProjectMemberHandler,
-            listProjectMembersHandler);
+            listProjectMembersHandler,
+            removeProjectMemberHandler);
     }
 
     private static void SetAuthenticatedUser(

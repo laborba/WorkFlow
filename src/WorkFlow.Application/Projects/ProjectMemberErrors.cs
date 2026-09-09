@@ -13,4 +13,14 @@ public static class ProjectMemberErrors
         new(
             "ProjectMembers.AlreadyActive",
             "O usuário informado já possui participação ativa neste projeto.");
+
+    public static Error RemoveNotAllowed { get; } =
+        new(
+            "ProjectMembers.RemoveNotAllowed",
+            "O usuário informado não possui permissão para remover membros deste projeto.");
+
+    public static Error NotActive { get; } =
+        new(
+            "ProjectMembers.NotActive",
+            "O usuário informado não possui participação ativa neste projeto.");
 }

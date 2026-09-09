@@ -24,6 +24,12 @@ internal sealed class FakeProjectMemberRepository :
 
     public long? QueriedUserId { get; private set; }
 
+    public ProjectMember? ActiveMemberToReturn { get; set; }
+
+    public long? LastGetActiveForUpdateProjectId { get; private set; }
+
+    public long? LastGetActiveForUpdateUserId { get; private set; }
+
     public PagedData<ProjectMemberListItemData>
         PagedDataToReturn
     { get; set; } =
@@ -63,6 +69,21 @@ internal sealed class FakeProjectMemberRepository :
 
         return Task.FromResult(
             IsActiveMemberResult);
+    }
+
+    public Task<ProjectMember?> GetActiveForUpdateAsync(
+        long projectId,
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        LastGetActiveForUpdateProjectId =
+            projectId;
+
+        LastGetActiveForUpdateUserId =
+            userId;
+
+        return Task.FromResult(
+            ActiveMemberToReturn);
     }
 
     public Task<PagedData<ProjectMemberListItemData>> GetPagedAsync(

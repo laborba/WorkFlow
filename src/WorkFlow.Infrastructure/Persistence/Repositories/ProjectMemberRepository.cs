@@ -32,6 +32,20 @@ public sealed class ProjectMemberRepository :
                 cancellationToken);
     }
 
+    public async Task<ProjectMember?> GetActiveForUpdateAsync(
+        long projectId,
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.ProjectMembers
+            .SingleOrDefaultAsync(
+                projectMember =>
+                    projectMember.ProjectId == projectId &&
+                    projectMember.UserId == userId &&
+                    projectMember.RemovedAt == null,
+                cancellationToken);
+    }
+
     public async Task<PagedData<ProjectMemberListItemData>> GetPagedAsync(
         long projectId,
         int pageNumber,

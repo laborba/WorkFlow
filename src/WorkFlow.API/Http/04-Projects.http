@@ -650,6 +650,134 @@ GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/project
 Authorization: Bearer {{tenantAdminToken}}
 Accept: application/json
 
+### ============================================================
+### PROJECTS — REMOÇÃO DE MEMBROS
+###
+### Regras:
+### - TenantAdmin pode remover membros de qualquer projeto do próprio Tenant.
+### - ProjectManager pode remover membros somente de projetos onde possui participação ativa.
+### - Member não pode remover membros.
+### - A remoção é lógica através de RemovedAt.
+### - Participações removidas permanecem preservadas.
+### - Projetos arquivados não permitem remoção de membros.
+### ============================================================
+
+
+### Projects - Member tentando remover outro membro - deve retornar 403 Forbidden
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{segundoUsuarioPublicId}}
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Projects - ProjectManager sem participação tentando remover membro - deve retornar 403 Forbidden
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}
+Authorization: Bearer {{projectManagerToken}}
+Accept: application/json
+
+
+### Projects - Remover membro sem token - deve retornar 401 Unauthorized
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}
+Accept: application/json
+
+
+### Projects - SystemAdmin tentando remover membro operacional - deve retornar 403 Forbidden
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### Projects - TenantAdmin tentando remover membro através de outro Tenant - deve retornar 403 Forbidden
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Usuário de outro Tenant tentando remover membro - deve retornar 403 Forbidden
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}
+Authorization: Bearer {{otherTenantToken}}
+Accept: application/json
+
+
+### Projects - Remover membro de projeto inexistente - deve retornar 404 Not Found
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/11111111-1111-1111-1111-111111111111/members/{{memberUserPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Remover usuário inexistente do projeto - deve retornar 404 Not Found
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/11111111-1111-1111-1111-111111111111
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Remover membro com UserPublicId vazio - deve retornar 400 Bad Request
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - TenantAdmin remover Member ativo do projeto - deve retornar 200 OK
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Member removido tentar consultar projeto - deve retornar 403 Forbidden
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Projects - TenantAdmin remover novamente o mesmo membro - deve retornar 404 Not Found
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Buscar membro removido na listagem - deve retornar 200 OK com lista vazia
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members?search=criado-pelo-admin
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Restaurar Member após teste de remoção - deve retornar 201 Created
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "{{memberUserPublicId}}"
+}
+
+
+### Projects - Member reincluído consultar projeto novamente - deve retornar 200 OK
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Projects - ProjectManager remover membro do próprio projeto - deve retornar 200 OK
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members/{{usuarioConsultaPublicId}}
+Authorization: Bearer {{projectManagerToken}}
+Accept: application/json
+
+
+### Projects - ProjectManager remover novamente o mesmo membro - deve retornar 404 Not Found
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members/{{usuarioConsultaPublicId}}
+Authorization: Bearer {{projectManagerToken}}
+Accept: application/json
+
+
+### Projects - Restaurar membro do projeto do ProjectManager - deve retornar 201 Created
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members
+Authorization: Bearer {{projectManagerToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "{{usuarioConsultaPublicId}}"
+}
 
 ### ============================================================
 ### PROJECTS — DADOS DE APOIO

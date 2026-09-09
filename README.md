@@ -129,7 +129,17 @@ Atualmente estão implementados:
 - paginação com tamanho máximo de 100 itens;
 - ordenação estável por data de inclusão e identificador interno;
 - a consulta resolve os dados do membro e do usuário responsável pela inclusão diretamente na persistência;
-- a resposta expõe somente identificadores públicos, incluindo `UserPublicId` e `AddedByUserPublicId`.
+- a resposta expõe somente identificadores públicos, incluindo `UserPublicId` e `AddedByUserPublicId`;
+- remoção lógica de membros através de `ProjectMember.RemovedAt`;
+- `TenantAdmin` pode remover membros de qualquer projeto do próprio Tenant;
+- `ProjectManager` pode remover membros somente quando possui participação ativa no projeto;
+- `Member` não pode remover membros;
+- projetos arquivados não permitem remoção de membros;
+- o usuário alvo pode ser removido mesmo que esteja inativo no Tenant;
+- remover um usuário sem participação ativa retorna `ProjectMembers.NotActive`;
+- participações removidas permanecem preservadas no histórico;
+- um usuário removido perde imediatamente o acesso concedido pela participação;
+- um usuário removido pode ser adicionado novamente futuramente, criando uma nova participação.
 
 ### Autenticação e autorização
 
@@ -186,7 +196,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-762 testes automatizados aprovados
+794 testes automatizados aprovados
 0 falhas
 ```
 
@@ -310,7 +320,20 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - validação de Tenant, usuário solicitante e projeto durante a listagem;
 - validação de número e tamanho de página;
 - testes reais da listagem de membros contra PostgreSQL;
-- testes da camada HTTP para sucesso, autenticação, autorização e recursos inexistentes na listagem de membros.
+- testes da camada HTTP para sucesso, autenticação, autorização e recursos inexistentes na listagem de membros;
+- remoção de membro por `TenantAdmin`;
+- remoção de membro por `ProjectManager` com participação ativa;
+- bloqueio de remoção por `ProjectManager` sem participação ativa;
+- bloqueio de remoção por `Member`;
+- bloqueio de remoção em projeto arquivado;
+- remoção permitida mesmo quando o usuário alvo está inativo;
+- validação de usuário alvo inexistente;
+- validação de participação ativa inexistente ou já removida;
+- preservação histórica da participação através de `RemovedAt`;
+- persistência real da remoção lógica no PostgreSQL;
+- confirmação de que membro removido deixa de ser considerado participante ativo;
+- possibilidade de reinclusão depois da remoção;
+- testes da camada HTTP para sucesso, autenticação, autorização, conflito e recursos inexistentes na remoção de membros.
 
 ---
 
@@ -1986,6 +2009,104 @@ totalPages = 0
 
 ---
 
+### Remover membro do projeto
+
+```http
+DELETE /api/tenants/{tenantPublicId}/projects/{projectPublicId}/members/{userPublicId}
+```
+
+A operação exige:
+
+```text
+TenantAccess
+```
+
+e aplica autorização específica do projeto no backend.
+
+As regras atuais são:
+
+```text
+TenantAdmin
+→ pode remover membros de qualquer projeto do próprio Tenant
+
+ProjectManager
+→ pode remover membros somente quando possui participação ativa no projeto
+
+Member
+→ não pode remover membros
+
+SystemAdmin
+→ não possui acesso operacional aos projetos do Tenant
+```
+
+Para `ProjectManager`, participação ativa significa:
+
+```text
+ProjectMember.RemovedAt == null
+```
+
+Um `ProjectManager` sem participação ativa ou um `Member` recebe:
+
+```text
+403 Forbidden
+ProjectMembers.RemoveNotAllowed
+```
+
+Projetos arquivados não permitem remoção de membros.
+
+Nesse caso:
+
+```text
+409 Conflict
+Projects.Archived
+```
+
+O usuário alvo precisa existir dentro do mesmo Tenant, porém não precisa estar ativo.
+
+Isso permite remover de projetos um usuário que tenha sido desativado administrativamente no Tenant.
+
+A remoção é lógica:
+
+```text
+ProjectMember.RemovedAt = UTC
+```
+
+Nenhum registro histórico é excluído.
+
+Quando o usuário não possui participação ativa no projeto, inclusive quando já foi removido anteriormente:
+
+```text
+404 Not Found
+ProjectMembers.NotActive
+```
+
+Exemplo de resposta:
+
+```json
+{
+  "projectPublicId": "00000000-0000-0000-0000-000000000000",
+  "userPublicId": "00000000-0000-0000-0000-000000000000",
+  "removedAt": "2026-09-09T17:00:00Z"
+}
+```
+
+A remoção faz com que o usuário deixe imediatamente de possuir os acessos concedidos pela participação ativa.
+
+Como o registro anterior permanece preservado, o mesmo usuário pode ser adicionado novamente no futuro, criando uma nova participação.
+
+O criador do projeto também pode deixar de ser membro.
+
+O vínculo histórico através de:
+
+```text
+CreatedByUserId
+```
+
+permanece preservado independentemente da participação atual do usuário.
+
+---
+
+
 ## Autenticação
 
 ### Realizar login
@@ -2448,6 +2569,8 @@ Projects.Archived
 
 ProjectMembers.AddNotAllowed
 ProjectMembers.AlreadyActive
+ProjectMembers.RemoveNotAllowed
+ProjectMembers.NotActive
 
 Validation.InvalidArgument
 ```
@@ -2635,7 +2758,7 @@ Os arquivos possuem responsabilidades separadas:
 → cadastro, consulta, listagem, atualização, status e perfil de usuários
 
 04-Projects.http
-→ criação, consulta individual, listagem, atualização, inclusão e listagem de membros, filtros e autorização de projetos
+→ criação, consulta individual, listagem, atualização, inclusão, listagem e remoção de membros, filtros e autorização de projetos
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -2769,7 +2892,15 @@ Alguns princípios e recursos adotados no projeto:
 - somente participações ativas são retornadas pela listagem operacional;
 - projetos arquivados continuam permitindo consulta de membros conforme as regras de autorização;
 - dados internos de `ProjectMember` não são expostos pela API;
-- usuários removidos do projeto perdem o acesso concedido pela participação;
+- a remoção de membros também exige `TenantAccess`;
+- `TenantAdmin` pode remover membros de qualquer projeto do próprio Tenant;
+- `ProjectManager` somente pode remover membros quando possui participação ativa no projeto;
+- `Member` não pode remover membros;
+- projetos arquivados não permitem remoção de membros;
+- a remoção de membros é lógica através de `RemovedAt`;
+- usuários inativos ainda podem ser removidos dos projetos;
+- participações removidas continuam preservadas para histórico;
+- usuários removidos do projeto perdem imediatamente o acesso concedido pela participação;
 - usuários desativados no Tenant não podem consultar projetos;
 - `SystemAdmin` não possui acesso operacional aos projetos de um Tenant;
 - endpoints administrativos de Tenant são restritos a `SystemAdmin`;
@@ -2840,7 +2971,7 @@ User Secrets
 
 O bootstrap é idempotente e pode ser desabilitado após a criação inicial da conta administrativa.
 
-A autorização por projeto já possui regras baseadas em participação ativa para consulta individual, listagem de projetos, atualização, inclusão de membros e listagem de membros.
+A autorização por projeto já possui regras baseadas em participação ativa para consulta individual, listagem de projetos, atualização, inclusão, listagem e remoção de membros.
 
 Ela continuará sendo evoluída com:
 
@@ -3149,7 +3280,7 @@ Essa camada ainda não está implementada.
 - [x] Autorização da listagem por participação ativa
 - [x] Exclusão de projetos arquivados da listagem padrão
 - [x] Atualização
-- [ ] Gerenciamento de membros — inclusão e listagem concluídas; remoção pendente
+- [x] Gerenciamento de membros — inclusão, listagem e remoção
 - [ ] Gerenciamento de permissões
 - [ ] Fluxos de status
 - [ ] Histórico
@@ -3330,9 +3461,18 @@ Participações removidas não aparecem na listagem operacional
 Busca de membros por nome ou e-mail
 Projetos arquivados permanecem com membros consultáveis conforme autorização
 Listagem expõe somente identificadores públicos das relações
+Remoção lógica de membros através de RemovedAt
+TenantAdmin pode remover membros de qualquer projeto do próprio Tenant
+ProjectManager pode remover membros quando possui participação ativa
+Member não pode remover membros
+Projetos Archived bloqueiam remoção de membros
+Usuários inativos podem ser removidos dos projetos
+Membro removido perde imediatamente o acesso baseado em participação
+Participações removidas permanecem preservadas para histórico
+Usuários removidos podem ser adicionados novamente futuramente
 SystemAdmin não possui acesso operacional aos projetos de Tenant
 Requisições HTTP manuais organizadas por módulo
-762 testes automatizados aprovados
+794 testes automatizados aprovados
 0 falhas
 ```
 
