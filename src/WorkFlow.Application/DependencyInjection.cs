@@ -15,6 +15,7 @@ using WorkFlow.Application.Projects.GetProjectByPublicId;
 using WorkFlow.Application.Projects.ListProjects;
 using WorkFlow.Application.Authentication.Login;
 using WorkFlow.Application.Projects.UpdateProject;
+using WorkFlow.Application.Projects.AddProjectMember;
 
 namespace WorkFlow.Application;
 
@@ -39,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<GetProjectByPublicIdHandler>();
         services.AddScoped<ListProjectsHandler>();
         services.AddScoped<UpdateProjectHandler>();
+        services.AddScoped<AddProjectMemberHandler>();
 
         return services;
     }

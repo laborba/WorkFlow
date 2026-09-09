@@ -392,6 +392,155 @@ Accept: application/json
 }
 
 ### ============================================================
+### PROJECTS — MEMBROS
+###
+### Regras:
+### - TenantAdmin pode adicionar membros a qualquer projeto do próprio Tenant.
+### - ProjectManager pode adicionar membros somente se possuir participação ativa.
+### - Member não pode adicionar membros, mesmo participando do projeto.
+### - SystemAdmin não possui acesso operacional aos projetos do Tenant.
+### - Usuário adicionado deve existir no mesmo Tenant e estar ativo.
+### - Não pode existir mais de uma participação ativa para o mesmo usuário no mesmo projeto.
+### ============================================================
+
+### Projects - TenantAdmin adicionar usuário do memberToken ao projeto - deve retornar 201 Created
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "{{memberUserPublicId}}"
+}
+
+
+### Projects - Member recém-adicionado consultar projeto - deve retornar 200 OK
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### Projects - TenantAdmin adicionar novamente o mesmo membro - deve retornar 409 Conflict
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "{{memberUserPublicId}}"
+}
+
+
+### Projects - ProjectManager adicionar membro ao próprio projeto - deve retornar 201 Created
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members
+Authorization: Bearer {{projectManagerToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "{{usuarioConsultaPublicId}}"
+}
+
+
+### Projects - ProjectManager sem participação tentando adicionar membro - deve retornar 403 Forbidden
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members
+Authorization: Bearer {{projectManagerToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "{{usuarioConsultaPublicId}}"
+}
+
+
+### Projects - Member ativo tentando adicionar outro membro - deve retornar 403 Forbidden
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "{{usuarioConsultaPublicId}}"
+}
+
+
+### Projects - Adicionar membro sem token - deve retornar 401 Unauthorized
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "{{usuarioConsultaPublicId}}"
+}
+
+
+### Projects - SystemAdmin tentando adicionar membro operacional - deve retornar 403 Forbidden
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "{{usuarioConsultaPublicId}}"
+}
+
+
+### Projects - TenantAdmin tentando adicionar membro através de outro Tenant - deve retornar 403 Forbidden
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantSecundarioPublicId}}/projects/{{projetoTenantAdminPublicId}}/members
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "{{usuarioConsultaPublicId}}"
+}
+
+
+### Projects - Usuário de outro Tenant tentando adicionar membro - deve retornar 403 Forbidden
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members
+Authorization: Bearer {{otherTenantToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "{{usuarioConsultaPublicId}}"
+}
+
+
+### Projects - Adicionar membro em projeto inexistente - deve retornar 404 Not Found
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/11111111-1111-1111-1111-111111111111/members
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "{{usuarioConsultaPublicId}}"
+}
+
+
+### Projects - Adicionar usuário inexistente ao projeto - deve retornar 404 Not Found
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "11111111-1111-1111-1111-111111111111"
+}
+
+
+### Projects - Adicionar membro com UserPublicId vazio - deve retornar 400 Bad Request
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "00000000-0000-0000-0000-000000000000"
+}
+
+
+### ============================================================
 ### PROJECTS — DADOS DE APOIO
 ###
 ### Não execute novamente sem necessidade.

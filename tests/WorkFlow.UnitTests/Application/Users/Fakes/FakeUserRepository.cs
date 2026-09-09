@@ -21,6 +21,14 @@ internal sealed class FakeUserRepository : IUserRepository
 
     public Guid? CheckedPublicId { get; private set; }
 
+    public List<(long TenantId, Guid PublicId)>
+        CheckedGetByPublicIdCalls
+    { get; } = new();
+
+    public Dictionary<Guid, User>
+        UsersByPublicIdToReturn
+    { get; } = new();
+
     public IReadOnlyCollection<User> UsersToReturn { get; set; } =
         Array.Empty<User>();
 
@@ -48,11 +56,14 @@ internal sealed class FakeUserRepository : IUserRepository
 
     public Guid? CheckedTrackedPublicId { get; private set; }
 
-    public Dictionary<long, User> UsersByIdToReturn { get; } = new();
+    public Dictionary<long, User> UsersByIdToReturn { get; } =
+        new();
 
-    public List<long> CheckedGetByIdTenantIds { get; } = new();
+    public List<long> CheckedGetByIdTenantIds { get; } =
+        new();
 
-    public List<long> CheckedUserIds { get; } = new();
+    public List<long> CheckedUserIds { get; } =
+        new();
 
     public Task<bool> ExistsByEmailAsync(
         long tenantId,
@@ -105,6 +116,20 @@ internal sealed class FakeUserRepository : IUserRepository
 
         CheckedPublicId =
             publicId;
+
+        CheckedGetByPublicIdCalls.Add(
+            (tenantId, publicId));
+
+        if (UsersByPublicIdToReturn.TryGetValue(
+                publicId,
+                out var user))
+        {
+            if (user.TenantId != tenantId)
+                return Task.FromResult<User?>(null);
+
+            return Task.FromResult<User?>(
+                user);
+        }
 
         return Task.FromResult(
             UserToReturn);

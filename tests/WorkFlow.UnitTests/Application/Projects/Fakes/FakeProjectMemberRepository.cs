@@ -10,6 +10,14 @@ internal sealed class FakeProjectMemberRepository :
 
     public bool IsActiveMemberResult { get; set; }
 
+    public Dictionary<(long ProjectId, long UserId), bool>
+        IsActiveMemberResults
+    { get; } = new();
+
+    public List<(long ProjectId, long UserId)>
+        IsActiveMemberCalls
+    { get; } = new();
+
     public long? QueriedProjectId { get; private set; }
 
     public long? QueriedUserId { get; private set; }
@@ -19,17 +27,33 @@ internal sealed class FakeProjectMemberRepository :
         long userId,
         CancellationToken cancellationToken = default)
     {
-        QueriedProjectId = projectId;
-        QueriedUserId = userId;
+        QueriedProjectId =
+            projectId;
 
-        return Task.FromResult(IsActiveMemberResult);
+        QueriedUserId =
+            userId;
+
+        IsActiveMemberCalls.Add(
+            (projectId, userId));
+
+        if (IsActiveMemberResults.TryGetValue(
+                (projectId, userId),
+                out var result))
+        {
+            return Task.FromResult(
+                result);
+        }
+
+        return Task.FromResult(
+            IsActiveMemberResult);
     }
 
     public Task AddAsync(
         ProjectMember projectMember,
         CancellationToken cancellationToken = default)
     {
-        AddedProjectMember = projectMember;
+        AddedProjectMember =
+            projectMember;
 
         return Task.CompletedTask;
     }

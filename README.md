@@ -108,6 +108,17 @@ Atualmente estão implementados:
 - projetos arquivados (`Archived`) não podem ser atualizados;
 - status e responsável não são alterados pelo endpoint de atualização;
 - atualização utiliza entidade rastreada pelo Entity Framework Core e persiste as alterações através do `UnitOfWork`.
+- inclusão de usuários como membros de projetos;
+- `TenantAdmin` pode adicionar membros a qualquer projeto do próprio Tenant;
+- `ProjectManager` pode adicionar membros somente quando possui participação ativa no projeto;
+- `Member` não pode adicionar membros;
+- `SystemAdmin` não possui acesso operacional ao gerenciamento de membros;
+- somente usuários existentes, ativos e pertencentes ao mesmo Tenant podem ser adicionados;
+- projetos arquivados não aceitam novos membros;
+- não pode existir mais de uma participação ativa do mesmo usuário no mesmo projeto;
+- uma participação removida permanece preservada no histórico e não impede uma nova participação futura;
+- o usuário autenticado que realizou a inclusão é registrado em `AddedByUserId`;
+- a inclusão de um membro passa imediatamente a conceder o acesso baseado em participação ativa.
 
 ### Autenticação e autorização
 
@@ -164,7 +175,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-704 testes automatizados aprovados
+734 testes automatizados aprovados
 0 falhas
 ```
 
@@ -262,7 +273,20 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - resolução do criador e do responsável na resposta da atualização;
 - isolamento da busca do projeto pelo Tenant;
 - persistência real das alterações do projeto no PostgreSQL;
-- testes da camada HTTP para sucesso, autenticação, autorização e conflitos da atualização.
+- testes da camada HTTP para sucesso, autenticação, autorização e conflitos da atualização;
+- inclusão de membro por `TenantAdmin`;
+- inclusão de membro por `ProjectManager` com participação ativa;
+- bloqueio de inclusão por `ProjectManager` sem participação ativa;
+- bloqueio de inclusão por `Member`;
+- bloqueio de inclusão em projeto arquivado;
+- validação de usuário inexistente ou inativo durante a inclusão;
+- validação de Tenant e projeto durante a inclusão;
+- bloqueio de participação ativa duplicada;
+- registro do usuário responsável pela inclusão através de `AddedByUserId`;
+- persistência real de `ProjectMember` no PostgreSQL;
+- restrição única para uma participação ativa por projeto e usuário;
+- possibilidade de nova participação depois da remoção da participação anterior;
+- testes da camada HTTP para autenticação, autorização, duplicidade e recursos inexistentes na inclusão de membros.
 
 ---
 
@@ -1708,6 +1732,107 @@ Exemplo de resposta:
 
 ---
 
+### Adicionar membro ao projeto
+
+```http
+POST /api/tenants/{tenantPublicId}/projects/{projectPublicId}/members
+```
+
+A operação exige:
+
+```text
+TenantAccess
+```
+
+e aplica autorização específica do projeto no backend.
+
+As regras atuais são:
+
+```text
+TenantAdmin
+→ pode adicionar membros a qualquer projeto do próprio Tenant
+
+ProjectManager
+→ pode adicionar membros somente quando possui participação ativa no projeto
+
+Member
+→ não pode adicionar membros
+
+SystemAdmin
+→ não possui acesso operacional aos projetos do Tenant
+```
+
+Para `ProjectManager`, participação ativa significa:
+
+```text
+ProjectMember.RemovedAt == null
+```
+
+Exemplo de requisição:
+
+```json
+{
+  "userPublicId": "00000000-0000-0000-0000-000000000000"
+}
+```
+
+O usuário informado deve:
+
+```text
+existir
+pertencer ao mesmo Tenant
+estar ativo
+```
+
+Projetos `Archived` não permitem inclusão de novos membros.
+
+Não pode existir mais de uma participação ativa do mesmo usuário no mesmo projeto.
+
+Nesse caso, a API retorna:
+
+```text
+409 Conflict
+ProjectMembers.AlreadyActive
+```
+
+Uma participação removida continua armazenada no histórico.
+
+Como a unicidade considera somente participações com:
+
+```text
+RemovedAt == null
+```
+
+um usuário removido poderá futuramente ser adicionado novamente, criando uma nova participação sem apagar a anterior.
+
+O usuário autenticado responsável pela inclusão é registrado em:
+
+```text
+AddedByUserId
+```
+
+Um `ProjectManager` sem participação ativa ou um `Member` recebe:
+
+```text
+403 Forbidden
+ProjectMembers.AddNotAllowed
+```
+
+Exemplo de resposta:
+
+```json
+{
+  "projectPublicId": "00000000-0000-0000-0000-000000000000",
+  "userPublicId": "00000000-0000-0000-0000-000000000000",
+  "addedByUserPublicId": "00000000-0000-0000-0000-000000000000",
+  "addedAt": "2026-09-09T12:00:00Z"
+}
+```
+
+A inclusão de um usuário como membro ativo passa a conceder imediatamente o acesso baseado em participação às operações que utilizam essa regra.
+
+---
+
 ## Autenticação
 
 ### Realizar login
@@ -2168,6 +2293,9 @@ Projects.ViewNotAllowed
 Projects.UpdateNotAllowed
 Projects.Archived
 
+ProjectMembers.AddNotAllowed
+ProjectMembers.AlreadyActive
+
 Validation.InvalidArgument
 ```
 
@@ -2354,7 +2482,7 @@ Os arquivos possuem responsabilidades separadas:
 → cadastro, consulta, listagem, atualização, status e perfil de usuários
 
 04-Projects.http
-→ criação, consulta individual, listagem, atualização, filtros e autorização de projetos
+→ criação, consulta individual, listagem, atualização, membros, filtros e autorização de projetos
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -2474,6 +2602,14 @@ Alguns princípios e recursos adotados no projeto:
 - projetos concluídos podem ter seus dados básicos atualizados;
 - projetos arquivados não podem ser atualizados;
 - status e responsável não são alterados pelo endpoint de atualização de dados básicos;
+- a inclusão de membros também exige `TenantAccess`;
+- `TenantAdmin` pode adicionar membros a qualquer projeto do próprio Tenant;
+- `ProjectManager` somente pode adicionar membros quando possui participação ativa;
+- `Member` não pode adicionar membros;
+- somente usuários ativos do mesmo Tenant podem ser adicionados;
+- projetos arquivados não aceitam novos membros;
+- o banco impede mais de uma participação ativa para o mesmo projeto e usuário;
+- participações removidas são preservadas para histórico e permitem nova inclusão futura;
 - usuários removidos do projeto perdem o acesso concedido pela participação;
 - usuários desativados no Tenant não podem consultar projetos;
 - `SystemAdmin` não possui acesso operacional aos projetos de um Tenant;
@@ -2545,7 +2681,7 @@ User Secrets
 
 O bootstrap é idempotente e pode ser desabilitado após a criação inicial da conta administrativa.
 
-A autorização por projeto já possui regras baseadas em participação ativa para consulta individual, listagem e atualização.
+A autorização por projeto já possui regras baseadas em participação ativa para consulta individual, listagem, atualização e inclusão de membros.
 
 Ela continuará sendo evoluída com:
 
@@ -2854,7 +2990,7 @@ Essa camada ainda não está implementada.
 - [x] Autorização da listagem por participação ativa
 - [x] Exclusão de projetos arquivados da listagem padrão
 - [x] Atualização
-- [ ] Gerenciamento de membros
+- [ ] Gerenciamento de membros — inclusão concluída; listagem e remoção pendentes
 - [ ] Gerenciamento de permissões
 - [ ] Fluxos de status
 - [ ] Histórico
@@ -3021,9 +3157,16 @@ Projetos Completed permitem atualização dos dados básicos
 Projetos Archived bloqueiam atualização
 Atualização de nome, descrição e prazo
 Remoção de prazo através de DueDate null
+Inclusão de membros em projetos
+TenantAdmin pode adicionar membros a qualquer projeto do próprio Tenant
+ProjectManager pode adicionar membros quando possui participação ativa
+Member não pode adicionar membros
+Participações ativas duplicadas são bloqueadas
+Participações removidas são preservadas e permitem futura reinclusão
+Inclusão de membro registra o usuário responsável pela operação
 SystemAdmin não possui acesso operacional aos projetos de Tenant
 Requisições HTTP manuais organizadas por módulo
-704 testes automatizados aprovados
+734 testes automatizados aprovados
 0 falhas
 ```
 
