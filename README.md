@@ -67,8 +67,10 @@ Atualmente estão implementados:
 - projeto criado inicialmente com status `Planning`;
 - nome, descrição e prazo opcional;
 - criador adicionado automaticamente como membro ativo do projeto;
-- criação de projeto e membro inicial protegida por transação;
-- rollback em caso de falha durante a persistência;
+- quando o criador é `ProjectManager`, sua participação inicial recebe automaticamente as permissões `EditProject`, `ManageProjectMembers` e `ManageProjectPermissions`;
+- `TenantAdmin` não depende de permissões específicas de projeto para as operações administrativas atualmente protegidas por bypass;
+- criação de projeto, membro inicial e permissões iniciais protegida por transação;
+- rollback em caso de falha durante qualquer etapa da persistência da criação;
 - policy `ProjectCreation` para criação por `TenantAdmin` ou `ProjectManager`;
 - combinação das policies `TenantAccess` e `ProjectCreation` no endpoint de criação;
 - consulta individual de projeto por `PublicId`;
@@ -100,18 +102,18 @@ Atualmente estão implementados:
 - atualização dos dados básicos do projeto;
 - atualização de nome, descrição e prazo;
 - possibilidade de remover o prazo enviando `DueDate = null`;
-- `TenantAdmin` pode atualizar qualquer projeto do próprio Tenant;
-- `ProjectManager` pode atualizar somente projetos nos quais possua participação ativa;
-- `Member` não pode atualizar projetos;
+- `TenantAdmin` pode atualizar qualquer projeto do próprio Tenant sem depender de permissão específica;
+- `ProjectManager` e `Member` podem atualizar projetos quando possuem participação ativa e a permissão `EditProject`;
+- usuários sem `EditProject` não podem atualizar o projeto;
 - `SystemAdmin` não possui acesso operacional à atualização de projetos de Tenant;
 - projetos concluídos (`Completed`) continuam permitindo atualização dos dados básicos;
 - projetos arquivados (`Archived`) não podem ser atualizados;
 - status e responsável não são alterados pelo endpoint de atualização;
 - atualização utiliza entidade rastreada pelo Entity Framework Core e persiste as alterações através do `UnitOfWork`.
 - inclusão de usuários como membros de projetos;
-- `TenantAdmin` pode adicionar membros a qualquer projeto do próprio Tenant;
-- `ProjectManager` pode adicionar membros somente quando possui participação ativa no projeto;
-- `Member` não pode adicionar membros;
+- `TenantAdmin` pode adicionar membros a qualquer projeto do próprio Tenant sem depender de permissão específica;
+- `ProjectManager` e `Member` podem adicionar membros quando possuem participação ativa e a permissão `ManageProjectMembers`;
+- usuários sem `ManageProjectMembers` não podem adicionar membros;
 - `SystemAdmin` não possui acesso operacional ao gerenciamento de membros;
 - somente usuários existentes, ativos e pertencentes ao mesmo Tenant podem ser adicionados;
 - projetos arquivados não aceitam novos membros;
@@ -131,9 +133,9 @@ Atualmente estão implementados:
 - a consulta resolve os dados do membro e do usuário responsável pela inclusão diretamente na persistência;
 - a resposta expõe somente identificadores públicos, incluindo `UserPublicId` e `AddedByUserPublicId`;
 - remoção lógica de membros através de `ProjectMember.RemovedAt`;
-- `TenantAdmin` pode remover membros de qualquer projeto do próprio Tenant;
-- `ProjectManager` pode remover membros somente quando possui participação ativa no projeto;
-- `Member` não pode remover membros;
+- `TenantAdmin` pode remover membros de qualquer projeto do próprio Tenant sem depender de permissão específica;
+- `ProjectManager` e `Member` podem remover membros quando possuem participação ativa e a permissão `ManageProjectMembers`;
+- usuários sem `ManageProjectMembers` não podem remover membros;
 - projetos arquivados não permitem remoção de membros;
 - o usuário alvo pode ser removido mesmo que esteja inativo no Tenant;
 - remover um usuário sem participação ativa retorna `ProjectMembers.NotActive`;
@@ -212,7 +214,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-901 testes automatizados aprovados
+911 testes automatizados aprovados
 0 falhas
 ```
 
@@ -264,6 +266,8 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - transação durante a criação de projeto e membro inicial;
 - rollback quando a persistência do projeto falha;
 - rollback quando a persistência do membro inicial falha;
+- criação automática das permissões `EditProject`, `ManageProjectMembers` e `ManageProjectPermissions` para o `ProjectManager` criador;
+- rollback quando a persistência das permissões iniciais falha;
 - persistência real de `Project` e `ProjectMember` no PostgreSQL;
 - consulta individual de projeto por `PublicId`;
 - isolamento da consulta pelo Tenant;
@@ -295,10 +299,11 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - validação de responsável com identificador público vazio;
 - listagem vazia quando nenhum projeto estiver visível;
 - testes reais da consulta paginada de projetos contra PostgreSQL;
-- atualização de projeto por `TenantAdmin`;
-- atualização de projeto por `ProjectManager` com participação ativa;
-- bloqueio de atualização para `ProjectManager` sem participação ativa;
-- bloqueio de atualização para `Member`;
+- atualização de projeto por `TenantAdmin` com bypass administrativo;
+- atualização de projeto por `ProjectManager` com participação ativa e `EditProject`;
+- atualização de projeto por `Member` com participação ativa e `EditProject`;
+- bloqueio de atualização para `ProjectManager` ou `Member` sem participação ativa;
+- bloqueio de atualização para `ProjectManager` ou `Member` sem `EditProject`;
 - atualização de projetos concluídos;
 - bloqueio de atualização de projetos arquivados;
 - validação de Tenant inexistente ou inativo durante a atualização;
@@ -311,10 +316,10 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - isolamento da busca do projeto pelo Tenant;
 - persistência real das alterações do projeto no PostgreSQL;
 - testes da camada HTTP para sucesso, autenticação, autorização e conflitos da atualização;
-- inclusão de membro por `TenantAdmin`;
-- inclusão de membro por `ProjectManager` com participação ativa;
-- bloqueio de inclusão por `ProjectManager` sem participação ativa;
-- bloqueio de inclusão por `Member`;
+- inclusão de membro por `TenantAdmin` com bypass administrativo;
+- inclusão de membro por `ProjectManager` e `Member` com participação ativa e `ManageProjectMembers`;
+- bloqueio de inclusão para `ProjectManager` ou `Member` sem participação ativa;
+- bloqueio de inclusão para `ProjectManager` ou `Member` sem `ManageProjectMembers`;
 - bloqueio de inclusão em projeto arquivado;
 - validação de usuário inexistente ou inativo durante a inclusão;
 - validação de Tenant e projeto durante a inclusão;
@@ -337,10 +342,10 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - validação de número e tamanho de página;
 - testes reais da listagem de membros contra PostgreSQL;
 - testes da camada HTTP para sucesso, autenticação, autorização e recursos inexistentes na listagem de membros;
-- remoção de membro por `TenantAdmin`;
-- remoção de membro por `ProjectManager` com participação ativa;
-- bloqueio de remoção por `ProjectManager` sem participação ativa;
-- bloqueio de remoção por `Member`;
+- remoção de membro por `TenantAdmin` com bypass administrativo;
+- remoção de membro por `ProjectManager` e `Member` com participação ativa e `ManageProjectMembers`;
+- bloqueio de remoção para `ProjectManager` ou `Member` sem participação ativa;
+- bloqueio de remoção para `ProjectManager` ou `Member` sem `ManageProjectMembers`;
 - bloqueio de remoção em projeto arquivado;
 - remoção permitida mesmo quando o usuário alvo está inativo;
 - validação de usuário alvo inexistente;
@@ -358,6 +363,9 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - possibilidade de nova concessão depois da revogação;
 - vínculo das permissões à participação atual em `ProjectMember`;
 - persistência real das permissões no PostgreSQL;
+- persistência simultânea das três permissões padrão concedidas ao `ProjectManager` criador;
+- consulta real de participação ativa através de `GetActiveAsync` no PostgreSQL;
+- exclusão de participações removidas da consulta `GetActiveAsync`;
 - restrição única para uma mesma permissão ativa por participação;
 - listagem somente das permissões ativas;
 - resolução de `GrantedByUserPublicId` na persistência;
@@ -558,15 +566,17 @@ O gerenciamento inicial de permissões específicas por projeto já está implem
 
 Membros de projeto podem possuir permissões próprias através de `ProjectMemberPermission`.
 
-Atualmente, `ManageProjectPermissions` já participa efetivamente da autorização para concessão, consulta e revogação de permissões.
+As permissões específicas já participam efetivamente da autorização de operações do projeto.
 
-As regras atuais são:
+Atualmente:
 
-- `TenantAdmin` pode gerenciar permissões no próprio Tenant sem depender de participação no projeto;
-- `ProjectManager` e `Member` precisam possuir participação ativa no projeto;
-- `ProjectManager` e `Member` também precisam possuir `ManageProjectPermissions`.
+- `ManageProjectPermissions` protege concessão, consulta e revogação de permissões;
+- `EditProject` protege a atualização dos dados básicos do projeto;
+- `ManageProjectMembers` protege inclusão e remoção de membros;
+- `TenantAdmin` possui bypass administrativo nessas operações dentro do próprio Tenant;
+- `ProjectManager` e `Member` precisam possuir participação ativa e a permissão exigida pela operação.
 
-As demais permissões existentes no domínio serão integradas progressivamente aos respectivos casos de uso, como edição de projeto, gerenciamento de membros, fluxos de status e tarefas.
+As demais permissões existentes no domínio serão integradas progressivamente aos fluxos de status e tarefas.
 
 ---
 
@@ -1341,19 +1351,21 @@ TenantAdmin
 → pode atualizar qualquer projeto do próprio Tenant
 
 ProjectManager
-→ pode atualizar somente se possuir participação ativa no projeto
+→ precisa possuir participação ativa + EditProject
 
 Member
-→ não pode atualizar projetos
+→ precisa possuir participação ativa + EditProject
 
 SystemAdmin
 → não possui acesso operacional a projetos de Tenant
 ```
 
-Para atualização por `ProjectManager`, participação ativa significa:
+Para `ProjectManager` e `Member`, a autorização exige simultaneamente:
 
 ```text
 ProjectMember.RemovedAt == null
++
+ProjectMemberPermission.EditProject ativa
 ```
 
 Projetos nos estados:
@@ -1382,7 +1394,7 @@ Nesse caso, a API retorna:
 Projects.Archived
 ```
 
-Um `ProjectManager` sem participação ativa ou um `Member` recebe:
+Um `ProjectManager` ou `Member` sem participação ativa ou sem `EditProject` recebe:
 
 ```text
 403 Forbidden
@@ -1454,6 +1466,18 @@ ResponsibleUserId = null
 
 O criador é automaticamente adicionado como membro ativo do projeto.
 
+Quando o criador possui perfil `ProjectManager`, sua participação inicial também recebe automaticamente as permissões:
+
+```text
+EditProject
+ManageProjectMembers
+ManageProjectPermissions
+```
+
+Essas permissões permitem que o `ProjectManager` recém-criado consiga administrar o projeto sem depender de uma concessão manual inicial.
+
+O `TenantAdmin` não recebe essas permissões automaticamente porque possui bypass administrativo nas operações atualmente protegidas.
+
 A criação utiliza uma transação para garantir consistência:
 
 ```text
@@ -1463,7 +1487,14 @@ salva e obtém Project.Id
 ↓
 cria ProjectMember para o criador
 ↓
-salva membro
+salva e obtém ProjectMember.Id
+↓
+se o criador for ProjectManager,
+cria EditProject,
+ManageProjectMembers e
+ManageProjectPermissions
+↓
+salva permissões
 ↓
 Commit
 ```
@@ -1474,7 +1505,7 @@ Caso alguma gravação falhe:
 Rollback
 ```
 
-evitando que um projeto fique persistido sem seu membro inicial.
+evitando que um projeto fique parcialmente persistido sem seu membro inicial ou, no caso de `ProjectManager`, sem suas permissões administrativas iniciais.
 
 Exemplo de resposta:
 
@@ -1728,19 +1759,21 @@ TenantAdmin
 → pode atualizar qualquer projeto do próprio Tenant
 
 ProjectManager
-→ pode atualizar somente se possuir participação ativa no projeto
+→ precisa possuir participação ativa e EditProject
 
 Member
-→ não pode atualizar projetos
+→ precisa possuir participação ativa e EditProject
 
 SystemAdmin
 → não possui acesso operacional aos projetos do Tenant
 ```
 
-Para `ProjectManager`, participação ativa significa:
+Para `ProjectManager` e `Member`, a autorização exige:
 
 ```text
 ProjectMember.RemovedAt == null
++
+EditProject ativa na participação atual
 ```
 
 Campos disponíveis para atualização:
@@ -1801,7 +1834,7 @@ Nesse caso, a API retorna:
 Projects.Archived
 ```
 
-Um `ProjectManager` sem participação ativa ou um `Member` recebe:
+Um `ProjectManager` ou `Member` sem participação ativa ou sem `EditProject` recebe:
 
 ```text
 403 Forbidden
@@ -1849,19 +1882,21 @@ TenantAdmin
 → pode adicionar membros a qualquer projeto do próprio Tenant
 
 ProjectManager
-→ pode adicionar membros somente quando possui participação ativa no projeto
+→ precisa possuir participação ativa e ManageProjectMembers
 
 Member
-→ não pode adicionar membros
+→ precisa possuir participação ativa e ManageProjectMembers
 
 SystemAdmin
 → não possui acesso operacional aos projetos do Tenant
 ```
 
-Para `ProjectManager`, participação ativa significa:
+Para `ProjectManager` e `Member`, a autorização exige:
 
 ```text
 ProjectMember.RemovedAt == null
++
+ManageProjectMembers ativa na participação atual
 ```
 
 Exemplo de requisição:
@@ -1907,7 +1942,7 @@ O usuário autenticado responsável pela inclusão é registrado em:
 AddedByUserId
 ```
 
-Um `ProjectManager` sem participação ativa ou um `Member` recebe:
+Um `ProjectManager` ou `Member` sem participação ativa ou sem `ManageProjectMembers` recebe:
 
 ```text
 403 Forbidden
@@ -2079,22 +2114,24 @@ TenantAdmin
 → pode remover membros de qualquer projeto do próprio Tenant
 
 ProjectManager
-→ pode remover membros somente quando possui participação ativa no projeto
+→ precisa possuir participação ativa e ManageProjectMembers
 
 Member
-→ não pode remover membros
+→ precisa possuir participação ativa e ManageProjectMembers
 
 SystemAdmin
 → não possui acesso operacional aos projetos do Tenant
 ```
 
-Para `ProjectManager`, participação ativa significa:
+Para `ProjectManager` e `Member`, a autorização exige:
 
 ```text
 ProjectMember.RemovedAt == null
++
+ManageProjectMembers ativa na participação atual
 ```
 
-Um `ProjectManager` sem participação ativa ou um `Member` recebe:
+Um `ProjectManager` ou `Member` sem participação ativa ou sem `ManageProjectMembers` recebe:
 
 ```text
 403 Forbidden
@@ -3015,16 +3052,15 @@ Alguns princípios e recursos adotados no projeto:
 - a filtragem por participação ocorre no backend antes da paginação;
 - projetos arquivados não aparecem na listagem padrão e precisam ser solicitados explicitamente através do filtro de status;
 - a atualização dos dados básicos de projetos exige `TenantAccess`;
-- `TenantAdmin` pode atualizar qualquer projeto do próprio Tenant;
-- `ProjectManager` somente pode atualizar projetos nos quais possua participação ativa;
-- `Member` não pode atualizar projetos;
+- `TenantAdmin` pode atualizar qualquer projeto do próprio Tenant sem depender de permissão específica;
+- `ProjectManager` e `Member` precisam possuir participação ativa e `EditProject` para atualizar projetos;
+- a ausência de `EditProject` bloqueia a atualização;
 - projetos concluídos podem ter seus dados básicos atualizados;
 - projetos arquivados não podem ser atualizados;
 - status e responsável não são alterados pelo endpoint de atualização de dados básicos;
 - a inclusão de membros também exige `TenantAccess`;
-- `TenantAdmin` pode adicionar membros a qualquer projeto do próprio Tenant;
-- `ProjectManager` somente pode adicionar membros quando possui participação ativa;
-- `Member` não pode adicionar membros;
+- `TenantAdmin` pode adicionar membros a qualquer projeto do próprio Tenant sem depender de permissão específica;
+- `ProjectManager` e `Member` precisam possuir participação ativa e `ManageProjectMembers` para adicionar membros;
 - somente usuários ativos do mesmo Tenant podem ser adicionados;
 - projetos arquivados não aceitam novos membros;
 - o banco impede mais de uma participação ativa para o mesmo projeto e usuário;
@@ -3036,9 +3072,8 @@ Alguns princípios e recursos adotados no projeto:
 - projetos arquivados continuam permitindo consulta de membros conforme as regras de autorização;
 - dados internos de `ProjectMember` não são expostos pela API;
 - a remoção de membros também exige `TenantAccess`;
-- `TenantAdmin` pode remover membros de qualquer projeto do próprio Tenant;
-- `ProjectManager` somente pode remover membros quando possui participação ativa no projeto;
-- `Member` não pode remover membros;
+- `TenantAdmin` pode remover membros de qualquer projeto do próprio Tenant sem depender de permissão específica;
+- `ProjectManager` e `Member` precisam possuir participação ativa e `ManageProjectMembers` para remover membros;
 - projetos arquivados não permitem remoção de membros;
 - a remoção de membros é lógica através de `RemovedAt`;
 - usuários inativos ainda podem ser removidos dos projetos;
@@ -3127,9 +3162,9 @@ A autorização por projeto já possui regras baseadas em participação ativa p
 
 O gerenciamento de `ProjectMemberPermission` também está implementado, incluindo concessão, listagem e revogação.
 
-A permissão `ManageProjectPermissions` já participa efetivamente da autorização dessas operações para `ProjectManager` e `Member`.
+As permissões `ManageProjectPermissions`, `EditProject` e `ManageProjectMembers` já participam efetivamente da autorização para `ProjectManager` e `Member`.
 
-A autorização continuará sendo evoluída integrando as demais permissões específicas aos respectivos casos de uso.
+A autorização continuará sendo evoluída integrando as permissões restantes aos fluxos de status e tarefas.
 
 ```text
 Permissões específicas por recurso
@@ -3298,9 +3333,21 @@ Regras atuais para gerenciamento:
 - `ProjectManager` e `Member` precisam possuir participação ativa;
 - `ProjectManager` e `Member` precisam possuir `ManageProjectPermissions`.
 
-`ManageProjectPermissions` já é uma permissão operacional efetiva.
+Atualmente já são permissões operacionais efetivas:
 
-As demais permissões serão integradas aos respectivos casos de uso conforme esses módulos forem implementados.
+- `EditProject`: permite atualização dos dados básicos do projeto;
+- `ManageProjectMembers`: permite inclusão e remoção de membros;
+- `ManageProjectPermissions`: permite concessão, consulta e revogação de permissões.
+
+Quando um `ProjectManager` cria um novo projeto, sua participação inicial recebe automaticamente:
+
+- `EditProject`;
+- `ManageProjectMembers`;
+- `ManageProjectPermissions`.
+
+O `TenantAdmin` não depende dessas permissões específicas nas operações atualmente cobertas por bypass administrativo.
+
+As demais permissões serão integradas aos respectivos casos de uso conforme os fluxos de status e tarefas forem implementados.
 
 # Notificações
 
@@ -3449,7 +3496,10 @@ Essa camada ainda não está implementada.
 - [x] Autorização da listagem de projetos por participação ativa
 - [x] Gerenciamento inicial de permissões por projeto
 - [x] Autorização de gerenciamento através de `ManageProjectPermissions`
-- [ ] Integração das demais permissões específicas aos respectivos casos de uso
+- [x] Integração de `EditProject` à atualização de projetos
+- [x] Integração de `ManageProjectMembers` à inclusão e remoção de membros
+- [x] Permissões administrativas iniciais automáticas para `ProjectManager` criador
+- [ ] Integração das permissões restantes aos fluxos de status e tarefas
 - [ ] Rate limiting
 - [ ] MFA
 - [ ] Recuperação de conta
@@ -3477,6 +3527,9 @@ Essa camada ainda não está implementada.
 - [x] Atualização
 - [x] Gerenciamento de membros — inclusão, listagem e remoção
 - [x] Gerenciamento de permissões — concessão, listagem e revogação
+- [x] Autorização de atualização através de `EditProject`
+- [x] Autorização de inclusão e remoção de membros através de `ManageProjectMembers`
+- [x] Concessão automática das permissões administrativas iniciais ao `ProjectManager` criador
 - [ ] Fluxos de status
 - [ ] Histórico
 - [ ] Kanban
@@ -3619,6 +3672,7 @@ Endpoints administrativos de Tenant protegidos
 Bootstrap inicial de SystemAdmin
 Criação de projetos por TenantAdmin e ProjectManager
 Criador adicionado automaticamente como membro do projeto
+ProjectManager criador recebe automaticamente EditProject, ManageProjectMembers e ManageProjectPermissions
 Criação de projeto protegida por transação
 Consulta individual de projetos por PublicId
 Consulta de projetos isolada pelo Tenant
@@ -3636,16 +3690,15 @@ Filtro de projetos por responsável
 Paginação da listagem de projetos
 Atualização dos dados básicos de projetos
 TenantAdmin pode atualizar qualquer projeto do próprio Tenant
-ProjectManager pode atualizar projetos com participação ativa
-Member não pode atualizar projetos
+ProjectManager e Member podem atualizar projetos com participação ativa e EditProject
+Usuários sem EditProject não podem atualizar projetos
 Projetos Completed permitem atualização dos dados básicos
 Projetos Archived bloqueiam atualização
 Atualização de nome, descrição e prazo
 Remoção de prazo através de DueDate null
 Inclusão de membros em projetos
 TenantAdmin pode adicionar membros a qualquer projeto do próprio Tenant
-ProjectManager pode adicionar membros quando possui participação ativa
-Member não pode adicionar membros
+ProjectManager e Member podem adicionar membros com participação ativa e ManageProjectMembers
 Participações ativas duplicadas são bloqueadas
 Participações removidas são preservadas e permitem futura reinclusão
 Inclusão de membro registra o usuário responsável pela operação
@@ -3658,8 +3711,7 @@ Projetos arquivados permanecem com membros consultáveis conforme autorização
 Listagem expõe somente identificadores públicos das relações
 Remoção lógica de membros através de RemovedAt
 TenantAdmin pode remover membros de qualquer projeto do próprio Tenant
-ProjectManager pode remover membros quando possui participação ativa
-Member não pode remover membros
+ProjectManager e Member podem remover membros com participação ativa e ManageProjectMembers
 Projetos Archived bloqueiam remoção de membros
 Usuários inativos podem ser removidos dos projetos
 Membro removido perde imediatamente o acesso baseado em participação
@@ -3674,11 +3726,13 @@ Permissões revogadas podem ser concedidas novamente
 TenantAdmin pode gerenciar permissões em projetos do próprio Tenant
 ProjectManager e Member dependem de participação ativa e ManageProjectPermissions para gerenciar permissões
 ManageProjectPermissions possui efeito efetivo na autorização
+EditProject possui efeito efetivo na autorização de atualização
+ManageProjectMembers possui efeito efetivo na autorização de inclusão e remoção de membros
 Projetos Archived permitem consulta, mas bloqueiam concessão e revogação de permissões
 Usuários alvo inativos podem ter permissões consultadas e revogadas
 SystemAdmin não possui acesso operacional aos projetos de Tenant
 Requisições HTTP manuais organizadas por módulo
-901 testes automatizados aprovados
+911 testes automatizados aprovados
 0 falhas
 ```
 

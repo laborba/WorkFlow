@@ -24,7 +24,7 @@ public sealed class ProjectsControllerTests
 {
     [Fact]
     public async Task
-    Create_ShouldUseAuthenticatedUserAsCreator_WhenDataIsValid()
+Create_ShouldUseAuthenticatedUserAsCreator_WhenDataIsValid()
     {
         var tenant =
             CreatePersistedTenant();
@@ -52,6 +52,9 @@ public sealed class ProjectsControllerTests
         var projectMemberRepository =
             new FakeProjectMemberRepository();
 
+        var projectMemberPermissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var unitOfWork =
             new FakeUnitOfWork();
 
@@ -76,6 +79,7 @@ public sealed class ProjectsControllerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                projectMemberPermissionRepository,
                 unitOfWork);
 
         var getProjectByPublicIdHandler =
@@ -102,9 +106,9 @@ public sealed class ProjectsControllerTests
             new ClaimsIdentity(
                 new[]
                 {
-                    new Claim(
-                        ClaimTypes.NameIdentifier,
-                        creator.PublicId.ToString())
+                new Claim(
+                    ClaimTypes.NameIdentifier,
+                    creator.PublicId.ToString())
                 },
                 "Test");
 
@@ -166,6 +170,10 @@ public sealed class ProjectsControllerTests
             creator.Id,
             addedProject.CreatedByUserId);
 
+        Assert.Empty(
+            projectMemberPermissionRepository
+                .AddedProjectMemberPermissions);
+
         Assert.Equal(
             creator.PublicId,
             response.CreatedByUserPublicId);
@@ -213,12 +221,16 @@ Create_ShouldReturnUnauthorized_WhenUserPublicIdClaimIsMissing()
         var projectMemberRepository =
             new FakeProjectMemberRepository();
 
+        var projectMemberPermissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var createProjectHandler =
             new CreateProjectHandler(
                 tenantRepository,
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                projectMemberPermissionRepository,
                 new FakeUnitOfWork());
 
         var getProjectByPublicIdHandler =
@@ -277,6 +289,10 @@ Create_ShouldReturnUnauthorized_WhenUserPublicIdClaimIsMissing()
 
         Assert.Null(
             projectRepository.AddedProject);
+
+        Assert.Empty(
+            projectMemberPermissionRepository
+                .AddedProjectMemberPermissions);
     }
 
     [Fact]
@@ -328,12 +344,16 @@ GetByPublicId_ShouldUseAuthenticatedUserAndReturnProject_WhenDataIsValid()
         var projectMemberRepository =
             new FakeProjectMemberRepository();
 
+        var projectMemberPermissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var createProjectHandler =
             new CreateProjectHandler(
                 tenantRepository,
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                projectMemberPermissionRepository,
                 new FakeUnitOfWork());
 
         var getProjectByPublicIdHandler =
@@ -444,8 +464,11 @@ GetByPublicId_ShouldUseAuthenticatedUserAndReturnProject_WhenDataIsValid()
 
         Assert.Null(
             projectMemberRepository.QueriedUserId);
-    }
 
+        Assert.Empty(
+            projectMemberPermissionRepository
+                .AddedProjectMemberPermissions);
+    }
 
     [Fact]
     public async Task
@@ -463,12 +486,16 @@ GetByPublicId_ShouldUseAuthenticatedUserAndReturnProject_WhenDataIsValid()
         var projectMemberRepository =
             new FakeProjectMemberRepository();
 
+        var projectMemberPermissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var createProjectHandler =
             new CreateProjectHandler(
                 tenantRepository,
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                projectMemberPermissionRepository,
                 new FakeUnitOfWork());
 
         var getProjectByPublicIdHandler =
@@ -521,8 +548,11 @@ GetByPublicId_ShouldUseAuthenticatedUserAndReturnProject_WhenDataIsValid()
 
         Assert.Null(
             projectMemberRepository.QueriedProjectId);
-    }
 
+        Assert.Empty(
+            projectMemberPermissionRepository
+                .AddedProjectMemberPermissions);
+    }
     [Fact]
     public async Task
 GetByPublicId_ShouldReturnNotFound_WhenProjectDoesNotExist()
@@ -554,12 +584,16 @@ GetByPublicId_ShouldReturnNotFound_WhenProjectDoesNotExist()
         var projectMemberRepository =
             new FakeProjectMemberRepository();
 
+        var projectMemberPermissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var createProjectHandler =
             new CreateProjectHandler(
                 tenantRepository,
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                projectMemberPermissionRepository,
                 new FakeUnitOfWork());
 
         var getProjectByPublicIdHandler =
@@ -629,6 +663,10 @@ GetByPublicId_ShouldReturnNotFound_WhenProjectDoesNotExist()
         Assert.Equal(
             ProjectErrors.NotFound.Message,
             response.Message);
+
+        Assert.Empty(
+            projectMemberPermissionRepository
+                .AddedProjectMemberPermissions);
     }
 
     [Fact]
@@ -679,12 +717,16 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterCannotViewProject()
                 IsActiveMemberResult = false
             };
 
+        var projectMemberPermissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var createProjectHandler =
             new CreateProjectHandler(
                 tenantRepository,
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                projectMemberPermissionRepository,
                 new FakeUnitOfWork());
 
         var getProjectByPublicIdHandler =
@@ -695,10 +737,10 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterCannotViewProject()
                 projectMemberRepository);
 
         var listProjectsHandler =
-             new ListProjectsHandler(
-                 tenantRepository,
-                 userRepository,
-                 projectRepository);
+            new ListProjectsHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository);
 
         var controller =
             new ProjectsController(
@@ -791,12 +833,16 @@ GetByPublicId_ShouldReturnConflict_WhenTenantIsInactive()
         var projectMemberRepository =
             new FakeProjectMemberRepository();
 
+        var projectMemberPermissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var createProjectHandler =
             new CreateProjectHandler(
                 tenantRepository,
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                projectMemberPermissionRepository,
                 new FakeUnitOfWork());
 
         var getProjectByPublicIdHandler =
@@ -904,12 +950,16 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterIsInactive()
         var projectMemberRepository =
             new FakeProjectMemberRepository();
 
+        var projectMemberPermissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var createProjectHandler =
             new CreateProjectHandler(
                 tenantRepository,
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                projectMemberPermissionRepository,
                 new FakeUnitOfWork());
 
         var getProjectByPublicIdHandler =
@@ -980,7 +1030,6 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterIsInactive()
             UserErrors.Inactive.Message,
             response.Message);
     }
-
 
 
     private static Tenant CreatePersistedTenant()
@@ -1078,12 +1127,15 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterIsInactive()
         var projectMemberRepository =
             new FakeProjectMemberRepository();
 
+        var projectMemberPermissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         return new UpdateProjectHandler(
             tenantRepository,
             userRepository,
             projectRepository,
             projectMemberRepository,
+            projectMemberPermissionRepository,
             new FakeUnitOfWork());
     }
-
 }

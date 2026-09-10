@@ -62,6 +62,9 @@ public sealed class UpdateProjectHandlerTests
         var projectMemberRepository =
             new FakeProjectMemberRepository();
 
+        var permissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var unitOfWork =
             new FakeUnitOfWork();
 
@@ -71,6 +74,7 @@ public sealed class UpdateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                permissionRepository,
                 unitOfWork);
 
         var newDueDate =
@@ -93,7 +97,8 @@ public sealed class UpdateProjectHandlerTests
                 newDueDate);
 
         var result =
-            await handler.HandleAsync(command);
+            await handler.HandleAsync(
+                command);
 
         Assert.True(result.IsSuccess);
         Assert.False(result.IsFailure);
@@ -153,111 +158,83 @@ public sealed class UpdateProjectHandlerTests
             1,
             unitOfWork.SaveChangesCallCount);
 
-        Assert.Null(
-            projectMemberRepository.QueriedProjectId);
+        Assert.Empty(
+            projectMemberRepository
+                .GetActiveCalls);
 
-        Assert.Null(
-            projectMemberRepository.QueriedUserId);
+        Assert.Empty(
+            permissionRepository
+                .IsActivePermissionCalls);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(UserRole.ProjectManager)]
+    [InlineData(UserRole.Member)]
     public async Task
-    HandleAsync_ShouldUpdateProject_WhenRequesterIsActiveProjectManagerMember()
+    HandleAsync_ShouldUpdateProject_WhenRequesterHasEditProjectPermission(
+        UserRole requesterRole)
     {
-        var tenant =
-            CreatePersistedTenant();
+        var fixture =
+            CreateFixture(
+                requesterRole);
 
-        var requester =
-            CreatePersistedUser(
-                tenant.Id,
-                10,
-                UserRole.ProjectManager);
-
-        var creator =
-            CreatePersistedUser(
-                tenant.Id,
-                20,
-                UserRole.TenantAdmin);
-
-        var project =
-            CreatePersistedProject(
-                tenant.Id,
-                creator.Id);
-
-        var tenantRepository =
-            new FakeTenantRepository
-            {
-                TenantToReturn = tenant
-            };
-
-        var userRepository =
-            new FakeUserRepository
-            {
-                UserToReturn = requester
-            };
-
-        userRepository.UsersByIdToReturn.Add(
-            creator.Id,
-            creator);
-
-        var projectRepository =
-            new FakeProjectRepository
-            {
-                ProjectToReturn = project
-            };
-
-        var projectMemberRepository =
-            new FakeProjectMemberRepository
-            {
-                IsActiveMemberResult = true
-            };
-
-        var unitOfWork =
-            new FakeUnitOfWork();
-
-        var handler =
-            new UpdateProjectHandler(
-                tenantRepository,
-                userRepository,
-                projectRepository,
-                projectMemberRepository,
-                unitOfWork);
-
-        var command =
-            new UpdateProjectCommand(
-                tenant.PublicId,
-                project.PublicId,
-                requester.PublicId,
-                "Projeto alterado pelo gerente",
-                null,
-                null);
+        GrantEditProjectPermission(
+            fixture);
 
         var result =
-            await handler.HandleAsync(command);
+            await fixture.Handler.HandleAsync(
+                CreateCommand(fixture));
 
         Assert.True(result.IsSuccess);
+        Assert.False(result.IsFailure);
+        Assert.Null(result.Error);
 
         Assert.Equal(
-            "Projeto alterado pelo gerente",
-            project.Name);
-
-        Assert.Null(
-            project.Description);
-
-        Assert.Null(
-            project.DueDate);
+            "Projeto atualizado",
+            fixture.Project.Name);
 
         Assert.Equal(
-            project.Id,
-            projectMemberRepository.QueriedProjectId);
+            "Descrição atualizada",
+            fixture.Project.Description);
 
         Assert.Equal(
-            requester.Id,
-            projectMemberRepository.QueriedUserId);
+            new DateTime(
+                2026,
+                12,
+                31,
+                12,
+                0,
+                0,
+                DateTimeKind.Utc),
+            fixture.Project.DueDate);
+
+        var membershipCall =
+            Assert.Single(
+                fixture.ProjectMemberRepository
+                    .GetActiveCalls);
+
+        Assert.Equal(
+            (
+                fixture.Project.Id,
+                fixture.Requester.Id
+            ),
+            membershipCall);
+
+        var permissionCall =
+            Assert.Single(
+                fixture.PermissionRepository
+                    .IsActivePermissionCalls);
+
+        Assert.Equal(
+            (
+                fixture.RequesterProjectMember.Id,
+                ProjectPermission.EditProject
+            ),
+            permissionCall);
 
         Assert.Equal(
             1,
-            unitOfWork.SaveChangesCallCount);
+            fixture.UnitOfWork.SaveChangesCallCount);
     }
 
     [Fact]
@@ -269,54 +246,92 @@ public sealed class UpdateProjectHandlerTests
                 UserRole.ProjectManager);
 
         fixture.ProjectMemberRepository
-            .IsActiveMemberResult = false;
+            .ActiveMembersToReturn
+            .Remove(
+                (
+                    fixture.Project.Id,
+                    fixture.Requester.Id
+                ));
 
         var result =
             await fixture.Handler.HandleAsync(
                 CreateCommand(fixture));
 
         Assert.True(result.IsFailure);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
 
         Assert.Equal(
             ProjectErrors.UpdateNotAllowed,
             result.Error);
 
-        Assert.Equal(
-            fixture.Project.Id,
-            fixture.ProjectMemberRepository.QueriedProjectId);
+        var membershipCall =
+            Assert.Single(
+                fixture.ProjectMemberRepository
+                    .GetActiveCalls);
 
         Assert.Equal(
-            fixture.Requester.Id,
-            fixture.ProjectMemberRepository.QueriedUserId);
+            (
+                fixture.Project.Id,
+                fixture.Requester.Id
+            ),
+            membershipCall);
+
+        Assert.Empty(
+            fixture.PermissionRepository
+                .IsActivePermissionCalls);
 
         Assert.Equal(
             0,
             fixture.UnitOfWork.SaveChangesCallCount);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(UserRole.ProjectManager)]
+    [InlineData(UserRole.Member)]
     public async Task
-    HandleAsync_ShouldReturnFailure_WhenRequesterIsMember()
+    HandleAsync_ShouldReturnFailure_WhenRequesterDoesNotHaveEditProjectPermission(
+        UserRole requesterRole)
     {
         var fixture =
             CreateFixture(
-                UserRole.Member);
+                requesterRole);
 
         var result =
             await fixture.Handler.HandleAsync(
                 CreateCommand(fixture));
 
         Assert.True(result.IsFailure);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
 
         Assert.Equal(
             ProjectErrors.UpdateNotAllowed,
             result.Error);
 
-        Assert.Null(
-            fixture.ProjectMemberRepository.QueriedProjectId);
+        var membershipCall =
+            Assert.Single(
+                fixture.ProjectMemberRepository
+                    .GetActiveCalls);
 
-        Assert.Null(
-            fixture.ProjectMemberRepository.QueriedUserId);
+        Assert.Equal(
+            (
+                fixture.Project.Id,
+                fixture.Requester.Id
+            ),
+            membershipCall);
+
+        var permissionCall =
+            Assert.Single(
+                fixture.PermissionRepository
+                    .IsActivePermissionCalls);
+
+        Assert.Equal(
+            (
+                fixture.RequesterProjectMember.Id,
+                ProjectPermission.EditProject
+            ),
+            permissionCall);
 
         Assert.Equal(
             0,
@@ -416,6 +431,9 @@ public sealed class UpdateProjectHandlerTests
         var projectMemberRepository =
             new FakeProjectMemberRepository();
 
+        var permissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var unitOfWork =
             new FakeUnitOfWork();
 
@@ -425,6 +443,7 @@ public sealed class UpdateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                permissionRepository,
                 unitOfWork);
 
         var result =
@@ -578,8 +597,9 @@ public sealed class UpdateProjectHandlerTests
                 null);
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => fixture.Handler.HandleAsync(
-                command));
+            () =>
+                fixture.Handler.HandleAsync(
+                    command));
 
         Assert.Equal(
             0,
@@ -608,8 +628,9 @@ public sealed class UpdateProjectHandlerTests
 
         var exception =
             await Assert.ThrowsAsync<ArgumentException>(
-                () => fixture.Handler.HandleAsync(
-                    command));
+                () =>
+                    fixture.Handler.HandleAsync(
+                        command));
 
         Assert.Equal(
             "name",
@@ -696,6 +717,7 @@ public sealed class UpdateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 new FakeProjectMemberRepository(),
+                new FakeProjectMemberPermissionRepository(),
                 unitOfWork);
 
         var result =
@@ -738,8 +760,9 @@ public sealed class UpdateProjectHandlerTests
 
         var exception =
             await Assert.ThrowsAsync<InvalidOperationException>(
-                () => fixture.Handler.HandleAsync(
-                    CreateCommand(fixture)));
+                () =>
+                    fixture.Handler.HandleAsync(
+                        CreateCommand(fixture)));
 
         Assert.Equal(
             "O usuário criador associado ao projeto não foi encontrado.",
@@ -811,18 +834,20 @@ public sealed class UpdateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 new FakeProjectMemberRepository(),
+                new FakeProjectMemberPermissionRepository(),
                 unitOfWork);
 
         var exception =
             await Assert.ThrowsAsync<InvalidOperationException>(
-                () => handler.HandleAsync(
-                    new UpdateProjectCommand(
-                        tenant.PublicId,
-                        project.PublicId,
-                        requester.PublicId,
-                        "Projeto atualizado",
-                        null,
-                        null)));
+                () =>
+                    handler.HandleAsync(
+                        new UpdateProjectCommand(
+                            tenant.PublicId,
+                            project.PublicId,
+                            requester.PublicId,
+                            "Projeto atualizado",
+                            null,
+                            null)));
 
         Assert.Equal(
             "O usuário responsável associado ao projeto não foi encontrado.",
@@ -856,6 +881,16 @@ public sealed class UpdateProjectHandlerTests
                 tenant.Id,
                 creator.Id);
 
+        var requesterProjectMember =
+            new ProjectMember(
+                project.Id,
+                requester.Id,
+                requester.Id);
+
+        EntityTestHelper.SetId(
+            requesterProjectMember,
+            1000);
+
         var tenantRepository =
             new FakeTenantRepository
             {
@@ -879,10 +914,18 @@ public sealed class UpdateProjectHandlerTests
             };
 
         var projectMemberRepository =
-            new FakeProjectMemberRepository
-            {
-                IsActiveMemberResult = true
-            };
+            new FakeProjectMemberRepository();
+
+        projectMemberRepository
+            .ActiveMembersToReturn[
+                (
+                    project.Id,
+                    requester.Id
+                )] =
+                    requesterProjectMember;
+
+        var permissionRepository =
+            new FakeProjectMemberPermissionRepository();
 
         var unitOfWork =
             new FakeUnitOfWork();
@@ -893,6 +936,7 @@ public sealed class UpdateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                permissionRepository,
                 unitOfWork);
 
         return new Fixture(
@@ -900,11 +944,25 @@ public sealed class UpdateProjectHandlerTests
             requester,
             creator,
             project,
+            requesterProjectMember,
             userRepository,
             projectRepository,
             projectMemberRepository,
+            permissionRepository,
             unitOfWork,
             handler);
+    }
+
+    private static void GrantEditProjectPermission(
+        Fixture fixture)
+    {
+        fixture.PermissionRepository
+            .IsActivePermissionResults[
+                (
+                    fixture.RequesterProjectMember.Id,
+                    ProjectPermission.EditProject
+                )] =
+                    true;
     }
 
     private static UpdateProjectCommand CreateCommand(
@@ -992,9 +1050,11 @@ public sealed class UpdateProjectHandlerTests
         User Requester,
         User Creator,
         Project Project,
+        ProjectMember RequesterProjectMember,
         FakeUserRepository UserRepository,
         FakeProjectRepository ProjectRepository,
         FakeProjectMemberRepository ProjectMemberRepository,
+        FakeProjectMemberPermissionRepository PermissionRepository,
         FakeUnitOfWork UnitOfWork,
         UpdateProjectHandler Handler);
 }

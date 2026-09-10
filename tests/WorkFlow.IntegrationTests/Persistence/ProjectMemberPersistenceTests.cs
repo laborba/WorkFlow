@@ -2,6 +2,7 @@
 using WorkFlow.Domain.Entities;
 using WorkFlow.Domain.Enums;
 using WorkFlow.IntegrationTests.Infrastructure;
+using WorkFlow.Infrastructure.Persistence.Repositories;
 using Xunit;
 
 namespace WorkFlow.IntegrationTests.Persistence;
@@ -522,6 +523,201 @@ public sealed class ProjectMemberPersistenceTests
 
         await Assert.ThrowsAsync<DbUpdateException>(
             () => context.SaveChangesAsync());
+
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task
+Repository_GetActiveAsync_ShouldReturnActiveProjectMember()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant =
+            new Tenant(
+                $"Tenant {uniqueValue}",
+                $"REG-{uniqueValue}",
+                $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(
+            tenant);
+
+        await context.SaveChangesAsync();
+
+        var creator =
+            new User(
+                tenant.Id,
+                "Criador",
+                $"creator-{uniqueValue}@test.local",
+                "creator-password-hash",
+                UserRole.ProjectManager);
+
+        var memberUser =
+            new User(
+                tenant.Id,
+                "Membro",
+                $"member-{uniqueValue}@test.local",
+                "member-password-hash",
+                UserRole.Member);
+
+        context.Users.AddRange(
+            creator,
+            memberUser);
+
+        await context.SaveChangesAsync();
+
+        var project =
+            new Project(
+                tenant.Id,
+                $"Projeto {uniqueValue}",
+                creator.Id);
+
+        context.Projects.Add(
+            project);
+
+        await context.SaveChangesAsync();
+
+        var projectMember =
+            new ProjectMember(
+                project.Id,
+                memberUser.Id,
+                creator.Id);
+
+        context.ProjectMembers.Add(
+            projectMember);
+
+        await context.SaveChangesAsync();
+
+        var projectMemberId =
+            projectMember.Id;
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new ProjectMemberRepository(
+                context);
+
+        var result =
+            await repository.GetActiveAsync(
+                project.Id,
+                memberUser.Id);
+
+        Assert.NotNull(
+            result);
+
+        Assert.Equal(
+            projectMemberId,
+            result!.Id);
+
+        Assert.Equal(
+            project.Id,
+            result.ProjectId);
+
+        Assert.Equal(
+            memberUser.Id,
+            result.UserId);
+
+        Assert.True(
+            result.IsActive);
+
+        Assert.Null(
+            result.RemovedAt);
+
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task
+    Repository_GetActiveAsync_ShouldReturnNull_WhenMembershipWasRemoved()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant =
+            new Tenant(
+                $"Tenant {uniqueValue}",
+                $"REG-{uniqueValue}",
+                $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(
+            tenant);
+
+        await context.SaveChangesAsync();
+
+        var creator =
+            new User(
+                tenant.Id,
+                "Criador",
+                $"creator-{uniqueValue}@test.local",
+                "creator-password-hash",
+                UserRole.ProjectManager);
+
+        var memberUser =
+            new User(
+                tenant.Id,
+                "Membro",
+                $"member-{uniqueValue}@test.local",
+                "member-password-hash",
+                UserRole.Member);
+
+        context.Users.AddRange(
+            creator,
+            memberUser);
+
+        await context.SaveChangesAsync();
+
+        var project =
+            new Project(
+                tenant.Id,
+                $"Projeto {uniqueValue}",
+                creator.Id);
+
+        context.Projects.Add(
+            project);
+
+        await context.SaveChangesAsync();
+
+        var projectMember =
+            new ProjectMember(
+                project.Id,
+                memberUser.Id,
+                creator.Id);
+
+        context.ProjectMembers.Add(
+            projectMember);
+
+        await context.SaveChangesAsync();
+
+        projectMember.Remove();
+
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var repository =
+            new ProjectMemberRepository(
+                context);
+
+        var result =
+            await repository.GetActiveAsync(
+                project.Id,
+                memberUser.Id);
+
+        Assert.Null(
+            result);
 
         await transaction.RollbackAsync();
     }

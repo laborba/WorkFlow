@@ -12,6 +12,8 @@ public sealed class RemoveProjectMemberHandler
     private readonly IUserRepository _userRepository;
     private readonly IProjectRepository _projectRepository;
     private readonly IProjectMemberRepository _projectMemberRepository;
+    private readonly IProjectMemberPermissionRepository
+        _projectMemberPermissionRepository;
     private readonly IUnitOfWork _unitOfWork;
 
     public RemoveProjectMemberHandler(
@@ -19,20 +21,35 @@ public sealed class RemoveProjectMemberHandler
         IUserRepository userRepository,
         IProjectRepository projectRepository,
         IProjectMemberRepository projectMemberRepository,
+        IProjectMemberPermissionRepository
+            projectMemberPermissionRepository,
         IUnitOfWork unitOfWork)
     {
-        _tenantRepository = tenantRepository;
-        _userRepository = userRepository;
-        _projectRepository = projectRepository;
-        _projectMemberRepository = projectMemberRepository;
-        _unitOfWork = unitOfWork;
+        _tenantRepository =
+            tenantRepository;
+
+        _userRepository =
+            userRepository;
+
+        _projectRepository =
+            projectRepository;
+
+        _projectMemberRepository =
+            projectMemberRepository;
+
+        _projectMemberPermissionRepository =
+            projectMemberPermissionRepository;
+
+        _unitOfWork =
+            unitOfWork;
     }
 
     public async Task<Result<RemoveProjectMemberResult>> HandleAsync(
         RemoveProjectMemberCommand command,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(
+            command);
 
         if (command.TenantPublicId == Guid.Empty)
         {
@@ -109,24 +126,39 @@ public sealed class RemoveProjectMemberHandler
                 ProjectErrors.NotFound);
         }
 
-        if (requestedByUser.Role == UserRole.ProjectManager)
+        if (requestedByUser.Role != UserRole.TenantAdmin)
         {
-            var isActiveMember =
-                await _projectMemberRepository.IsActiveMemberAsync(
-                    project.Id,
-                    requestedByUser.Id,
-                    cancellationToken);
-
-            if (!isActiveMember)
+            if (requestedByUser.Role != UserRole.ProjectManager &&
+                requestedByUser.Role != UserRole.Member)
             {
                 return Result<RemoveProjectMemberResult>.Failure(
                     ProjectMemberErrors.RemoveNotAllowed);
             }
-        }
-        else if (requestedByUser.Role != UserRole.TenantAdmin)
-        {
-            return Result<RemoveProjectMemberResult>.Failure(
-                ProjectMemberErrors.RemoveNotAllowed);
+
+            var requesterProjectMember =
+                await _projectMemberRepository.GetActiveAsync(
+                    project.Id,
+                    requestedByUser.Id,
+                    cancellationToken);
+
+            if (requesterProjectMember is null)
+            {
+                return Result<RemoveProjectMemberResult>.Failure(
+                    ProjectMemberErrors.RemoveNotAllowed);
+            }
+
+            var canManageMembers =
+                await _projectMemberPermissionRepository
+                    .IsActivePermissionAsync(
+                        requesterProjectMember.Id,
+                        ProjectPermission.ManageProjectMembers,
+                        cancellationToken);
+
+            if (!canManageMembers)
+            {
+                return Result<RemoveProjectMemberResult>.Failure(
+                    ProjectMemberErrors.RemoveNotAllowed);
+            }
         }
 
         if (project.IsArchived)

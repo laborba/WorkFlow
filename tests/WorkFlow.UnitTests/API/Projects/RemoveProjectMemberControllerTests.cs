@@ -75,14 +75,34 @@ public sealed class RemoveProjectMemberControllerTests
 
     [Fact]
     public async Task
-    Remove_ShouldReturnOk_WhenRequesterIsActiveProjectManager()
+Remove_ShouldReturnOk_WhenRequesterIsProjectManagerWithManageProjectMembersPermission()
     {
         var fixture =
             CreateFixture(
                 UserRole.ProjectManager);
 
+        var requesterProjectMember =
+            new ProjectMember(
+                fixture.Project.Id,
+                fixture.Requester.Id,
+                fixture.Requester.Id);
+
+        EntityTestHelper.SetId(
+            requesterProjectMember,
+            1000);
+
         fixture.ProjectMemberRepository
-            .IsActiveMemberResult = true;
+            .ActiveMembersToReturn[
+                (fixture.Project.Id, fixture.Requester.Id)] =
+            requesterProjectMember;
+
+        fixture.PermissionRepository
+            .IsActivePermissionResults[
+                (
+                    requesterProjectMember.Id,
+                    ProjectPermission.ManageProjectMembers
+                )] =
+            true;
 
         var controller =
             CreateController(
@@ -102,9 +122,9 @@ public sealed class RemoveProjectMemberControllerTests
         Assert.IsType<OkObjectResult>(
             result.Result);
 
-        Assert.Single(
-            fixture.ProjectMemberRepository
-                .IsActiveMemberCalls);
+        Assert.Equal(
+            1,
+            fixture.UnitOfWork.SaveChangesCallCount);
     }
 
     [Fact]
@@ -417,7 +437,7 @@ public sealed class RemoveProjectMemberControllerTests
     }
 
     private static ProjectMembersController CreateController(
-        Fixture fixture)
+    Fixture fixture)
     {
         var addHandler =
             new AddProjectMemberHandler(
@@ -425,6 +445,7 @@ public sealed class RemoveProjectMemberControllerTests
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
+                fixture.PermissionRepository,
                 fixture.UnitOfWork);
 
         var listHandler =
@@ -440,10 +461,8 @@ public sealed class RemoveProjectMemberControllerTests
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
+                fixture.PermissionRepository,
                 fixture.UnitOfWork);
-
-        var permissionRepository =
-            new FakeProjectMemberPermissionRepository();
 
         var grantPermissionHandler =
             new GrantProjectMemberPermissionHandler(
@@ -451,7 +470,7 @@ public sealed class RemoveProjectMemberControllerTests
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
-                permissionRepository,
+                fixture.PermissionRepository,
                 fixture.UnitOfWork);
 
         var listPermissionsHandler =
@@ -460,7 +479,7 @@ public sealed class RemoveProjectMemberControllerTests
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
-                permissionRepository);
+                fixture.PermissionRepository);
 
         var revokePermissionHandler =
             new RevokeProjectMemberPermissionHandler(
@@ -468,7 +487,7 @@ public sealed class RemoveProjectMemberControllerTests
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
-                permissionRepository,
+                fixture.PermissionRepository,
                 fixture.UnitOfWork);
 
         return new ProjectMembersController(
@@ -587,6 +606,9 @@ public sealed class RemoveProjectMemberControllerTests
                         requester.Id)
             };
 
+        var permissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var unitOfWork =
             new TestUnitOfWork();
 
@@ -599,6 +621,7 @@ public sealed class RemoveProjectMemberControllerTests
             userRepository,
             projectRepository,
             projectMemberRepository,
+            permissionRepository,
             unitOfWork);
     }
 
@@ -633,5 +656,6 @@ public sealed class RemoveProjectMemberControllerTests
         FakeUserRepository UserRepository,
         FakeProjectRepository ProjectRepository,
         FakeProjectMemberRepository ProjectMemberRepository,
+        FakeProjectMemberPermissionRepository PermissionRepository,
         TestUnitOfWork UnitOfWork);
 }

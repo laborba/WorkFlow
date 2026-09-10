@@ -1095,4 +1095,143 @@ Repository_GetActiveForUpdateAsync_ShouldReturnTrackedPermissionAndStopReturning
 
         await transaction.RollbackAsync();
     }
+
+    [Fact]
+    public async Task
+Repository_ShouldPersistDefaultProjectManagerPermissionsTogether()
+    {
+        await using var context =
+            _database.CreateDbContext();
+
+        await using var transaction =
+            await context.Database.BeginTransactionAsync();
+
+        var uniqueValue =
+            Guid.NewGuid().ToString("N");
+
+        var tenant =
+            new Tenant(
+                $"Tenant {uniqueValue}",
+                $"REG-{uniqueValue}",
+                $"tenant-{uniqueValue}@test.local");
+
+        context.Tenants.Add(
+            tenant);
+
+        await context.SaveChangesAsync();
+
+        var projectManager =
+            new User(
+                tenant.Id,
+                "Gerente do Projeto",
+                $"manager-{uniqueValue}@test.local",
+                "manager-password-hash",
+                UserRole.ProjectManager);
+
+        context.Users.Add(
+            projectManager);
+
+        await context.SaveChangesAsync();
+
+        var project =
+            new Project(
+                tenant.Id,
+                $"Projeto {uniqueValue}",
+                projectManager.Id);
+
+        context.Projects.Add(
+            project);
+
+        await context.SaveChangesAsync();
+
+        var projectMember =
+            new ProjectMember(
+                project.Id,
+                projectManager.Id,
+                projectManager.Id);
+
+        context.ProjectMembers.Add(
+            projectMember);
+
+        await context.SaveChangesAsync();
+
+        var repository =
+            new ProjectMemberPermissionRepository(
+                context);
+
+        var editProject =
+            new ProjectMemberPermission(
+                projectMember.Id,
+                ProjectPermission.EditProject,
+                projectManager.Id);
+
+        var manageProjectMembers =
+            new ProjectMemberPermission(
+                projectMember.Id,
+                ProjectPermission.ManageProjectMembers,
+                projectManager.Id);
+
+        var manageProjectPermissions =
+            new ProjectMemberPermission(
+                projectMember.Id,
+                ProjectPermission.ManageProjectPermissions,
+                projectManager.Id);
+
+        await repository.AddAsync(
+            editProject);
+
+        await repository.AddAsync(
+            manageProjectMembers);
+
+        await repository.AddAsync(
+            manageProjectPermissions);
+
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var permissions =
+            await repository.GetActivePermissionsAsync(
+                projectMember.Id);
+
+        Assert.Equal(
+            3,
+            permissions.Count);
+
+        Assert.Equal(
+            new[]
+            {
+            ProjectPermission.EditProject,
+            ProjectPermission.ManageProjectMembers,
+            ProjectPermission.ManageProjectPermissions
+            },
+            permissions
+                .Select(permission =>
+                    permission.Permission)
+                .ToArray());
+
+        Assert.All(
+            permissions,
+            permission =>
+                Assert.Equal(
+                    projectManager.PublicId,
+                    permission.GrantedByUserPublicId));
+
+        Assert.True(
+            await repository.IsActivePermissionAsync(
+                projectMember.Id,
+                ProjectPermission.EditProject));
+
+        Assert.True(
+            await repository.IsActivePermissionAsync(
+                projectMember.Id,
+                ProjectPermission.ManageProjectMembers));
+
+        Assert.True(
+            await repository.IsActivePermissionAsync(
+                projectMember.Id,
+                ProjectPermission.ManageProjectPermissions));
+
+        await transaction.RollbackAsync();
+    }
 }

@@ -43,6 +43,9 @@ public class CreateProjectHandlerTests
         var projectMemberRepository =
             new FakeProjectMemberRepository();
 
+        var projectMemberPermissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var unitOfWork =
             new FakeUnitOfWork();
 
@@ -67,6 +70,7 @@ public class CreateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                projectMemberPermissionRepository,
                 unitOfWork);
 
         var dueDate =
@@ -164,6 +168,10 @@ public class CreateProjectHandlerTests
         Assert.True(
             addedMember.IsActive);
 
+        Assert.Empty(
+            projectMemberPermissionRepository
+                .AddedProjectMemberPermissions);
+
         Assert.Equal(
             addedProject.PublicId,
             response.PublicId);
@@ -213,40 +221,6 @@ public class CreateProjectHandlerTests
             unitOfWork.RollbackCallCount);
     }
 
-    private static Tenant CreatePersistedTenant()
-    {
-        var tenant =
-            new Tenant(
-                "Empresa de Teste",
-                "REG-CREATE-PROJECT",
-                "empresa@test.local");
-
-        EntityTestHelper.SetId(
-            tenant,
-            42);
-
-        return tenant;
-    }
-
-    private static User CreatePersistedUser(
-        long tenantId,
-        UserRole role)
-    {
-        var user =
-            new User(
-                tenantId,
-                "Usuário Criador",
-                "criador@test.local",
-                "password-hash",
-                role);
-
-        EntityTestHelper.SetId(
-            user,
-            84);
-
-        return user;
-    }
-
     [Fact]
     public async Task
     HandleAsync_ShouldReturnFailure_WhenTenantDoesNotExist()
@@ -272,6 +246,7 @@ public class CreateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                new FakeProjectMemberPermissionRepository(),
                 unitOfWork);
 
         var command =
@@ -352,6 +327,7 @@ public class CreateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                new FakeProjectMemberPermissionRepository(),
                 unitOfWork);
 
         var command =
@@ -433,6 +409,7 @@ public class CreateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                new FakeProjectMemberPermissionRepository(),
                 unitOfWork);
 
         var command =
@@ -526,6 +503,7 @@ public class CreateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                new FakeProjectMemberPermissionRepository(),
                 unitOfWork);
 
         var command =
@@ -617,6 +595,7 @@ public class CreateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                new FakeProjectMemberPermissionRepository(),
                 unitOfWork);
 
         var command =
@@ -671,7 +650,7 @@ public class CreateProjectHandlerTests
 
     [Fact]
     public async Task
-    HandleAsync_ShouldCreateProject_WhenCreatorIsProjectManager()
+    HandleAsync_ShouldCreateProjectAndDefaultPermissions_WhenCreatorIsProjectManager()
     {
         var tenant =
             CreatePersistedTenant();
@@ -699,6 +678,9 @@ public class CreateProjectHandlerTests
         var projectMemberRepository =
             new FakeProjectMemberRepository();
 
+        var projectMemberPermissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var unitOfWork =
             new FakeUnitOfWork();
 
@@ -714,6 +696,20 @@ public class CreateProjectHandlerTests
                     EntityTestHelper.SetId(
                         project,
                         100);
+
+                    return;
+                }
+
+                if (saveChangesCallCount == 2)
+                {
+                    var projectMember =
+                        Assert.IsType<ProjectMember>(
+                            projectMemberRepository
+                                .AddedProjectMember);
+
+                    EntityTestHelper.SetId(
+                        projectMember,
+                        200);
                 }
             };
 
@@ -723,6 +719,7 @@ public class CreateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                projectMemberPermissionRepository,
                 unitOfWork);
 
         var command =
@@ -734,7 +731,8 @@ public class CreateProjectHandlerTests
                 null);
 
         var result =
-            await handler.HandleAsync(command);
+            await handler.HandleAsync(
+                command);
 
         Assert.True(result.IsSuccess);
         Assert.False(result.IsFailure);
@@ -744,13 +742,13 @@ public class CreateProjectHandlerTests
             Assert.IsType<Project>(
                 projectRepository.AddedProject);
 
-        Assert.Equal(
-            creator.Id,
-            addedProject.CreatedByUserId);
-
         var addedMember =
             Assert.IsType<ProjectMember>(
                 projectMemberRepository.AddedProjectMember);
+
+        Assert.Equal(
+            creator.Id,
+            addedProject.CreatedByUserId);
 
         Assert.Equal(
             creator.Id,
@@ -761,11 +759,60 @@ public class CreateProjectHandlerTests
             addedMember.AddedByUserId);
 
         Assert.Equal(
+            200,
+            addedMember.Id);
+
+        Assert.Equal(
+            3,
+            projectMemberPermissionRepository
+                .AddedProjectMemberPermissions.Count);
+
+        Assert.Contains(
+            projectMemberPermissionRepository
+                .AddedProjectMemberPermissions,
+            permission =>
+                permission.ProjectMemberId ==
+                    addedMember.Id &&
+                permission.Permission ==
+                    ProjectPermission.EditProject &&
+                permission.GrantedByUserId ==
+                    creator.Id);
+
+        Assert.Contains(
+            projectMemberPermissionRepository
+                .AddedProjectMemberPermissions,
+            permission =>
+                permission.ProjectMemberId ==
+                    addedMember.Id &&
+                permission.Permission ==
+                    ProjectPermission.ManageProjectMembers &&
+                permission.GrantedByUserId ==
+                    creator.Id);
+
+        Assert.Contains(
+            projectMemberPermissionRepository
+                .AddedProjectMemberPermissions,
+            permission =>
+                permission.ProjectMemberId ==
+                    addedMember.Id &&
+                permission.Permission ==
+                    ProjectPermission.ManageProjectPermissions &&
+                permission.GrantedByUserId ==
+                    creator.Id);
+
+        Assert.All(
+            projectMemberPermissionRepository
+                .AddedProjectMemberPermissions,
+            permission =>
+                Assert.True(
+                    permission.IsActive));
+
+        Assert.Equal(
             1,
             unitOfWork.BeginTransactionCallCount);
 
         Assert.Equal(
-            2,
+            3,
             unitOfWork.SaveChangesCallCount);
 
         Assert.Equal(
@@ -839,6 +886,7 @@ public class CreateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                new FakeProjectMemberPermissionRepository(),
                 unitOfWork);
 
         var command =
@@ -905,6 +953,7 @@ public class CreateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                new FakeProjectMemberPermissionRepository(),
                 unitOfWork);
 
         var command =
@@ -969,6 +1018,7 @@ public class CreateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                new FakeProjectMemberPermissionRepository(),
                 unitOfWork);
 
         var command =
@@ -1047,6 +1097,7 @@ public class CreateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                new FakeProjectMemberPermissionRepository(),
                 unitOfWork);
 
         var command =
@@ -1132,6 +1183,7 @@ public class CreateProjectHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                new FakeProjectMemberPermissionRepository(),
                 unitOfWork);
 
         var command =
@@ -1171,5 +1223,161 @@ public class CreateProjectHandlerTests
         Assert.Equal(
             1,
             unitOfWork.RollbackCallCount);
+    }
+
+    [Fact]
+    public async Task
+    HandleAsync_ShouldRollbackTransaction_WhenSavingDefaultPermissionsFails()
+    {
+        var tenant =
+            CreatePersistedTenant();
+
+        var creator =
+            CreatePersistedUser(
+                tenant.Id,
+                UserRole.ProjectManager);
+
+        var tenantRepository =
+            new FakeTenantRepository
+            {
+                TenantToReturn = tenant
+            };
+
+        var userRepository =
+            new FakeUserRepository
+            {
+                UserToReturn = creator
+            };
+
+        var projectRepository =
+            new FakeProjectRepository();
+
+        var projectMemberRepository =
+            new FakeProjectMemberRepository();
+
+        var projectMemberPermissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
+        var unitOfWork =
+            new FakeUnitOfWork();
+
+        unitOfWork.OnSaveChanges =
+            saveChangesCallCount =>
+            {
+                if (saveChangesCallCount == 1)
+                {
+                    var project =
+                        Assert.IsType<Project>(
+                            projectRepository.AddedProject);
+
+                    EntityTestHelper.SetId(
+                        project,
+                        100);
+
+                    return;
+                }
+
+                if (saveChangesCallCount == 2)
+                {
+                    var projectMember =
+                        Assert.IsType<ProjectMember>(
+                            projectMemberRepository
+                                .AddedProjectMember);
+
+                    EntityTestHelper.SetId(
+                        projectMember,
+                        200);
+
+                    return;
+                }
+
+                if (saveChangesCallCount == 3)
+                {
+                    throw new InvalidOperationException(
+                        "Falha simulada ao salvar as permissões.");
+                }
+            };
+
+        var handler =
+            new CreateProjectHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository,
+                projectMemberRepository,
+                projectMemberPermissionRepository,
+                unitOfWork);
+
+        var command =
+            new CreateProjectCommand(
+                tenant.PublicId,
+                creator.PublicId,
+                "Projeto do Gerente",
+                null,
+                null);
+
+        var exception =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () =>
+                    handler.HandleAsync(
+                        command));
+
+        Assert.Equal(
+            "Falha simulada ao salvar as permissões.",
+            exception.Message);
+
+        Assert.Equal(
+            3,
+            projectMemberPermissionRepository
+                .AddedProjectMemberPermissions.Count);
+
+        Assert.Equal(
+            1,
+            unitOfWork.BeginTransactionCallCount);
+
+        Assert.Equal(
+            3,
+            unitOfWork.SaveChangesCallCount);
+
+        Assert.Equal(
+            0,
+            unitOfWork.CommitCallCount);
+
+        Assert.Equal(
+            1,
+            unitOfWork.RollbackCallCount);
+    }
+
+    private static Tenant CreatePersistedTenant()
+    {
+        var tenant =
+            new Tenant(
+                "Empresa de Teste",
+                "REG-CREATE-PROJECT",
+                "empresa@test.local");
+
+        EntityTestHelper.SetId(
+            tenant,
+            42);
+
+        return tenant;
+    }
+
+    private static User CreatePersistedUser(
+        long tenantId,
+        UserRole role)
+    {
+        var user =
+            new User(
+                tenantId,
+                "Usuário Criador",
+                "criador@test.local",
+                "password-hash",
+                role);
+
+        EntityTestHelper.SetId(
+            user,
+            84);
+
+        return user;
     }
 }

@@ -360,12 +360,15 @@ public sealed class ListProjectsControllerTests
     }
 
     private static ProjectsController CreateController(
-        FakeTenantRepository tenantRepository,
-        FakeUserRepository userRepository,
-        FakeProjectRepository projectRepository)
+    FakeTenantRepository tenantRepository,
+    FakeUserRepository userRepository,
+    FakeProjectRepository projectRepository)
     {
         var projectMemberRepository =
             new FakeProjectMemberRepository();
+
+        var projectMemberPermissionRepository =
+            new FakeProjectMemberPermissionRepository();
 
         var createProjectHandler =
             new CreateProjectHandler(
@@ -373,6 +376,7 @@ public sealed class ListProjectsControllerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                projectMemberPermissionRepository,
                 new FakeUnitOfWork());
 
         var getProjectByPublicIdHandler =
@@ -471,11 +475,15 @@ public sealed class ListProjectsControllerTests
         var projectMemberRepository =
             new FakeProjectMemberRepository();
 
+        var projectMemberPermissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         return new UpdateProjectHandler(
             tenantRepository,
             userRepository,
             projectRepository,
             projectMemberRepository,
+            projectMemberPermissionRepository,
             new FakeUnitOfWork());
     }
 }

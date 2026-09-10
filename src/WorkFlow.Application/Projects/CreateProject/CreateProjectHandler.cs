@@ -13,6 +13,8 @@ public sealed class CreateProjectHandler
     private readonly IUserRepository _userRepository;
     private readonly IProjectRepository _projectRepository;
     private readonly IProjectMemberRepository _projectMemberRepository;
+    private readonly IProjectMemberPermissionRepository
+        _projectMemberPermissionRepository;
     private readonly IUnitOfWork _unitOfWork;
 
     public CreateProjectHandler(
@@ -20,20 +22,35 @@ public sealed class CreateProjectHandler
         IUserRepository userRepository,
         IProjectRepository projectRepository,
         IProjectMemberRepository projectMemberRepository,
+        IProjectMemberPermissionRepository
+            projectMemberPermissionRepository,
         IUnitOfWork unitOfWork)
     {
-        _tenantRepository = tenantRepository;
-        _userRepository = userRepository;
-        _projectRepository = projectRepository;
-        _projectMemberRepository = projectMemberRepository;
-        _unitOfWork = unitOfWork;
+        _tenantRepository =
+            tenantRepository;
+
+        _userRepository =
+            userRepository;
+
+        _projectRepository =
+            projectRepository;
+
+        _projectMemberRepository =
+            projectMemberRepository;
+
+        _projectMemberPermissionRepository =
+            projectMemberPermissionRepository;
+
+        _unitOfWork =
+            unitOfWork;
     }
 
     public async Task<Result<CreateProjectResult>> HandleAsync(
         CreateProjectCommand command,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(
+            command);
 
         if (command.TenantPublicId == Guid.Empty)
         {
@@ -124,6 +141,34 @@ public sealed class CreateProjectHandler
 
             await _unitOfWork.SaveChangesAsync(
                 cancellationToken);
+
+            if (createdByUser.Role ==
+                UserRole.ProjectManager)
+            {
+                var defaultPermissions =
+                    new[]
+                    {
+                        ProjectPermission.EditProject,
+                        ProjectPermission.ManageProjectMembers,
+                        ProjectPermission.ManageProjectPermissions
+                    };
+
+                foreach (var permission in defaultPermissions)
+                {
+                    var projectMemberPermission =
+                        new ProjectMemberPermission(
+                            creatorMember.Id,
+                            permission,
+                            createdByUser.Id);
+
+                    await _projectMemberPermissionRepository.AddAsync(
+                        projectMemberPermission,
+                        cancellationToken);
+                }
+
+                await _unitOfWork.SaveChangesAsync(
+                    cancellationToken);
+            }
 
             await transaction.CommitAsync(
                 cancellationToken);

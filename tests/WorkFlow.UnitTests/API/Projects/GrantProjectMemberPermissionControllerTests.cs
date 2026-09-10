@@ -395,7 +395,7 @@ public sealed class GrantProjectMemberPermissionControllerTests
     }
 
     private static ProjectMembersController CreateController(
-        Fixture fixture)
+    Fixture fixture)
     {
         var addHandler =
             new AddProjectMemberHandler(
@@ -403,6 +403,7 @@ public sealed class GrantProjectMemberPermissionControllerTests
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
+                fixture.PermissionRepository,
                 fixture.UnitOfWork);
 
         var listHandler =
@@ -418,6 +419,7 @@ public sealed class GrantProjectMemberPermissionControllerTests
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
+                fixture.PermissionRepository,
                 fixture.UnitOfWork);
 
         var grantHandler =
@@ -435,7 +437,7 @@ public sealed class GrantProjectMemberPermissionControllerTests
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
-                new FakeProjectMemberPermissionRepository());
+                fixture.PermissionRepository);
 
         var revokePermissionHandler =
             new RevokeProjectMemberPermissionHandler(

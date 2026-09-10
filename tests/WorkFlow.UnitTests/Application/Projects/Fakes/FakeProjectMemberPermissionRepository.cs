@@ -49,6 +49,10 @@ internal sealed class FakeProjectMemberPermissionRepository :
         AddedProjectMemberPermission
     { get; private set; }
 
+    public List<ProjectMemberPermission>
+        AddedProjectMemberPermissions
+    { get; } = new();
+
     public Task<bool> IsActivePermissionAsync(
         long projectMemberId,
         ProjectPermission permission,
@@ -107,6 +111,9 @@ internal sealed class FakeProjectMemberPermissionRepository :
     {
         AddedProjectMemberPermission =
             projectMemberPermission;
+
+        AddedProjectMemberPermissions.Add(
+            projectMemberPermission);
 
         return Task.CompletedTask;
     }

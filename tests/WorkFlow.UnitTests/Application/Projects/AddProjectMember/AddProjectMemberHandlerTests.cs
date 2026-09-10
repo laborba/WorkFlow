@@ -82,39 +82,51 @@ public sealed class AddProjectMemberHandlerTests
                     .IsActiveMemberCalls);
 
         Assert.Equal(
-            (fixture.Project.Id, fixture.UserToAdd.Id),
+            (
+                fixture.Project.Id,
+                fixture.UserToAdd.Id
+            ),
             membershipCall);
+
+        Assert.Empty(
+            fixture.ProjectMemberRepository
+                .GetActiveCalls);
+
+        Assert.Empty(
+            fixture.PermissionRepository
+                .IsActivePermissionCalls);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(UserRole.ProjectManager)]
+    [InlineData(UserRole.Member)]
     public async Task
-    HandleAsync_ShouldAddMember_WhenRequesterIsActiveProjectManager()
+    HandleAsync_ShouldAddMember_WhenRequesterHasManageProjectMembersPermission(
+        UserRole requesterRole)
     {
         var fixture =
             CreateFixture(
-                UserRole.ProjectManager);
+                requesterRole);
 
-        fixture.ProjectMemberRepository
-            .IsActiveMemberResults[
-                (fixture.Project.Id, fixture.Requester.Id)] =
-            true;
-
-        fixture.ProjectMemberRepository
-            .IsActiveMemberResults[
-                (fixture.Project.Id, fixture.UserToAdd.Id)] =
-            false;
+        GrantManageProjectMembersPermission(
+            fixture);
 
         var result =
             await fixture.Handler.HandleAsync(
                 CreateCommand(fixture));
 
-        Assert.True(
-            result.IsSuccess);
+        Assert.True(result.IsSuccess);
+        Assert.False(result.IsFailure);
+        Assert.Null(result.Error);
 
         var addedMember =
             Assert.IsType<ProjectMember>(
                 fixture.ProjectMemberRepository
                     .AddedProjectMember);
+
+        Assert.Equal(
+            fixture.Project.Id,
+            addedMember.ProjectId);
 
         Assert.Equal(
             fixture.UserToAdd.Id,
@@ -124,20 +136,41 @@ public sealed class AddProjectMemberHandlerTests
             fixture.Requester.Id,
             addedMember.AddedByUserId);
 
+        var requesterMembershipCall =
+            Assert.Single(
+                fixture.ProjectMemberRepository
+                    .GetActiveCalls);
+
         Assert.Equal(
-            2,
-            fixture.ProjectMemberRepository
-                .IsActiveMemberCalls.Count);
+            (
+                fixture.Project.Id,
+                fixture.Requester.Id
+            ),
+            requesterMembershipCall);
 
-        Assert.Contains(
-            (fixture.Project.Id, fixture.Requester.Id),
-            fixture.ProjectMemberRepository
-                .IsActiveMemberCalls);
+        var permissionCall =
+            Assert.Single(
+                fixture.PermissionRepository
+                    .IsActivePermissionCalls);
 
-        Assert.Contains(
-            (fixture.Project.Id, fixture.UserToAdd.Id),
-            fixture.ProjectMemberRepository
-                .IsActiveMemberCalls);
+        Assert.Equal(
+            (
+                fixture.RequesterProjectMember.Id,
+                ProjectPermission.ManageProjectMembers
+            ),
+            permissionCall);
+
+        var targetMembershipCall =
+            Assert.Single(
+                fixture.ProjectMemberRepository
+                    .IsActiveMemberCalls);
+
+        Assert.Equal(
+            (
+                fixture.Project.Id,
+                fixture.UserToAdd.Id
+            ),
+            targetMembershipCall);
 
         Assert.Equal(
             1,
@@ -153,16 +186,20 @@ public sealed class AddProjectMemberHandlerTests
                 UserRole.ProjectManager);
 
         fixture.ProjectMemberRepository
-            .IsActiveMemberResults[
-                (fixture.Project.Id, fixture.Requester.Id)] =
-            false;
+            .ActiveMembersToReturn
+            .Remove(
+                (
+                    fixture.Project.Id,
+                    fixture.Requester.Id
+                ));
 
         var result =
             await fixture.Handler.HandleAsync(
                 CreateCommand(fixture));
 
-        Assert.True(
-            result.IsFailure);
+        Assert.True(result.IsFailure);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
 
         Assert.Equal(
             ProjectMemberErrors.AddNotAllowed,
@@ -175,47 +212,86 @@ public sealed class AddProjectMemberHandlerTests
         var membershipCall =
             Assert.Single(
                 fixture.ProjectMemberRepository
-                    .IsActiveMemberCalls);
+                    .GetActiveCalls);
 
         Assert.Equal(
-            (fixture.Project.Id, fixture.Requester.Id),
+            (
+                fixture.Project.Id,
+                fixture.Requester.Id
+            ),
             membershipCall);
+
+        Assert.Empty(
+            fixture.PermissionRepository
+                .IsActivePermissionCalls);
 
         Assert.Single(
             fixture.UserRepository
                 .CheckedGetByPublicIdCalls);
+
+        Assert.Empty(
+            fixture.ProjectMemberRepository
+                .IsActiveMemberCalls);
 
         Assert.Equal(
             0,
             fixture.UnitOfWork.SaveChangesCallCount);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(UserRole.ProjectManager)]
+    [InlineData(UserRole.Member)]
     public async Task
-    HandleAsync_ShouldReturnFailure_WhenRequesterIsMember()
+    HandleAsync_ShouldReturnFailure_WhenRequesterDoesNotHaveManageProjectMembersPermission(
+        UserRole requesterRole)
     {
         var fixture =
             CreateFixture(
-                UserRole.Member);
+                requesterRole);
 
         var result =
             await fixture.Handler.HandleAsync(
                 CreateCommand(fixture));
 
-        Assert.True(
-            result.IsFailure);
+        Assert.True(result.IsFailure);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
 
         Assert.Equal(
             ProjectMemberErrors.AddNotAllowed,
             result.Error);
 
-        Assert.Empty(
-            fixture.ProjectMemberRepository
-                .IsActiveMemberCalls);
-
         Assert.Null(
             fixture.ProjectMemberRepository
                 .AddedProjectMember);
+
+        var membershipCall =
+            Assert.Single(
+                fixture.ProjectMemberRepository
+                    .GetActiveCalls);
+
+        Assert.Equal(
+            (
+                fixture.Project.Id,
+                fixture.Requester.Id
+            ),
+            membershipCall);
+
+        var permissionCall =
+            Assert.Single(
+                fixture.PermissionRepository
+                    .IsActivePermissionCalls);
+
+        Assert.Equal(
+            (
+                fixture.RequesterProjectMember.Id,
+                ProjectPermission.ManageProjectMembers
+            ),
+            permissionCall);
+
+        Assert.Empty(
+            fixture.ProjectMemberRepository
+                .IsActiveMemberCalls);
 
         Assert.Single(
             fixture.UserRepository
@@ -240,12 +316,21 @@ public sealed class AddProjectMemberHandlerTests
             await fixture.Handler.HandleAsync(
                 CreateCommand(fixture));
 
-        Assert.True(
-            result.IsFailure);
+        Assert.True(result.IsFailure);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
 
         Assert.Equal(
             ProjectErrors.Archived,
             result.Error);
+
+        Assert.Empty(
+            fixture.ProjectMemberRepository
+                .GetActiveCalls);
+
+        Assert.Empty(
+            fixture.PermissionRepository
+                .IsActivePermissionCalls);
 
         Assert.Empty(
             fixture.ProjectMemberRepository
@@ -281,8 +366,9 @@ public sealed class AddProjectMemberHandlerTests
             await fixture.Handler.HandleAsync(
                 CreateCommand(fixture));
 
-        Assert.True(
-            result.IsFailure);
+        Assert.True(result.IsFailure);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
 
         Assert.Equal(
             UserErrors.NotFound,
@@ -292,6 +378,14 @@ public sealed class AddProjectMemberHandlerTests
             2,
             fixture.UserRepository
                 .CheckedGetByPublicIdCalls.Count);
+
+        Assert.Empty(
+            fixture.ProjectMemberRepository
+                .GetActiveCalls);
+
+        Assert.Empty(
+            fixture.PermissionRepository
+                .IsActivePermissionCalls);
 
         Assert.Empty(
             fixture.ProjectMemberRepository
@@ -320,12 +414,21 @@ public sealed class AddProjectMemberHandlerTests
             await fixture.Handler.HandleAsync(
                 CreateCommand(fixture));
 
-        Assert.True(
-            result.IsFailure);
+        Assert.True(result.IsFailure);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
 
         Assert.Equal(
             UserErrors.Inactive,
             result.Error);
+
+        Assert.Empty(
+            fixture.ProjectMemberRepository
+                .GetActiveCalls);
+
+        Assert.Empty(
+            fixture.PermissionRepository
+                .IsActivePermissionCalls);
 
         Assert.Empty(
             fixture.ProjectMemberRepository
@@ -350,15 +453,19 @@ public sealed class AddProjectMemberHandlerTests
 
         fixture.ProjectMemberRepository
             .IsActiveMemberResults[
-                (fixture.Project.Id, fixture.UserToAdd.Id)] =
-            true;
+                (
+                    fixture.Project.Id,
+                    fixture.UserToAdd.Id
+                )] =
+                    true;
 
         var result =
             await fixture.Handler.HandleAsync(
                 CreateCommand(fixture));
 
-        Assert.True(
-            result.IsFailure);
+        Assert.True(result.IsFailure);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
 
         Assert.Equal(
             ProjectMemberErrors.AlreadyActive,
@@ -370,7 +477,10 @@ public sealed class AddProjectMemberHandlerTests
                     .IsActiveMemberCalls);
 
         Assert.Equal(
-            (fixture.Project.Id, fixture.UserToAdd.Id),
+            (
+                fixture.Project.Id,
+                fixture.UserToAdd.Id
+            ),
             membershipCall);
 
         Assert.Null(
@@ -397,8 +507,9 @@ public sealed class AddProjectMemberHandlerTests
             await fixture.Handler.HandleAsync(
                 CreateCommand(fixture));
 
-        Assert.True(
-            result.IsFailure);
+        Assert.True(result.IsFailure);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
 
         Assert.Equal(
             TenantErrors.NotFound,
@@ -431,8 +542,9 @@ public sealed class AddProjectMemberHandlerTests
             await fixture.Handler.HandleAsync(
                 CreateCommand(fixture));
 
-        Assert.True(
-            result.IsFailure);
+        Assert.True(result.IsFailure);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
 
         Assert.Equal(
             TenantErrors.Inactive,
@@ -464,8 +576,9 @@ public sealed class AddProjectMemberHandlerTests
             await fixture.Handler.HandleAsync(
                 CreateCommand(fixture));
 
-        Assert.True(
-            result.IsFailure);
+        Assert.True(result.IsFailure);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
 
         Assert.Equal(
             UserErrors.NotFound,
@@ -498,8 +611,9 @@ public sealed class AddProjectMemberHandlerTests
             await fixture.Handler.HandleAsync(
                 CreateCommand(fixture));
 
-        Assert.True(
-            result.IsFailure);
+        Assert.True(result.IsFailure);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
 
         Assert.Equal(
             UserErrors.Inactive,
@@ -533,8 +647,9 @@ public sealed class AddProjectMemberHandlerTests
             await fixture.Handler.HandleAsync(
                 CreateCommand(fixture));
 
-        Assert.True(
-            result.IsFailure);
+        Assert.True(result.IsFailure);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
 
         Assert.Equal(
             ProjectErrors.NotFound,
@@ -562,8 +677,9 @@ public sealed class AddProjectMemberHandlerTests
                 UserRole.TenantAdmin);
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => fixture.Handler.HandleAsync(
-                null!));
+            () =>
+                fixture.Handler.HandleAsync(
+                    null!));
 
         Assert.Null(
             fixture.ProjectMemberRepository
@@ -603,8 +719,9 @@ public sealed class AddProjectMemberHandlerTests
                     : fixture.UserToAdd.PublicId);
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => fixture.Handler.HandleAsync(
-                command));
+            () =>
+                fixture.Handler.HandleAsync(
+                    command));
 
         Assert.Null(
             fixture.ProjectMemberRepository
@@ -662,6 +779,16 @@ public sealed class AddProjectMemberHandlerTests
             project,
             100);
 
+        var requesterProjectMember =
+            new ProjectMember(
+                project.Id,
+                requester.Id,
+                requester.Id);
+
+        EntityTestHelper.SetId(
+            requesterProjectMember,
+            1000);
+
         var tenantRepository =
             new FakeTenantRepository
             {
@@ -674,12 +801,12 @@ public sealed class AddProjectMemberHandlerTests
         userRepository
             .UsersByPublicIdToReturn[
                 requester.PublicId] =
-            requester;
+                    requester;
 
         userRepository
             .UsersByPublicIdToReturn[
                 userToAdd.PublicId] =
-            userToAdd;
+                    userToAdd;
 
         var projectRepository =
             new FakeProjectRepository
@@ -690,6 +817,17 @@ public sealed class AddProjectMemberHandlerTests
         var projectMemberRepository =
             new FakeProjectMemberRepository();
 
+        projectMemberRepository
+            .ActiveMembersToReturn[
+                (
+                    project.Id,
+                    requester.Id
+                )] =
+                    requesterProjectMember;
+
+        var permissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var unitOfWork =
             new FakeUnitOfWork();
 
@@ -699,6 +837,7 @@ public sealed class AddProjectMemberHandlerTests
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                permissionRepository,
                 unitOfWork);
 
         return new Fixture(
@@ -706,12 +845,26 @@ public sealed class AddProjectMemberHandlerTests
             requester,
             userToAdd,
             project,
+            requesterProjectMember,
             tenantRepository,
             userRepository,
             projectRepository,
             projectMemberRepository,
+            permissionRepository,
             unitOfWork,
             handler);
+    }
+
+    private static void GrantManageProjectMembersPermission(
+        Fixture fixture)
+    {
+        fixture.PermissionRepository
+            .IsActivePermissionResults[
+                (
+                    fixture.RequesterProjectMember.Id,
+                    ProjectPermission.ManageProjectMembers
+                )] =
+                    true;
     }
 
     private static AddProjectMemberCommand CreateCommand(
@@ -729,10 +882,12 @@ public sealed class AddProjectMemberHandlerTests
         User Requester,
         User UserToAdd,
         Project Project,
+        ProjectMember RequesterProjectMember,
         FakeTenantRepository TenantRepository,
         FakeUserRepository UserRepository,
         FakeProjectRepository ProjectRepository,
         FakeProjectMemberRepository ProjectMemberRepository,
+        FakeProjectMemberPermissionRepository PermissionRepository,
         FakeUnitOfWork UnitOfWork,
         AddProjectMemberHandler Handler);
 }

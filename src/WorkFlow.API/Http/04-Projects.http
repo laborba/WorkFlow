@@ -251,8 +251,8 @@ Accept: application/json
 ###
 ### Regras:
 ### - TenantAdmin pode atualizar qualquer projeto do próprio Tenant.
-### - ProjectManager pode atualizar somente projetos em que possui participação ativa.
-### - Member não pode atualizar projetos nesta vertical.
+### - ProjectManager e Member precisam possuir participação ativa no projeto.
+### - ProjectManager e Member precisam possuir EditProject.
 ### - Projetos Archived não podem ser atualizados.
 ### - Status e responsável não são alterados por este endpoint.
 ### ============================================================
@@ -276,7 +276,7 @@ Authorization: Bearer {{tenantAdminToken}}
 Accept: application/json
 
 
-### Projects - ProjectManager atualizar projeto com participação ativa - deve retornar 200 OK
+### Projects - ProjectManager com EditProject atualizar projeto - deve retornar 200 OK
 PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}
 Authorization: Bearer {{projectManagerToken}}
 Content-Type: application/json
@@ -314,7 +314,7 @@ Authorization: Bearer {{tenantAdminToken}}
 Accept: application/json
 
 
-### Projects - Member tentando atualizar projeto - deve retornar 403 Forbidden
+### Projects - Member sem EditProject tentando atualizar projeto - deve retornar 403 Forbidden
 PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}
 Authorization: Bearer {{memberToken}}
 Content-Type: application/json
@@ -396,8 +396,8 @@ Accept: application/json
 ###
 ### Regras:
 ### - TenantAdmin pode adicionar membros a qualquer projeto do próprio Tenant.
-### - ProjectManager pode adicionar membros somente se possuir participação ativa.
-### - Member não pode adicionar membros, mesmo participando do projeto.
+### - ProjectManager e Member precisam possuir participação ativa no projeto.
+### - ProjectManager e Member precisam possuir ManageProjectMembers.
 ### - SystemAdmin não possui acesso operacional aos projetos do Tenant.
 ### - Usuário adicionado deve existir no mesmo Tenant e estar ativo.
 ### - Não pode existir mais de uma participação ativa para o mesmo usuário no mesmo projeto.
@@ -431,7 +431,7 @@ Accept: application/json
 }
 
 
-### Projects - ProjectManager adicionar membro ao próprio projeto - deve retornar 201 Created
+### Projects - ProjectManager com ManageProjectMembers adicionar membro ao próprio projeto - deve retornar 201 Created
 POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members
 Authorization: Bearer {{projectManagerToken}}
 Content-Type: application/json
@@ -453,7 +453,7 @@ Accept: application/json
 }
 
 
-### Projects - Member ativo tentando adicionar outro membro - deve retornar 403 Forbidden
+### Projects - Member sem ManageProjectMembers tentando adicionar outro membro - deve retornar 403 Forbidden
 POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members
 Authorization: Bearer {{memberToken}}
 Content-Type: application/json
@@ -655,15 +655,15 @@ Accept: application/json
 ###
 ### Regras:
 ### - TenantAdmin pode remover membros de qualquer projeto do próprio Tenant.
-### - ProjectManager pode remover membros somente de projetos onde possui participação ativa.
-### - Member não pode remover membros.
+### - ProjectManager e Member precisam possuir participação ativa no projeto.
+### - ProjectManager e Member precisam possuir ManageProjectMembers.
 ### - A remoção é lógica através de RemovedAt.
 ### - Participações removidas permanecem preservadas.
 ### - Projetos arquivados não permitem remoção de membros.
 ### ============================================================
 
 
-### Projects - Member tentando remover outro membro - deve retornar 403 Forbidden
+### Projects - Member sem ManageProjectMembers tentando remover outro membro - deve retornar 403 Forbidden
 DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{segundoUsuarioPublicId}}
 Authorization: Bearer {{memberToken}}
 Accept: application/json
@@ -757,7 +757,7 @@ Authorization: Bearer {{memberToken}}
 Accept: application/json
 
 
-### Projects - ProjectManager remover membro do próprio projeto - deve retornar 200 OK
+### Projects - ProjectManager com ManageProjectMembers remover membro do próprio projeto - deve retornar 200 OK
 DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members/{{usuarioConsultaPublicId}}
 Authorization: Bearer {{projectManagerToken}}
 Accept: application/json
@@ -820,7 +820,7 @@ Accept: application/json
 }
 
 
-### Projects - ProjectManager ativo sem ManageProjectPermissions tentar conceder permissão - deve retornar 403 Forbidden
+### Projects - ProjectManager com ManageProjectPermissions conceder CreateTask - deve retornar 201 Created
 POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members/{{usuarioConsultaPublicId}}/permissions
 Authorization: Bearer {{projectManagerToken}}
 Content-Type: application/json
@@ -986,13 +986,13 @@ Authorization: Bearer {{memberToken}}
 Accept: application/json
 
 
-### Projects - ProjectManager sem ManageProjectPermissions listar permissões - deve retornar 403 Forbidden
+### Projects - ProjectManager com ManageProjectPermissions listar permissões - deve retornar 200 OK com CreateTask
 GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members/{{usuarioConsultaPublicId}}/permissions
 Authorization: Bearer {{projectManagerToken}}
 Accept: application/json
 
 
-### Projects - TenantAdmin listar permissões de membro sem permissões ativas - deve retornar 200 OK com lista vazia
+### Projects - TenantAdmin listar permissão concedida pelo ProjectManager - deve retornar 200 OK com CreateTask
 GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members/{{usuarioConsultaPublicId}}/permissions
 Authorization: Bearer {{tenantAdminToken}}
 Accept: application/json
@@ -1112,8 +1112,8 @@ Authorization: Bearer {{memberToken}}
 Accept: application/json
 
 
-### Projects - ProjectManager sem ManageProjectPermissions tentar revogar permissão - deve retornar 403 Forbidden
-DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members/{{usuarioConsultaPublicId}}/permissions/1
+### Projects - ProjectManager com ManageProjectPermissions revogar CreateTask - deve retornar 200 OK
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/members/{{usuarioConsultaPublicId}}/permissions/7
 Authorization: Bearer {{projectManagerToken}}
 Accept: application/json
 

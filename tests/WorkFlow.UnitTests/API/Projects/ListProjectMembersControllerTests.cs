@@ -391,12 +391,16 @@ public sealed class ListProjectMembersControllerTests
         var unitOfWork =
             new FakeUnitOfWork();
 
+        var permissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
         var addProjectMemberHandler =
             new AddProjectMemberHandler(
                 fixture.TenantRepository,
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
+                permissionRepository,
                 unitOfWork);
 
         var listProjectMembersHandler =
@@ -412,10 +416,8 @@ public sealed class ListProjectMembersControllerTests
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
+                permissionRepository,
                 unitOfWork);
-
-        var permissionRepository =
-            new FakeProjectMemberPermissionRepository();
 
         var grantPermissionHandler =
             new GrantProjectMemberPermissionHandler(
