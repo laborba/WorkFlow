@@ -4,14 +4,14 @@ using WorkFlow.Domain.Enums;
 using WorkFlow.Infrastructure.Persistence.Repositories;
 using WorkFlow.IntegrationTests.Infrastructure;
 
-namespace WorkFlow.IntegrationTests.Persistence;
+namespace WorkFlow.IntegrationTests.Persistence.Projects;
 
 [Collection(TestCollectionNames.PostgreSql)]
-public sealed class AddProjectMemberPersistenceTests
+public sealed class RemoveProjectMemberPersistenceTests
 {
     private readonly PostgreSqlTestDatabase _database;
 
-    public AddProjectMemberPersistenceTests(
+    public RemoveProjectMemberPersistenceTests(
         PostgreSqlTestDatabase database)
     {
         _database = database;
@@ -19,7 +19,7 @@ public sealed class AddProjectMemberPersistenceTests
 
     [Fact]
     public async Task
-    AddAsync_ShouldRejectSecondActiveMembershipForSameProjectAndUser()
+    GetActiveForUpdateAsync_ShouldReturnTrackedMemberAndPersistRemoval()
     {
         await using var context =
             _database.CreateDbContext();
@@ -41,7 +41,7 @@ public sealed class AddProjectMemberPersistenceTests
 
         await context.SaveChangesAsync();
 
-        var addedByUser =
+        var admin =
             new User(
                 tenant.Id,
                 "Administrador",
@@ -49,7 +49,7 @@ public sealed class AddProjectMemberPersistenceTests
                 "password-hash",
                 UserRole.TenantAdmin);
 
-        var memberUser =
+        var member =
             new User(
                 tenant.Id,
                 "Membro",
@@ -58,8 +58,8 @@ public sealed class AddProjectMemberPersistenceTests
                 UserRole.Member);
 
         context.Users.AddRange(
-            addedByUser,
-            memberUser);
+            admin,
+            member);
 
         await context.SaveChangesAsync();
 
@@ -67,10 +67,21 @@ public sealed class AddProjectMemberPersistenceTests
             new Project(
                 tenant.Id,
                 $"Projeto {uniqueValue}",
-                addedByUser.Id);
+                admin.Id);
 
         context.Projects.Add(
             project);
+
+        await context.SaveChangesAsync();
+
+        var projectMember =
+            new ProjectMember(
+                project.Id,
+                member.Id,
+                admin.Id);
+
+        context.ProjectMembers.Add(
+            projectMember);
 
         await context.SaveChangesAsync();
 
@@ -78,35 +89,48 @@ public sealed class AddProjectMemberPersistenceTests
             new ProjectMemberRepository(
                 context);
 
-        var firstMembership =
-            new ProjectMember(
+        var trackedMember =
+            await repository.GetActiveForUpdateAsync(
                 project.Id,
-                memberUser.Id,
-                addedByUser.Id);
+                member.Id);
 
-        await repository.AddAsync(
-            firstMembership);
+        Assert.NotNull(
+            trackedMember);
+
+        Assert.Null(
+            trackedMember.RemovedAt);
+
+        trackedMember.Remove();
 
         await context.SaveChangesAsync();
 
-        var secondMembership =
-            new ProjectMember(
+        context.ChangeTracker.Clear();
+
+        var persistedMember =
+            await context.ProjectMembers
+                .AsNoTracking()
+                .SingleAsync(
+                    item =>
+                        item.ProjectId == project.Id &&
+                        item.UserId == member.Id);
+
+        Assert.NotNull(
+            persistedMember.RemovedAt);
+
+        var isActive =
+            await repository.IsActiveMemberAsync(
                 project.Id,
-                memberUser.Id,
-                addedByUser.Id);
+                member.Id);
 
-        await repository.AddAsync(
-            secondMembership);
-
-        await Assert.ThrowsAsync<DbUpdateException>(
-            () => context.SaveChangesAsync());
+        Assert.False(
+            isActive);
 
         await transaction.RollbackAsync();
     }
 
     [Fact]
     public async Task
-    AddAsync_ShouldAllowNewMembershipAfterPreviousMembershipWasRemoved()
+    GetActiveForUpdateAsync_ShouldReturnNull_WhenMembershipWasAlreadyRemoved()
     {
         await using var context =
             _database.CreateDbContext();
@@ -128,7 +152,7 @@ public sealed class AddProjectMemberPersistenceTests
 
         await context.SaveChangesAsync();
 
-        var addedByUser =
+        var admin =
             new User(
                 tenant.Id,
                 "Administrador",
@@ -136,7 +160,7 @@ public sealed class AddProjectMemberPersistenceTests
                 "password-hash",
                 UserRole.TenantAdmin);
 
-        var memberUser =
+        var member =
             new User(
                 tenant.Id,
                 "Membro",
@@ -145,8 +169,8 @@ public sealed class AddProjectMemberPersistenceTests
                 UserRole.Member);
 
         context.Users.AddRange(
-            addedByUser,
-            memberUser);
+            admin,
+            member);
 
         await context.SaveChangesAsync();
 
@@ -154,10 +178,23 @@ public sealed class AddProjectMemberPersistenceTests
             new Project(
                 tenant.Id,
                 $"Projeto {uniqueValue}",
-                addedByUser.Id);
+                admin.Id);
 
         context.Projects.Add(
             project);
+
+        await context.SaveChangesAsync();
+
+        var projectMember =
+            new ProjectMember(
+                project.Id,
+                member.Id,
+                admin.Id);
+
+        projectMember.Remove();
+
+        context.ProjectMembers.Add(
+            projectMember);
 
         await context.SaveChangesAsync();
 
@@ -165,64 +202,13 @@ public sealed class AddProjectMemberPersistenceTests
             new ProjectMemberRepository(
                 context);
 
-        var firstMembership =
-            new ProjectMember(
+        var result =
+            await repository.GetActiveForUpdateAsync(
                 project.Id,
-                memberUser.Id,
-                addedByUser.Id);
+                member.Id);
 
-        await repository.AddAsync(
-            firstMembership);
-
-        await context.SaveChangesAsync();
-
-        firstMembership.Remove();
-
-        await context.SaveChangesAsync();
-
-        var secondMembership =
-            new ProjectMember(
-                project.Id,
-                memberUser.Id,
-                addedByUser.Id);
-
-        await repository.AddAsync(
-            secondMembership);
-
-        await context.SaveChangesAsync();
-
-        context.ChangeTracker.Clear();
-
-        var persistedMemberships =
-            await context.ProjectMembers
-                .AsNoTracking()
-                .Where(member =>
-                    member.ProjectId == project.Id &&
-                    member.UserId == memberUser.Id)
-                .OrderBy(member => member.Id)
-                .ToListAsync();
-
-        Assert.Equal(
-            2,
-            persistedMemberships.Count);
-
-        Assert.Single(
-            persistedMemberships.Where(
-                member =>
-                    member.RemovedAt is not null));
-
-        Assert.Single(
-            persistedMemberships.Where(
-                member =>
-                    member.RemovedAt is null));
-
-        var isActiveMember =
-            await repository.IsActiveMemberAsync(
-                project.Id,
-                memberUser.Id);
-
-        Assert.True(
-            isActiveMember);
+        Assert.Null(
+            result);
 
         await transaction.RollbackAsync();
     }

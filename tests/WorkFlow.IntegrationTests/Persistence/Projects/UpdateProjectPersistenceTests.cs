@@ -4,7 +4,7 @@ using WorkFlow.Domain.Enums;
 using WorkFlow.Infrastructure.Persistence.Repositories;
 using WorkFlow.IntegrationTests.Infrastructure;
 
-namespace WorkFlow.IntegrationTests.Persistence;
+namespace WorkFlow.IntegrationTests.Persistence.Projects;
 
 [Collection(TestCollectionNames.PostgreSql)]
 public sealed class UpdateProjectPersistenceTests

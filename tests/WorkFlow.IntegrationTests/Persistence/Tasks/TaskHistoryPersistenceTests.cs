@@ -4,7 +4,7 @@ using WorkFlow.Domain.Enums;
 using WorkFlow.IntegrationTests.Infrastructure;
 using Xunit;
 
-namespace WorkFlow.IntegrationTests.Persistence;
+namespace WorkFlow.IntegrationTests.Persistence.Tasks;
 
 [Collection(TestCollectionNames.PostgreSql)]
 public sealed class TaskHistoryPersistenceTests

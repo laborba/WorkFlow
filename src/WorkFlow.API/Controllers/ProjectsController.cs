@@ -3,15 +3,19 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using WorkFlow.API.Authorization;
 using WorkFlow.API.Contracts.Common;
+using WorkFlow.Application.Common.Errors;
 using WorkFlow.API.Contracts.Projects;
 using WorkFlow.Application.Projects;
 using WorkFlow.Application.Projects.CreateProject;
 using WorkFlow.Application.Projects.GetProjectByPublicId;
 using WorkFlow.Application.Projects.ListProjects;
+using WorkFlow.Application.Projects.PauseProject;
+using WorkFlow.Application.Projects.ResumeProject;
+using WorkFlow.Application.Projects.StartProject;
+using WorkFlow.Application.Projects.UpdateProject;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Enums;
-using WorkFlow.Application.Projects.UpdateProject;
 
 namespace WorkFlow.API.Controllers;
 
@@ -32,11 +36,23 @@ public sealed class ProjectsController :
     private readonly UpdateProjectHandler
         _updateProjectHandler;
 
+    private readonly StartProjectHandler
+        _startProjectHandler;
+
+    private readonly PauseProjectHandler
+        _pauseProjectHandler;
+
+    private readonly ResumeProjectHandler
+        _resumeProjectHandler;
+
     public ProjectsController(
         CreateProjectHandler createProjectHandler,
         GetProjectByPublicIdHandler getProjectByPublicIdHandler,
         ListProjectsHandler listProjectsHandler,
-        UpdateProjectHandler updateProjectHandler)
+        UpdateProjectHandler updateProjectHandler,
+        StartProjectHandler startProjectHandler,
+        PauseProjectHandler pauseProjectHandler,
+        ResumeProjectHandler resumeProjectHandler)
     {
         _createProjectHandler =
             createProjectHandler;
@@ -49,6 +65,15 @@ public sealed class ProjectsController :
 
         _updateProjectHandler =
             updateProjectHandler;
+
+        _startProjectHandler =
+            startProjectHandler;
+
+        _pauseProjectHandler =
+            pauseProjectHandler;
+
+        _resumeProjectHandler =
+            resumeProjectHandler;
     }
 
     [Authorize(
@@ -471,5 +496,218 @@ public sealed class ProjectsController :
 
         return Ok(
             response);
+    }
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpPatch("{projectPublicId:guid}/start")]
+    [ProducesResponseType<ProjectStatusResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ProjectStatusResponse>> Start(
+        Guid tenantPublicId,
+        Guid projectPublicId,
+        CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var userPublicId))
+        {
+            return Unauthorized();
+        }
+
+        var command =
+            new StartProjectCommand(
+                tenantPublicId,
+                projectPublicId,
+                userPublicId);
+
+        var result =
+            await _startProjectHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return MapProjectStatusError(
+                result.Error!);
+        }
+
+        return Ok(
+            CreateProjectStatusResponse(
+                result.Value!));
+    }
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpPatch("{projectPublicId:guid}/pause")]
+    [ProducesResponseType<ProjectStatusResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ProjectStatusResponse>> Pause(
+        Guid tenantPublicId,
+        Guid projectPublicId,
+        [FromBody] PauseProjectRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var userPublicId))
+        {
+            return Unauthorized();
+        }
+
+        var command =
+            new PauseProjectCommand(
+                tenantPublicId,
+                projectPublicId,
+                userPublicId,
+                request.Reason);
+
+        var result =
+            await _pauseProjectHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return MapProjectStatusError(
+                result.Error!);
+        }
+
+        return Ok(
+            CreateProjectStatusResponse(
+                result.Value!));
+    }
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpPatch("{projectPublicId:guid}/resume")]
+    [ProducesResponseType<ProjectStatusResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ProjectStatusResponse>> Resume(
+        Guid tenantPublicId,
+        Guid projectPublicId,
+        [FromBody] ResumeProjectRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var userPublicId))
+        {
+            return Unauthorized();
+        }
+
+        var command =
+            new ResumeProjectCommand(
+                tenantPublicId,
+                projectPublicId,
+                userPublicId,
+                request.NewDueDate);
+
+        var result =
+            await _resumeProjectHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return MapProjectStatusError(
+                result.Error!);
+        }
+
+        return Ok(
+            CreateProjectStatusResponse(
+                result.Value!));
+    }
+
+    private ActionResult<ProjectStatusResponse>
+        MapProjectStatusError(
+            Error error)
+    {
+        var errorResponse =
+            new ErrorResponse(
+                error.Code,
+                error.Message);
+
+        if (error == TenantErrors.NotFound ||
+            error == UserErrors.NotFound ||
+            error == ProjectErrors.NotFound)
+        {
+            return NotFound(
+                errorResponse);
+        }
+
+        if (error == TenantErrors.Inactive ||
+            error == ProjectErrors.InvalidStatusTransition ||
+            error == ProjectErrors.Archived)
+        {
+            return Conflict(
+                errorResponse);
+        }
+
+        if (error == UserErrors.Inactive ||
+            error == ProjectErrors.StatusChangeNotAllowed)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                errorResponse);
+        }
+
+        return BadRequest(
+            errorResponse);
+    }
+
+    private static ProjectStatusResponse
+        CreateProjectStatusResponse(
+            ProjectStatusResult project)
+    {
+        return new ProjectStatusResponse(
+            project.PublicId,
+            project.TenantPublicId,
+            project.Status,
+            project.DueDate,
+            project.UpdatedAt,
+            project.ArchivedAt);
     }
 }

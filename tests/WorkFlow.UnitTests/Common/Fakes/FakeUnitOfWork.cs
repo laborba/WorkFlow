@@ -1,6 +1,6 @@
 ﻿using WorkFlow.Application.Abstractions.Persistence;
 
-namespace WorkFlow.UnitTests.Application.Tenants.Fakes;
+namespace WorkFlow.UnitTests.Common.Fakes;
 
 internal sealed class FakeUnitOfWork : IUnitOfWork
 {

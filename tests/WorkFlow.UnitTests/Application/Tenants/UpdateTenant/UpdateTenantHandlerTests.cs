@@ -2,6 +2,7 @@
 using WorkFlow.Application.Tenants.UpdateTenant;
 using WorkFlow.Domain.Entities;
 using WorkFlow.UnitTests.Application.Tenants.Fakes;
+using WorkFlow.UnitTests.Common.Fakes;
 
 namespace WorkFlow.UnitTests.Application.Tenants.UpdateTenant;
 

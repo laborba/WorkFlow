@@ -8,6 +8,9 @@ using WorkFlow.Application.Projects;
 using WorkFlow.Application.Projects.CreateProject;
 using WorkFlow.Application.Projects.GetProjectByPublicId;
 using WorkFlow.Application.Projects.ListProjects;
+using WorkFlow.Application.Projects.PauseProject;
+using WorkFlow.Application.Projects.ResumeProject;
+using WorkFlow.Application.Projects.StartProject;
 using WorkFlow.Application.Projects.UpdateProject;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
@@ -17,6 +20,7 @@ using WorkFlow.UnitTests.Application.Projects.Fakes;
 using WorkFlow.UnitTests.Application.Tenants.Fakes;
 using WorkFlow.UnitTests.Application.Users.Fakes;
 using WorkFlow.UnitTests.Common;
+using WorkFlow.UnitTests.Common.Fakes;
 
 namespace WorkFlow.UnitTests.API.Projects;
 
@@ -634,11 +638,11 @@ public sealed class UpdateProjectControllerTests
     }
 
     private static ProjectsController CreateController(
-    FakeTenantRepository tenantRepository,
-    FakeUserRepository userRepository,
-    FakeProjectRepository projectRepository,
-    FakeProjectMemberRepository projectMemberRepository,
-    FakeUnitOfWork unitOfWork)
+        FakeTenantRepository tenantRepository,
+        FakeUserRepository userRepository,
+        FakeProjectRepository projectRepository,
+        FakeProjectMemberRepository projectMemberRepository,
+        FakeUnitOfWork unitOfWork)
     {
         var projectMemberPermissionRepository =
             new FakeProjectMemberPermissionRepository();
@@ -674,11 +678,41 @@ public sealed class UpdateProjectControllerTests
                 projectMemberPermissionRepository,
                 unitOfWork);
 
+        var startProjectHandler =
+            new StartProjectHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository,
+                projectMemberRepository,
+                projectMemberPermissionRepository,
+                unitOfWork);
+
+        var pauseProjectHandler =
+            new PauseProjectHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository,
+                projectMemberRepository,
+                projectMemberPermissionRepository,
+                unitOfWork);
+
+        var resumeProjectHandler =
+            new ResumeProjectHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository,
+                projectMemberRepository,
+                projectMemberPermissionRepository,
+                unitOfWork);
+
         return new ProjectsController(
             createProjectHandler,
             getProjectByPublicIdHandler,
             listProjectsHandler,
-            updateProjectHandler);
+            updateProjectHandler,
+            startProjectHandler,
+            pauseProjectHandler,
+            resumeProjectHandler);
     }
 
     private static void SetAuthenticatedUser(
@@ -753,14 +787,15 @@ public sealed class UpdateProjectControllerTests
                 "Projeto Original",
                 createdByUserId,
                 "Descrição original",
-                dueDate: new DateTime(
-                    2026,
-                    10,
-                    31,
-                    12,
-                    0,
-                    0,
-                    DateTimeKind.Utc));
+                dueDate:
+                    new DateTime(
+                        2026,
+                        10,
+                        31,
+                        12,
+                        0,
+                        0,
+                        DateTimeKind.Utc));
 
         EntityTestHelper.SetId(
             project,

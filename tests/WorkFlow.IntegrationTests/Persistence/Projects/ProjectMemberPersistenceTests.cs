@@ -5,7 +5,7 @@ using WorkFlow.IntegrationTests.Infrastructure;
 using WorkFlow.Infrastructure.Persistence.Repositories;
 using Xunit;
 
-namespace WorkFlow.IntegrationTests.Persistence;
+namespace WorkFlow.IntegrationTests.Persistence.Projects;
 
 [Collection(TestCollectionNames.PostgreSql)]
 public sealed class ProjectMemberPersistenceTests

@@ -109,7 +109,17 @@ Atualmente estão implementados:
 - projetos concluídos (`Completed`) continuam permitindo atualização dos dados básicos;
 - projetos arquivados (`Archived`) não podem ser atualizados;
 - status e responsável não são alterados pelo endpoint de atualização;
-- atualização utiliza entidade rastreada pelo Entity Framework Core e persiste as alterações através do `UnitOfWork`.
+- atualização utiliza entidade rastreada pelo Entity Framework Core e persiste as alterações através do `UnitOfWork`;
+- início de projetos através da transição `Planning → InProgress`;
+- pausa de projetos através da transição `InProgress → Paused`;
+- a pausa exige um motivo válido;
+- retomada de projetos através da transição `Paused → InProgress`;
+- ao retomar um projeto, o prazo atual pode ser mantido ou substituído por um novo `DueDate`;
+- `TenantAdmin` pode iniciar, pausar e retomar qualquer projeto do próprio Tenant sem depender de permissão específica;
+- `ProjectManager` e `Member` precisam possuir participação ativa e a permissão `EditProject` para iniciar, pausar ou retomar projetos;
+- usuários sem participação ativa ou sem `EditProject` não podem executar essas transições;
+- transições incompatíveis com o estado atual do projeto são rejeitadas;
+- alterações de status utilizam a entidade rastreada pelo Entity Framework Core e são persistidas através do `UnitOfWork`;
 - inclusão de usuários como membros de projetos;
 - `TenantAdmin` pode adicionar membros a qualquer projeto do próprio Tenant sem depender de permissão específica;
 - `ProjectManager` e `Member` podem adicionar membros quando possuem participação ativa e a permissão `ManageProjectMembers`;
@@ -214,7 +224,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-911 testes automatizados aprovados
+969 testes automatizados aprovados
 0 falhas
 ```
 
@@ -316,6 +326,18 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - isolamento da busca do projeto pelo Tenant;
 - persistência real das alterações do projeto no PostgreSQL;
 - testes da camada HTTP para sucesso, autenticação, autorização e conflitos da atualização;
+- início de projeto através da transição `Planning → InProgress`;
+- pausa de projeto através da transição `InProgress → Paused`;
+- retomada de projeto através da transição `Paused → InProgress`;
+- manutenção do prazo atual durante a retomada quando nenhum novo prazo é informado;
+- alteração do prazo durante a retomada quando um novo `DueDate` é informado;
+- autorização de `TenantAdmin` para alterações de status através de bypass administrativo;
+- autorização de `ProjectManager` e `Member` através de participação ativa e `EditProject`;
+- bloqueio de alteração de status sem participação ativa ou sem `EditProject`;
+- bloqueio de transições incompatíveis com o estado atual do projeto;
+- testes da camada HTTP para início, pausa e retomada de projetos;
+- testes de integração exercitando handlers, repositórios reais, Entity Framework Core e PostgreSQL nas alterações de status;
+- confirmação da persistência real das transições de status e do novo prazo no PostgreSQL;
 - inclusão de membro por `TenantAdmin` com bypass administrativo;
 - inclusão de membro por `ProjectManager` e `Member` com participação ativa e `ManageProjectMembers`;
 - bloqueio de inclusão para `ProjectManager` ou `Member` sem participação ativa;
@@ -571,12 +593,12 @@ As permissões específicas já participam efetivamente da autorização de oper
 Atualmente:
 
 - `ManageProjectPermissions` protege concessão, consulta e revogação de permissões;
-- `EditProject` protege a atualização dos dados básicos do projeto;
+- `EditProject` protege a atualização dos dados básicos e as operações de início, pausa e retomada do projeto;
 - `ManageProjectMembers` protege inclusão e remoção de membros;
 - `TenantAdmin` possui bypass administrativo nessas operações dentro do próprio Tenant;
 - `ProjectManager` e `Member` precisam possuir participação ativa e a permissão exigida pela operação.
 
-As demais permissões existentes no domínio serão integradas progressivamente aos fluxos de status e tarefas.
+As demais permissões existentes no domínio serão integradas progressivamente aos fluxos de conclusão, reabertura, arquivamento e tarefas.
 
 ---
 
@@ -1861,6 +1883,141 @@ Exemplo de resposta:
 
 ---
 
+### Iniciar projeto
+
+```http
+PATCH /api/tenants/{tenantPublicId}/projects/{projectPublicId}/start
+```
+
+A operação exige `TenantAccess`.
+
+Regras atuais:
+
+```text
+TenantAdmin
+→ pode iniciar qualquer projeto do próprio Tenant
+
+ProjectManager
+→ precisa possuir participação ativa e EditProject
+
+Member
+→ precisa possuir participação ativa e EditProject
+
+SystemAdmin
+→ não possui acesso operacional aos projetos do Tenant
+```
+
+A transição permitida é:
+
+```text
+Planning
+↓
+InProgress
+```
+
+Tentar iniciar um projeto em outro estado retorna:
+
+```text
+409 Conflict
+Projects.InvalidStatusTransition
+```
+
+Um `ProjectManager` ou `Member` sem autorização recebe:
+
+```text
+403 Forbidden
+Projects.StatusChangeNotAllowed
+```
+
+---
+
+### Pausar projeto
+
+```http
+PATCH /api/tenants/{tenantPublicId}/projects/{projectPublicId}/pause
+```
+
+Exemplo:
+
+```json
+{
+  "reason": "Aguardando retorno do cliente."
+}
+```
+
+A transição permitida é:
+
+```text
+InProgress
+↓
+Paused
+```
+
+O motivo da pausa é obrigatório.
+
+A autorização segue as mesmas regras de início do projeto: `TenantAdmin` possui bypass administrativo, enquanto `ProjectManager` e `Member` precisam possuir participação ativa e `EditProject`.
+
+---
+
+### Retomar projeto
+
+```http
+PATCH /api/tenants/{tenantPublicId}/projects/{projectPublicId}/resume
+```
+
+A transição permitida é:
+
+```text
+Paused
+↓
+InProgress
+```
+
+O prazo existente pode ser mantido:
+
+```json
+{
+  "newDueDate": null
+}
+```
+
+ou substituído:
+
+```json
+{
+  "newDueDate": "2027-04-30T18:00:00Z"
+}
+```
+
+A autorização segue as mesmas regras dos demais fluxos de status.
+
+As respostas de início, pausa e retomada retornam o estado atualizado do projeto, incluindo:
+
+```text
+PublicId
+TenantPublicId
+Status
+DueDate
+UpdatedAt
+ArchivedAt
+```
+
+Transições incompatíveis com o estado atual retornam:
+
+```text
+409 Conflict
+Projects.InvalidStatusTransition
+```
+
+Usuários sem autorização recebem:
+
+```text
+403 Forbidden
+Projects.StatusChangeNotAllowed
+```
+
+---
+
 ### Adicionar membro ao projeto
 
 ```http
@@ -2741,6 +2898,8 @@ Projects.NotFound
 Projects.CreationNotAllowed
 Projects.ViewNotAllowed
 Projects.UpdateNotAllowed
+Projects.StatusChangeNotAllowed
+Projects.InvalidStatusTransition
 Projects.Archived
 
 ProjectMembers.AddNotAllowed
@@ -2938,7 +3097,7 @@ Os arquivos possuem responsabilidades separadas:
 → cadastro, consulta, listagem, atualização, status e perfil de usuários
 
 04-Projects.http
-→ criação, consulta individual, listagem e atualização de projetos; inclusão, listagem e remoção de membros; concessão, listagem e revogação de permissões; filtros e autorização
+→ criação, consulta individual, listagem, atualização, início, pausa e retomada de projetos; inclusão, listagem e remoção de membros; concessão, listagem e revogação de permissões; filtros e autorização
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -3054,7 +3213,8 @@ Alguns princípios e recursos adotados no projeto:
 - a atualização dos dados básicos de projetos exige `TenantAccess`;
 - `TenantAdmin` pode atualizar qualquer projeto do próprio Tenant sem depender de permissão específica;
 - `ProjectManager` e `Member` precisam possuir participação ativa e `EditProject` para atualizar projetos;
-- a ausência de `EditProject` bloqueia a atualização;
+- `EditProject` também protege as operações de início, pausa e retomada do projeto;
+- a ausência de `EditProject` bloqueia tanto a atualização dos dados básicos quanto essas transições de status;
 - projetos concluídos podem ter seus dados básicos atualizados;
 - projetos arquivados não podem ser atualizados;
 - status e responsável não são alterados pelo endpoint de atualização de dados básicos;
@@ -3164,7 +3324,9 @@ O gerenciamento de `ProjectMemberPermission` também está implementado, incluin
 
 As permissões `ManageProjectPermissions`, `EditProject` e `ManageProjectMembers` já participam efetivamente da autorização para `ProjectManager` e `Member`.
 
-A autorização continuará sendo evoluída integrando as permissões restantes aos fluxos de status e tarefas.
+`EditProject` também é utilizada nos fluxos de início, pausa e retomada de projetos.
+
+A autorização continuará sendo evoluída integrando `CompleteProject`, `ReopenProject`, `ArchiveProject` e as permissões específicas de tarefas aos respectivos casos de uso.
 
 ```text
 Permissões específicas por recurso
@@ -3335,7 +3497,7 @@ Regras atuais para gerenciamento:
 
 Atualmente já são permissões operacionais efetivas:
 
-- `EditProject`: permite atualização dos dados básicos do projeto;
+- `EditProject`: permite atualização dos dados básicos e início, pausa e retomada do projeto;
 - `ManageProjectMembers`: permite inclusão e remoção de membros;
 - `ManageProjectPermissions`: permite concessão, consulta e revogação de permissões.
 
@@ -3347,7 +3509,7 @@ Quando um `ProjectManager` cria um novo projeto, sua participação inicial rece
 
 O `TenantAdmin` não depende dessas permissões específicas nas operações atualmente cobertas por bypass administrativo.
 
-As demais permissões serão integradas aos respectivos casos de uso conforme os fluxos de status e tarefas forem implementados.
+As demais permissões serão integradas aos respectivos casos de uso conforme os fluxos de conclusão, reabertura, arquivamento e tarefas forem implementados.
 
 # Notificações
 
@@ -3499,7 +3661,9 @@ Essa camada ainda não está implementada.
 - [x] Integração de `EditProject` à atualização de projetos
 - [x] Integração de `ManageProjectMembers` à inclusão e remoção de membros
 - [x] Permissões administrativas iniciais automáticas para `ProjectManager` criador
-- [ ] Integração das permissões restantes aos fluxos de status e tarefas
+- [x] Integração de `EditProject` aos fluxos de início, pausa e retomada de projetos
+- [ ] Integração de `CompleteProject`, `ReopenProject` e `ArchiveProject` aos respectivos fluxos
+- [ ] Integração das permissões específicas aos fluxos de tarefas
 - [ ] Rate limiting
 - [ ] MFA
 - [ ] Recuperação de conta
@@ -3530,7 +3694,12 @@ Essa camada ainda não está implementada.
 - [x] Autorização de atualização através de `EditProject`
 - [x] Autorização de inclusão e remoção de membros através de `ManageProjectMembers`
 - [x] Concessão automática das permissões administrativas iniciais ao `ProjectManager` criador
-- [ ] Fluxos de status
+- [x] Início de projeto — `Planning → InProgress`
+- [x] Pausa de projeto — `InProgress → Paused`
+- [x] Retomada de projeto — `Paused → InProgress`
+- [ ] Conclusão de projeto
+- [ ] Reabertura de projeto
+- [ ] Arquivamento e restauração de projeto
 - [ ] Histórico
 - [ ] Kanban
 
@@ -3728,11 +3897,21 @@ ProjectManager e Member dependem de participação ativa e ManageProjectPermissi
 ManageProjectPermissions possui efeito efetivo na autorização
 EditProject possui efeito efetivo na autorização de atualização
 ManageProjectMembers possui efeito efetivo na autorização de inclusão e remoção de membros
+EditProject possui efeito efetivo nos fluxos de início, pausa e retomada de projetos
+Projetos podem ser iniciados através da transição Planning → InProgress
+Projetos InProgress podem ser pausados
+Projetos Paused podem ser retomados para InProgress
+Retomada pode manter o prazo atual ou definir um novo DueDate
+TenantAdmin possui bypass administrativo nas operações atuais de status
+ProjectManager e Member dependem de participação ativa e EditProject para início, pausa e retomada
+Transições incompatíveis com o estado atual são bloqueadas
+Persistência das alterações de status validada com PostgreSQL real
+Endpoints PATCH de start, pause e resume validados manualmente
 Projetos Archived permitem consulta, mas bloqueiam concessão e revogação de permissões
 Usuários alvo inativos podem ter permissões consultadas e revogadas
 SystemAdmin não possui acesso operacional aos projetos de Tenant
 Requisições HTTP manuais organizadas por módulo
-911 testes automatizados aprovados
+969 testes automatizados aprovados
 0 falhas
 ```
 

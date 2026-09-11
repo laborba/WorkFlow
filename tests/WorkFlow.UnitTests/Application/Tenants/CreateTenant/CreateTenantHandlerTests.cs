@@ -2,6 +2,7 @@
 using WorkFlow.Domain.Entities;
 using WorkFlow.UnitTests.Application.Tenants.Fakes;
 using WorkFlow.Application.Tenants;
+using WorkFlow.UnitTests.Common.Fakes;
 
 namespace WorkFlow.UnitTests.Application.Tenants.CreateTenant;
 

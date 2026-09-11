@@ -7,6 +7,11 @@ using WorkFlow.API.Controllers;
 using WorkFlow.Application.Projects;
 using WorkFlow.Application.Projects.CreateProject;
 using WorkFlow.Application.Projects.GetProjectByPublicId;
+using WorkFlow.Application.Projects.ListProjects;
+using WorkFlow.Application.Projects.PauseProject;
+using WorkFlow.Application.Projects.ResumeProject;
+using WorkFlow.Application.Projects.StartProject;
+using WorkFlow.Application.Projects.UpdateProject;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Entities;
@@ -15,8 +20,7 @@ using WorkFlow.UnitTests.Application.Projects.Fakes;
 using WorkFlow.UnitTests.Application.Tenants.Fakes;
 using WorkFlow.UnitTests.Application.Users.Fakes;
 using WorkFlow.UnitTests.Common;
-using WorkFlow.Application.Projects.ListProjects;
-using WorkFlow.Application.Projects.UpdateProject;
+using WorkFlow.UnitTests.Common.Fakes;
 
 namespace WorkFlow.UnitTests.API.Projects;
 
@@ -24,7 +28,7 @@ public sealed class ProjectsControllerTests
 {
     [Fact]
     public async Task
-Create_ShouldUseAuthenticatedUserAsCreator_WhenDataIsValid()
+    Create_ShouldUseAuthenticatedUserAsCreator_WhenDataIsValid()
     {
         var tenant =
             CreatePersistedTenant();
@@ -100,15 +104,18 @@ Create_ShouldUseAuthenticatedUserAsCreator_WhenDataIsValid()
                 handler,
                 getProjectByPublicIdHandler,
                 listProjectsHandler,
-                CreateUnusedUpdateProjectHandler());
+                CreateUnusedUpdateProjectHandler(),
+                CreateUnusedStartProjectHandler(),
+                CreateUnusedPauseProjectHandler(),
+                CreateUnusedResumeProjectHandler());
 
         var identity =
             new ClaimsIdentity(
                 new[]
                 {
-                new Claim(
-                    ClaimTypes.NameIdentifier,
-                    creator.PublicId.ToString())
+                    new Claim(
+                        ClaimTypes.NameIdentifier,
+                        creator.PublicId.ToString())
                 },
                 "Test");
 
@@ -207,7 +214,7 @@ Create_ShouldUseAuthenticatedUserAsCreator_WhenDataIsValid()
 
     [Fact]
     public async Task
-Create_ShouldReturnUnauthorized_WhenUserPublicIdClaimIsMissing()
+    Create_ShouldReturnUnauthorized_WhenUserPublicIdClaimIsMissing()
     {
         var tenantRepository =
             new FakeTenantRepository();
@@ -251,7 +258,10 @@ Create_ShouldReturnUnauthorized_WhenUserPublicIdClaimIsMissing()
                 createProjectHandler,
                 getProjectByPublicIdHandler,
                 listProjectsHandler,
-                CreateUnusedUpdateProjectHandler());
+                CreateUnusedUpdateProjectHandler(),
+                CreateUnusedStartProjectHandler(),
+                CreateUnusedPauseProjectHandler(),
+                CreateUnusedResumeProjectHandler());
 
         controller.ControllerContext =
             new ControllerContext
@@ -297,7 +307,7 @@ Create_ShouldReturnUnauthorized_WhenUserPublicIdClaimIsMissing()
 
     [Fact]
     public async Task
-GetByPublicId_ShouldUseAuthenticatedUserAndReturnProject_WhenDataIsValid()
+    GetByPublicId_ShouldUseAuthenticatedUserAndReturnProject_WhenDataIsValid()
     {
         var tenant =
             CreatePersistedTenant();
@@ -374,15 +384,18 @@ GetByPublicId_ShouldUseAuthenticatedUserAndReturnProject_WhenDataIsValid()
                 createProjectHandler,
                 getProjectByPublicIdHandler,
                 listProjectsHandler,
-                CreateUnusedUpdateProjectHandler());
+                CreateUnusedUpdateProjectHandler(),
+                CreateUnusedStartProjectHandler(),
+                CreateUnusedPauseProjectHandler(),
+                CreateUnusedResumeProjectHandler());
 
         var identity =
             new ClaimsIdentity(
                 new[]
                 {
-                new Claim(
-                    ClaimTypes.NameIdentifier,
-                    requester.PublicId.ToString())
+                    new Claim(
+                        ClaimTypes.NameIdentifier,
+                        requester.PublicId.ToString())
                 },
                 "Test");
 
@@ -516,7 +529,10 @@ GetByPublicId_ShouldUseAuthenticatedUserAndReturnProject_WhenDataIsValid()
                 createProjectHandler,
                 getProjectByPublicIdHandler,
                 listProjectsHandler,
-                CreateUnusedUpdateProjectHandler());
+                CreateUnusedUpdateProjectHandler(),
+                CreateUnusedStartProjectHandler(),
+                CreateUnusedPauseProjectHandler(),
+                CreateUnusedResumeProjectHandler());
 
         controller.ControllerContext =
             new ControllerContext
@@ -553,9 +569,10 @@ GetByPublicId_ShouldUseAuthenticatedUserAndReturnProject_WhenDataIsValid()
             projectMemberPermissionRepository
                 .AddedProjectMemberPermissions);
     }
+
     [Fact]
     public async Task
-GetByPublicId_ShouldReturnNotFound_WhenProjectDoesNotExist()
+    GetByPublicId_ShouldReturnNotFound_WhenProjectDoesNotExist()
     {
         var tenant =
             CreatePersistedTenant();
@@ -614,15 +631,18 @@ GetByPublicId_ShouldReturnNotFound_WhenProjectDoesNotExist()
                 createProjectHandler,
                 getProjectByPublicIdHandler,
                 listProjectsHandler,
-                CreateUnusedUpdateProjectHandler());
+                CreateUnusedUpdateProjectHandler(),
+                CreateUnusedStartProjectHandler(),
+                CreateUnusedPauseProjectHandler(),
+                CreateUnusedResumeProjectHandler());
 
         var identity =
             new ClaimsIdentity(
                 new[]
                 {
-                new Claim(
-                    ClaimTypes.NameIdentifier,
-                    requester.PublicId.ToString())
+                    new Claim(
+                        ClaimTypes.NameIdentifier,
+                        requester.PublicId.ToString())
                 },
                 "Test");
 
@@ -671,7 +691,7 @@ GetByPublicId_ShouldReturnNotFound_WhenProjectDoesNotExist()
 
     [Fact]
     public async Task
-GetByPublicId_ShouldReturnForbidden_WhenRequesterCannotViewProject()
+    GetByPublicId_ShouldReturnForbidden_WhenRequesterCannotViewProject()
     {
         var tenant =
             CreatePersistedTenant();
@@ -747,15 +767,18 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterCannotViewProject()
                 createProjectHandler,
                 getProjectByPublicIdHandler,
                 listProjectsHandler,
-                CreateUnusedUpdateProjectHandler());
+                CreateUnusedUpdateProjectHandler(),
+                CreateUnusedStartProjectHandler(),
+                CreateUnusedPauseProjectHandler(),
+                CreateUnusedResumeProjectHandler());
 
         var identity =
             new ClaimsIdentity(
                 new[]
                 {
-                new Claim(
-                    ClaimTypes.NameIdentifier,
-                    requester.PublicId.ToString())
+                    new Claim(
+                        ClaimTypes.NameIdentifier,
+                        requester.PublicId.ToString())
                 },
                 "Test");
 
@@ -808,7 +831,7 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterCannotViewProject()
 
     [Fact]
     public async Task
-GetByPublicId_ShouldReturnConflict_WhenTenantIsInactive()
+    GetByPublicId_ShouldReturnConflict_WhenTenantIsInactive()
     {
         var tenant =
             CreatePersistedTenant();
@@ -863,15 +886,18 @@ GetByPublicId_ShouldReturnConflict_WhenTenantIsInactive()
                 createProjectHandler,
                 getProjectByPublicIdHandler,
                 listProjectsHandler,
-                CreateUnusedUpdateProjectHandler());
+                CreateUnusedUpdateProjectHandler(),
+                CreateUnusedStartProjectHandler(),
+                CreateUnusedPauseProjectHandler(),
+                CreateUnusedResumeProjectHandler());
 
         var identity =
             new ClaimsIdentity(
                 new[]
                 {
-                new Claim(
-                    ClaimTypes.NameIdentifier,
-                    requesterPublicId.ToString())
+                    new Claim(
+                        ClaimTypes.NameIdentifier,
+                        requesterPublicId.ToString())
                 },
                 "Test");
 
@@ -919,7 +945,7 @@ GetByPublicId_ShouldReturnConflict_WhenTenantIsInactive()
 
     [Fact]
     public async Task
-GetByPublicId_ShouldReturnForbidden_WhenRequesterIsInactive()
+    GetByPublicId_ShouldReturnForbidden_WhenRequesterIsInactive()
     {
         var tenant =
             CreatePersistedTenant();
@@ -980,15 +1006,18 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterIsInactive()
                 createProjectHandler,
                 getProjectByPublicIdHandler,
                 listProjectsHandler,
-                CreateUnusedUpdateProjectHandler());
+                CreateUnusedUpdateProjectHandler(),
+                CreateUnusedStartProjectHandler(),
+                CreateUnusedPauseProjectHandler(),
+                CreateUnusedResumeProjectHandler());
 
         var identity =
             new ClaimsIdentity(
                 new[]
                 {
-                new Claim(
-                    ClaimTypes.NameIdentifier,
-                    requester.PublicId.ToString())
+                    new Claim(
+                        ClaimTypes.NameIdentifier,
+                        requester.PublicId.ToString())
                 },
                 "Test");
 
@@ -1030,7 +1059,6 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterIsInactive()
             UserErrors.Inactive.Message,
             response.Message);
     }
-
 
     private static Tenant CreatePersistedTenant()
     {
@@ -1096,14 +1124,15 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterIsInactive()
                 "Projeto de Teste",
                 createdByUserId,
                 "Descrição do projeto",
-                dueDate: new DateTime(
-                    2026,
-                    9,
-                    30,
-                    12,
-                    0,
-                    0,
-                    DateTimeKind.Utc));
+                dueDate:
+                    new DateTime(
+                        2026,
+                        9,
+                        30,
+                        12,
+                        0,
+                        0,
+                        DateTimeKind.Utc));
 
         EntityTestHelper.SetId(
             project,
@@ -1113,7 +1142,7 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterIsInactive()
     }
 
     private static UpdateProjectHandler
-    CreateUnusedUpdateProjectHandler()
+        CreateUnusedUpdateProjectHandler()
     {
         var tenantRepository =
             new FakeTenantRepository();
@@ -1136,6 +1165,42 @@ GetByPublicId_ShouldReturnForbidden_WhenRequesterIsInactive()
             projectRepository,
             projectMemberRepository,
             projectMemberPermissionRepository,
+            new FakeUnitOfWork());
+    }
+
+    private static StartProjectHandler
+        CreateUnusedStartProjectHandler()
+    {
+        return new StartProjectHandler(
+            new FakeTenantRepository(),
+            new FakeUserRepository(),
+            new FakeProjectRepository(),
+            new FakeProjectMemberRepository(),
+            new FakeProjectMemberPermissionRepository(),
+            new FakeUnitOfWork());
+    }
+
+    private static PauseProjectHandler
+        CreateUnusedPauseProjectHandler()
+    {
+        return new PauseProjectHandler(
+            new FakeTenantRepository(),
+            new FakeUserRepository(),
+            new FakeProjectRepository(),
+            new FakeProjectMemberRepository(),
+            new FakeProjectMemberPermissionRepository(),
+            new FakeUnitOfWork());
+    }
+
+    private static ResumeProjectHandler
+        CreateUnusedResumeProjectHandler()
+    {
+        return new ResumeProjectHandler(
+            new FakeTenantRepository(),
+            new FakeUserRepository(),
+            new FakeProjectRepository(),
+            new FakeProjectMemberRepository(),
+            new FakeProjectMemberPermissionRepository(),
             new FakeUnitOfWork());
     }
 }

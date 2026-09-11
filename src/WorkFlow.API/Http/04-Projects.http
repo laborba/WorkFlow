@@ -1165,6 +1165,162 @@ Authorization: Bearer {{tenantAdminToken}}
 Accept: application/json
 
 ### ============================================================
+### PROJECTS — CICLO DE STATUS
+###
+### Regras:
+### - Planning pode ser iniciado e passa para InProgress.
+### - InProgress pode ser pausado e passa para Paused.
+### - Paused pode ser retomado e volta para InProgress.
+### - Ao retomar, o prazo atual pode ser mantido ou substituído.
+### - TenantAdmin possui bypass administrativo.
+### - ProjectManager e Member precisam ser membros ativos.
+### - ProjectManager e Member precisam possuir EditProject.
+### ============================================================
+
+### Projects - TenantAdmin iniciar projeto em Planning - deve retornar 200 OK e status InProgress
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/start
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Iniciar novamente projeto já InProgress - deve retornar 409 Conflict
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/start
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Member sem EditProject tentar pausar projeto - deve retornar 403 Forbidden
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/pause
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "Tentativa de pausa sem permissão."
+}
+
+
+### Projects - TenantAdmin conceder EditProject ao Member para teste de status - deve retornar 201 Created
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 1
+}
+
+
+### Projects - Member com EditProject pausar projeto InProgress - deve retornar 200 OK e status Paused
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/pause
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "Aguardando retorno do cliente."
+}
+
+
+### Projects - Member com EditProject retomar projeto com novo prazo - deve retornar 200 OK e status InProgress
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/resume
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "newDueDate": "2027-04-30T18:00:00Z"
+}
+
+
+### Projects - TenantAdmin pausar projeto novamente - deve retornar 200 OK e status Paused
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/pause
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "Pausa para validar retomada sem alteração de prazo."
+}
+
+
+### Projects - TenantAdmin retomar projeto mantendo prazo - deve retornar 200 OK e status InProgress
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/resume
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "newDueDate": null
+}
+
+
+### Projects - Retomar projeto que já está InProgress - deve retornar 409 Conflict
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/resume
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "newDueDate": null
+}
+
+
+### Projects - Alterar status sem token - deve retornar 401 Unauthorized
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/pause
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "Tentativa sem autenticação."
+}
+
+
+### Projects - SystemAdmin tentar alterar status de projeto operacional - deve retornar 403 Forbidden
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/pause
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "Tentativa por SystemAdmin."
+}
+
+
+### Projects - Usuário de outro Tenant tentar alterar status - deve retornar 403 Forbidden
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/pause
+Authorization: Bearer {{otherTenantToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "Tentativa por usuário de outro Tenant."
+}
+
+
+### Projects - TenantAdmin revogar EditProject do Member após teste de status - deve retornar 200 OK
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/1
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Member sem EditProject tentar pausar após revogação - deve retornar 403 Forbidden
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/pause
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "Tentativa após revogação da permissão."
+}
+
+
+### Projects - Confirmar estado final do projeto - deve retornar 200 OK, status InProgress e prazo 2027-04-30
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+### ============================================================
 ### PROJECTS — DADOS DE APOIO
 ###
 ### Não execute novamente sem necessidade.

@@ -9,6 +9,10 @@ using WorkFlow.Application.Common.Pagination;
 using WorkFlow.Application.Projects.CreateProject;
 using WorkFlow.Application.Projects.GetProjectByPublicId;
 using WorkFlow.Application.Projects.ListProjects;
+using WorkFlow.Application.Projects.PauseProject;
+using WorkFlow.Application.Projects.ResumeProject;
+using WorkFlow.Application.Projects.StartProject;
+using WorkFlow.Application.Projects.UpdateProject;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Entities;
@@ -17,7 +21,7 @@ using WorkFlow.UnitTests.Application.Projects.Fakes;
 using WorkFlow.UnitTests.Application.Tenants.Fakes;
 using WorkFlow.UnitTests.Application.Users.Fakes;
 using WorkFlow.UnitTests.Common;
-using WorkFlow.Application.Projects.UpdateProject;
+using WorkFlow.UnitTests.Common.Fakes;
 
 namespace WorkFlow.UnitTests.API.Projects;
 
@@ -116,7 +120,8 @@ public sealed class ListProjectsControllerTests
             okResult.StatusCode);
 
         var item =
-            Assert.Single(response.Items);
+            Assert.Single(
+                response.Items);
 
         Assert.Equal(
             projectPublicId,
@@ -360,9 +365,9 @@ public sealed class ListProjectsControllerTests
     }
 
     private static ProjectsController CreateController(
-    FakeTenantRepository tenantRepository,
-    FakeUserRepository userRepository,
-    FakeProjectRepository projectRepository)
+        FakeTenantRepository tenantRepository,
+        FakeUserRepository userRepository,
+        FakeProjectRepository projectRepository)
     {
         var projectMemberRepository =
             new FakeProjectMemberRepository();
@@ -396,7 +401,10 @@ public sealed class ListProjectsControllerTests
             createProjectHandler,
             getProjectByPublicIdHandler,
             listProjectsHandler,
-            CreateUnusedUpdateProjectHandler());
+            CreateUnusedUpdateProjectHandler(),
+            CreateUnusedStartProjectHandler(),
+            CreateUnusedPauseProjectHandler(),
+            CreateUnusedResumeProjectHandler());
     }
 
     private static void SetAuthenticatedUser(
@@ -461,29 +469,50 @@ public sealed class ListProjectsControllerTests
     }
 
     private static UpdateProjectHandler
-    CreateUnusedUpdateProjectHandler()
+        CreateUnusedUpdateProjectHandler()
     {
-        var tenantRepository =
-            new FakeTenantRepository();
-
-        var userRepository =
-            new FakeUserRepository();
-
-        var projectRepository =
-            new FakeProjectRepository();
-
-        var projectMemberRepository =
-            new FakeProjectMemberRepository();
-
-        var projectMemberPermissionRepository =
-            new FakeProjectMemberPermissionRepository();
-
         return new UpdateProjectHandler(
-            tenantRepository,
-            userRepository,
-            projectRepository,
-            projectMemberRepository,
-            projectMemberPermissionRepository,
+            new FakeTenantRepository(),
+            new FakeUserRepository(),
+            new FakeProjectRepository(),
+            new FakeProjectMemberRepository(),
+            new FakeProjectMemberPermissionRepository(),
+            new FakeUnitOfWork());
+    }
+
+    private static StartProjectHandler
+        CreateUnusedStartProjectHandler()
+    {
+        return new StartProjectHandler(
+            new FakeTenantRepository(),
+            new FakeUserRepository(),
+            new FakeProjectRepository(),
+            new FakeProjectMemberRepository(),
+            new FakeProjectMemberPermissionRepository(),
+            new FakeUnitOfWork());
+    }
+
+    private static PauseProjectHandler
+        CreateUnusedPauseProjectHandler()
+    {
+        return new PauseProjectHandler(
+            new FakeTenantRepository(),
+            new FakeUserRepository(),
+            new FakeProjectRepository(),
+            new FakeProjectMemberRepository(),
+            new FakeProjectMemberPermissionRepository(),
+            new FakeUnitOfWork());
+    }
+
+    private static ResumeProjectHandler
+        CreateUnusedResumeProjectHandler()
+    {
+        return new ResumeProjectHandler(
+            new FakeTenantRepository(),
+            new FakeUserRepository(),
+            new FakeProjectRepository(),
+            new FakeProjectMemberRepository(),
+            new FakeProjectMemberPermissionRepository(),
             new FakeUnitOfWork());
     }
 }

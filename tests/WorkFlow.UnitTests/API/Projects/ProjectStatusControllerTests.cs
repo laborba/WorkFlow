@@ -5,14 +5,14 @@ using WorkFlow.API.Contracts.Common;
 using WorkFlow.API.Contracts.Projects;
 using WorkFlow.API.Controllers;
 using WorkFlow.Application.Projects;
-using WorkFlow.Application.Projects.AddProjectMember;
-using WorkFlow.Application.Projects.GrantProjectMemberPermission;
-using WorkFlow.Application.Projects.ListProjectMemberPermissions;
-using WorkFlow.Application.Projects.ListProjectMembers;
-using WorkFlow.Application.Projects.RemoveProjectMember;
-using WorkFlow.Application.Projects.RevokeProjectMemberPermission;
+using WorkFlow.Application.Projects.CreateProject;
+using WorkFlow.Application.Projects.GetProjectByPublicId;
+using WorkFlow.Application.Projects.ListProjects;
+using WorkFlow.Application.Projects.PauseProject;
+using WorkFlow.Application.Projects.ResumeProject;
+using WorkFlow.Application.Projects.StartProject;
+using WorkFlow.Application.Projects.UpdateProject;
 using WorkFlow.Application.Tenants;
-using WorkFlow.Application.Users;
 using WorkFlow.Domain.Entities;
 using WorkFlow.Domain.Enums;
 using WorkFlow.UnitTests.Application.Projects.Fakes;
@@ -23,11 +23,11 @@ using WorkFlow.UnitTests.Common.Fakes;
 
 namespace WorkFlow.UnitTests.API.Projects;
 
-public sealed class ProjectMembersControllerTests
+public sealed class ProjectStatusControllerTests
 {
     [Fact]
     public async Task
-    Add_ShouldUseAuthenticatedUserAndReturnCreated_WhenDataIsValid()
+    Start_ShouldReturnOk_WhenTenantAdminStartsPlanningProject()
     {
         var fixture =
             CreateFixture(
@@ -41,57 +41,43 @@ public sealed class ProjectMembersControllerTests
             controller,
             fixture.Requester.PublicId);
 
-        var request =
-            new AddProjectMemberRequest(
-                fixture.UserToAdd.PublicId);
-
         var result =
-            await controller.Add(
+            await controller.Start(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
-                request,
                 CancellationToken.None);
 
-        var createdResult =
-            Assert.IsType<ObjectResult>(
+        var okResult =
+            Assert.IsType<OkObjectResult>(
                 result.Result);
 
-        Assert.Equal(
-            StatusCodes.Status201Created,
-            createdResult.StatusCode);
-
         var response =
-            Assert.IsType<AddProjectMemberResponse>(
-                createdResult.Value);
+            Assert.IsType<ProjectStatusResponse>(
+                okResult.Value);
+
+        Assert.Equal(
+            StatusCodes.Status200OK,
+            okResult.StatusCode);
 
         Assert.Equal(
             fixture.Project.PublicId,
-            response.ProjectPublicId);
+            response.PublicId);
 
         Assert.Equal(
-            fixture.UserToAdd.PublicId,
-            response.UserPublicId);
+            fixture.Tenant.PublicId,
+            response.TenantPublicId);
 
         Assert.Equal(
-            fixture.Requester.PublicId,
-            response.AddedByUserPublicId);
-
-        var addedMember =
-            Assert.IsType<ProjectMember>(
-                fixture.ProjectMemberRepository
-                    .AddedProjectMember);
+            ProjectStatus.InProgress,
+            response.Status);
 
         Assert.Equal(
-            fixture.Project.Id,
-            addedMember.ProjectId);
+            ProjectStatus.InProgress,
+            fixture.Project.Status);
 
         Assert.Equal(
-            fixture.UserToAdd.Id,
-            addedMember.UserId);
-
-        Assert.Equal(
-            fixture.Requester.Id,
-            addedMember.AddedByUserId);
+            fixture.Project.DueDate,
+            response.DueDate);
 
         Assert.Equal(
             1,
@@ -100,7 +86,7 @@ public sealed class ProjectMembersControllerTests
 
     [Fact]
     public async Task
-    Add_ShouldReturnUnauthorized_WhenUserPublicIdClaimIsMissing()
+    Start_ShouldReturnUnauthorized_WhenUserPublicIdClaimIsMissing()
     {
         var fixture =
             CreateFixture(
@@ -110,33 +96,21 @@ public sealed class ProjectMembersControllerTests
             CreateController(
                 fixture);
 
-        controller.ControllerContext =
-            new ControllerContext
-            {
-                HttpContext =
-                    new DefaultHttpContext
-                    {
-                        User =
-                            new ClaimsPrincipal(
-                                new ClaimsIdentity(
-                                    authenticationType: "Test"))
-                    }
-            };
+        SetUnauthenticatedUser(
+            controller);
 
         var result =
-            await controller.Add(
+            await controller.Start(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
-                new AddProjectMemberRequest(
-                    fixture.UserToAdd.PublicId),
                 CancellationToken.None);
 
         Assert.IsType<UnauthorizedResult>(
             result.Result);
 
-        Assert.Null(
-            fixture.ProjectMemberRepository
-                .AddedProjectMember);
+        Assert.Equal(
+            ProjectStatus.Planning,
+            fixture.Project.Status);
 
         Assert.Equal(
             0,
@@ -145,7 +119,7 @@ public sealed class ProjectMembersControllerTests
 
     [Fact]
     public async Task
-    Add_ShouldReturnNotFound_WhenTenantDoesNotExist()
+    Start_ShouldReturnNotFound_WhenTenantDoesNotExist()
     {
         var fixture =
             CreateFixture(
@@ -163,11 +137,9 @@ public sealed class ProjectMembersControllerTests
             fixture.Requester.PublicId);
 
         var result =
-            await controller.Add(
+            await controller.Start(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
-                new AddProjectMemberRequest(
-                    fixture.UserToAdd.PublicId),
                 CancellationToken.None);
 
         var notFoundResult =
@@ -177,6 +149,10 @@ public sealed class ProjectMembersControllerTests
         var response =
             Assert.IsType<ErrorResponse>(
                 notFoundResult.Value);
+
+        Assert.Equal(
+            StatusCodes.Status404NotFound,
+            notFoundResult.StatusCode);
 
         Assert.Equal(
             TenantErrors.NotFound.Code,
@@ -185,101 +161,15 @@ public sealed class ProjectMembersControllerTests
         Assert.Equal(
             TenantErrors.NotFound.Message,
             response.Message);
+
+        Assert.Equal(
+            0,
+            fixture.UnitOfWork.SaveChangesCallCount);
     }
 
     [Fact]
     public async Task
-    Add_ShouldReturnNotFound_WhenProjectDoesNotExist()
-    {
-        var fixture =
-            CreateFixture(
-                UserRole.TenantAdmin);
-
-        fixture.ProjectRepository.ProjectToReturn =
-            null;
-
-        var controller =
-            CreateController(
-                fixture);
-
-        SetAuthenticatedUser(
-            controller,
-            fixture.Requester.PublicId);
-
-        var result =
-            await controller.Add(
-                fixture.Tenant.PublicId,
-                Guid.NewGuid(),
-                new AddProjectMemberRequest(
-                    fixture.UserToAdd.PublicId),
-                CancellationToken.None);
-
-        var notFoundResult =
-            Assert.IsType<NotFoundObjectResult>(
-                result.Result);
-
-        var response =
-            Assert.IsType<ErrorResponse>(
-                notFoundResult.Value);
-
-        Assert.Equal(
-            ProjectErrors.NotFound.Code,
-            response.Code);
-
-        Assert.Equal(
-            ProjectErrors.NotFound.Message,
-            response.Message);
-    }
-
-    [Fact]
-    public async Task
-    Add_ShouldReturnNotFound_WhenUserToAddDoesNotExist()
-    {
-        var fixture =
-            CreateFixture(
-                UserRole.TenantAdmin);
-
-        fixture.UserRepository
-            .UsersByPublicIdToReturn
-            .Remove(
-                fixture.UserToAdd.PublicId);
-
-        var controller =
-            CreateController(
-                fixture);
-
-        SetAuthenticatedUser(
-            controller,
-            fixture.Requester.PublicId);
-
-        var result =
-            await controller.Add(
-                fixture.Tenant.PublicId,
-                fixture.Project.PublicId,
-                new AddProjectMemberRequest(
-                    fixture.UserToAdd.PublicId),
-                CancellationToken.None);
-
-        var notFoundResult =
-            Assert.IsType<NotFoundObjectResult>(
-                result.Result);
-
-        var response =
-            Assert.IsType<ErrorResponse>(
-                notFoundResult.Value);
-
-        Assert.Equal(
-            UserErrors.NotFound.Code,
-            response.Code);
-
-        Assert.Equal(
-            UserErrors.NotFound.Message,
-            response.Message);
-    }
-
-    [Fact]
-    public async Task
-    Add_ShouldReturnForbidden_WhenRequesterCannotAddMembers()
+    Start_ShouldReturnForbidden_WhenRequesterCannotChangeProjectStatus()
     {
         var fixture =
             CreateFixture(
@@ -294,93 +184,49 @@ public sealed class ProjectMembersControllerTests
             fixture.Requester.PublicId);
 
         var result =
-            await controller.Add(
+            await controller.Start(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
-                new AddProjectMemberRequest(
-                    fixture.UserToAdd.PublicId),
                 CancellationToken.None);
 
         var forbiddenResult =
             Assert.IsType<ObjectResult>(
                 result.Result);
 
-        Assert.Equal(
-            StatusCodes.Status403Forbidden,
-            forbiddenResult.StatusCode);
-
         var response =
             Assert.IsType<ErrorResponse>(
                 forbiddenResult.Value);
 
         Assert.Equal(
-            ProjectMemberErrors.AddNotAllowed.Code,
-            response.Code);
-
-        Assert.Equal(
-            ProjectMemberErrors.AddNotAllowed.Message,
-            response.Message);
-    }
-
-    [Fact]
-    public async Task
-    Add_ShouldReturnForbidden_WhenUserIsInactive()
-    {
-        var fixture =
-            CreateFixture(
-                UserRole.TenantAdmin);
-
-        fixture.UserToAdd.Deactivate();
-
-        var controller =
-            CreateController(
-                fixture);
-
-        SetAuthenticatedUser(
-            controller,
-            fixture.Requester.PublicId);
-
-        var result =
-            await controller.Add(
-                fixture.Tenant.PublicId,
-                fixture.Project.PublicId,
-                new AddProjectMemberRequest(
-                    fixture.UserToAdd.PublicId),
-                CancellationToken.None);
-
-        var forbiddenResult =
-            Assert.IsType<ObjectResult>(
-                result.Result);
-
-        Assert.Equal(
             StatusCodes.Status403Forbidden,
             forbiddenResult.StatusCode);
 
-        var response =
-            Assert.IsType<ErrorResponse>(
-                forbiddenResult.Value);
-
         Assert.Equal(
-            UserErrors.Inactive.Code,
+            ProjectErrors.StatusChangeNotAllowed.Code,
             response.Code);
 
         Assert.Equal(
-            UserErrors.Inactive.Message,
+            ProjectErrors.StatusChangeNotAllowed.Message,
             response.Message);
+
+        Assert.Equal(
+            ProjectStatus.Planning,
+            fixture.Project.Status);
+
+        Assert.Equal(
+            0,
+            fixture.UnitOfWork.SaveChangesCallCount);
     }
 
     [Fact]
     public async Task
-    Add_ShouldReturnConflict_WhenUserIsAlreadyActiveMember()
+    Start_ShouldReturnConflict_WhenTransitionIsInvalid()
     {
         var fixture =
             CreateFixture(
                 UserRole.TenantAdmin);
 
-        fixture.ProjectMemberRepository
-            .IsActiveMemberResults[
-                (fixture.Project.Id, fixture.UserToAdd.Id)] =
-            true;
+        fixture.Project.Start();
 
         var controller =
             CreateController(
@@ -391,43 +237,49 @@ public sealed class ProjectMembersControllerTests
             fixture.Requester.PublicId);
 
         var result =
-            await controller.Add(
+            await controller.Start(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
-                new AddProjectMemberRequest(
-                    fixture.UserToAdd.PublicId),
                 CancellationToken.None);
 
         var conflictResult =
             Assert.IsType<ConflictObjectResult>(
                 result.Result);
 
-        Assert.Equal(
-            StatusCodes.Status409Conflict,
-            conflictResult.StatusCode);
-
         var response =
             Assert.IsType<ErrorResponse>(
                 conflictResult.Value);
 
         Assert.Equal(
-            ProjectMemberErrors.AlreadyActive.Code,
+            StatusCodes.Status409Conflict,
+            conflictResult.StatusCode);
+
+        Assert.Equal(
+            ProjectErrors.InvalidStatusTransition.Code,
             response.Code);
 
         Assert.Equal(
-            ProjectMemberErrors.AlreadyActive.Message,
+            ProjectErrors.InvalidStatusTransition.Message,
             response.Message);
+
+        Assert.Equal(
+            ProjectStatus.InProgress,
+            fixture.Project.Status);
+
+        Assert.Equal(
+            0,
+            fixture.UnitOfWork.SaveChangesCallCount);
     }
 
     [Fact]
     public async Task
-    Add_ShouldReturnConflict_WhenProjectIsArchived()
+    Pause_ShouldReturnOk_WhenTenantAdminPausesInProgressProject()
     {
         var fixture =
             CreateFixture(
                 UserRole.TenantAdmin);
 
-        fixture.Project.Archive();
+        fixture.Project.Start();
 
         var controller =
             CreateController(
@@ -437,44 +289,108 @@ public sealed class ProjectMembersControllerTests
             controller,
             fixture.Requester.PublicId);
 
+        var request =
+            new PauseProjectRequest(
+                "Aguardando retorno do cliente.");
+
         var result =
-            await controller.Add(
+            await controller.Pause(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
-                new AddProjectMemberRequest(
-                    fixture.UserToAdd.PublicId),
+                request,
                 CancellationToken.None);
 
-        var conflictResult =
-            Assert.IsType<ConflictObjectResult>(
+        var okResult =
+            Assert.IsType<OkObjectResult>(
                 result.Result);
 
-        Assert.Equal(
-            StatusCodes.Status409Conflict,
-            conflictResult.StatusCode);
-
         var response =
-            Assert.IsType<ErrorResponse>(
-                conflictResult.Value);
+            Assert.IsType<ProjectStatusResponse>(
+                okResult.Value);
 
         Assert.Equal(
-            ProjectErrors.Archived.Code,
-            response.Code);
+            StatusCodes.Status200OK,
+            okResult.StatusCode);
 
         Assert.Equal(
-            ProjectErrors.Archived.Message,
-            response.Message);
+            ProjectStatus.Paused,
+            response.Status);
+
+        Assert.Equal(
+            ProjectStatus.Paused,
+            fixture.Project.Status);
+
+        Assert.Equal(
+            fixture.Project.DueDate,
+            response.DueDate);
+
+        Assert.Equal(
+            1,
+            fixture.UnitOfWork.SaveChangesCallCount);
     }
 
     [Fact]
     public async Task
-    Add_ShouldReturnConflict_WhenTenantIsInactive()
+    Pause_ShouldReturnUnauthorized_WhenUserPublicIdClaimIsMissing()
     {
         var fixture =
             CreateFixture(
                 UserRole.TenantAdmin);
 
-        fixture.Tenant.Deactivate();
+        fixture.Project.Start();
+
+        var controller =
+            CreateController(
+                fixture);
+
+        SetUnauthenticatedUser(
+            controller);
+
+        var request =
+            new PauseProjectRequest(
+                "Aguardando retorno do cliente.");
+
+        var result =
+            await controller.Pause(
+                fixture.Tenant.PublicId,
+                fixture.Project.PublicId,
+                request,
+                CancellationToken.None);
+
+        Assert.IsType<UnauthorizedResult>(
+            result.Result);
+
+        Assert.Equal(
+            ProjectStatus.InProgress,
+            fixture.Project.Status);
+
+        Assert.Equal(
+            0,
+            fixture.UnitOfWork.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task
+    Resume_ShouldReturnOkAndChangeDueDate_WhenNewDueDateIsProvided()
+    {
+        var fixture =
+            CreateFixture(
+                UserRole.TenantAdmin);
+
+        fixture.Project.Start();
+
+        fixture.Project.Pause(
+            "Aguardando retorno do cliente.");
+
+        var newDueDate =
+            new DateTime(
+                2027,
+                1,
+                31,
+                12,
+                0,
+                0,
+                DateTimeKind.Utc);
 
         var controller =
             CreateController(
@@ -484,99 +400,226 @@ public sealed class ProjectMembersControllerTests
             controller,
             fixture.Requester.PublicId);
 
+        var request =
+            new ResumeProjectRequest(
+                newDueDate);
+
         var result =
-            await controller.Add(
+            await controller.Resume(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
-                new AddProjectMemberRequest(
-                    fixture.UserToAdd.PublicId),
+                request,
                 CancellationToken.None);
 
-        var conflictResult =
-            Assert.IsType<ConflictObjectResult>(
+        var okResult =
+            Assert.IsType<OkObjectResult>(
                 result.Result);
 
-        Assert.Equal(
-            StatusCodes.Status409Conflict,
-            conflictResult.StatusCode);
-
         var response =
-            Assert.IsType<ErrorResponse>(
-                conflictResult.Value);
+            Assert.IsType<ProjectStatusResponse>(
+                okResult.Value);
 
         Assert.Equal(
-            TenantErrors.Inactive.Code,
-            response.Code);
+            StatusCodes.Status200OK,
+            okResult.StatusCode);
+
+        Assert.Equal(
+            ProjectStatus.InProgress,
+            response.Status);
+
+        Assert.Equal(
+            ProjectStatus.InProgress,
+            fixture.Project.Status);
+
+        Assert.Equal(
+            newDueDate,
+            response.DueDate);
+
+        Assert.Equal(
+            newDueDate,
+            fixture.Project.DueDate);
+
+        Assert.Equal(
+            1,
+            fixture.UnitOfWork.SaveChangesCallCount);
     }
 
-    private static ProjectMembersController CreateController(
-    Fixture fixture)
+    [Fact]
+    public async Task
+    Resume_ShouldReturnOkAndKeepDueDate_WhenNewDueDateIsNull()
     {
-        var permissionRepository =
-            new FakeProjectMemberPermissionRepository();
+        var fixture =
+            CreateFixture(
+                UserRole.TenantAdmin);
 
-        var addProjectMemberHandler =
-            new AddProjectMemberHandler(
+        fixture.Project.Start();
+
+        fixture.Project.Pause(
+            "Aguardando retorno do cliente.");
+
+        var originalDueDate =
+            fixture.Project.DueDate;
+
+        var controller =
+            CreateController(
+                fixture);
+
+        SetAuthenticatedUser(
+            controller,
+            fixture.Requester.PublicId);
+
+        var request =
+            new ResumeProjectRequest(
+                null);
+
+        var result =
+            await controller.Resume(
+                fixture.Tenant.PublicId,
+                fixture.Project.PublicId,
+                request,
+                CancellationToken.None);
+
+        var okResult =
+            Assert.IsType<OkObjectResult>(
+                result.Result);
+
+        var response =
+            Assert.IsType<ProjectStatusResponse>(
+                okResult.Value);
+
+        Assert.Equal(
+            ProjectStatus.InProgress,
+            response.Status);
+
+        Assert.Equal(
+            originalDueDate,
+            response.DueDate);
+
+        Assert.Equal(
+            originalDueDate,
+            fixture.Project.DueDate);
+
+        Assert.Equal(
+            1,
+            fixture.UnitOfWork.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task
+    Resume_ShouldReturnUnauthorized_WhenUserPublicIdClaimIsMissing()
+    {
+        var fixture =
+            CreateFixture(
+                UserRole.TenantAdmin);
+
+        fixture.Project.Start();
+
+        fixture.Project.Pause(
+            "Aguardando retorno do cliente.");
+
+        var controller =
+            CreateController(
+                fixture);
+
+        SetUnauthenticatedUser(
+            controller);
+
+        var request =
+            new ResumeProjectRequest(
+                null);
+
+        var result =
+            await controller.Resume(
+                fixture.Tenant.PublicId,
+                fixture.Project.PublicId,
+                request,
+                CancellationToken.None);
+
+        Assert.IsType<UnauthorizedResult>(
+            result.Result);
+
+        Assert.Equal(
+            ProjectStatus.Paused,
+            fixture.Project.Status);
+
+        Assert.Equal(
+            0,
+            fixture.UnitOfWork.SaveChangesCallCount);
+    }
+
+    private static ProjectsController CreateController(
+        Fixture fixture)
+    {
+        var createProjectHandler =
+            new CreateProjectHandler(
                 fixture.TenantRepository,
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
-                permissionRepository,
+                fixture.PermissionRepository,
                 fixture.UnitOfWork);
 
-        var listProjectMembersHandler =
-            new ListProjectMembersHandler(
+        var getProjectByPublicIdHandler =
+            new GetProjectByPublicIdHandler(
                 fixture.TenantRepository,
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository);
 
-        var removeProjectMemberHandler =
-            new RemoveProjectMemberHandler(
+        var listProjectsHandler =
+            new ListProjectsHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository);
+
+        var updateProjectHandler =
+            new UpdateProjectHandler(
                 fixture.TenantRepository,
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
-                permissionRepository,
+                fixture.PermissionRepository,
                 fixture.UnitOfWork);
 
-        var grantPermissionHandler =
-            new GrantProjectMemberPermissionHandler(
+        var startProjectHandler =
+            new StartProjectHandler(
                 fixture.TenantRepository,
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
-                permissionRepository,
+                fixture.PermissionRepository,
                 fixture.UnitOfWork);
 
-        var listPermissionsHandler =
-            new ListProjectMemberPermissionsHandler(
+        var pauseProjectHandler =
+            new PauseProjectHandler(
                 fixture.TenantRepository,
                 fixture.UserRepository,
                 fixture.ProjectRepository,
                 fixture.ProjectMemberRepository,
-                permissionRepository);
-
-        var revokePermissionHandler =
-            new RevokeProjectMemberPermissionHandler(
-                fixture.TenantRepository,
-                fixture.UserRepository,
-                fixture.ProjectRepository,
-                fixture.ProjectMemberRepository,
-                permissionRepository,
+                fixture.PermissionRepository,
                 fixture.UnitOfWork);
 
-        return new ProjectMembersController(
-            addProjectMemberHandler,
-            listProjectMembersHandler,
-            removeProjectMemberHandler,
-            grantPermissionHandler,
-            listPermissionsHandler,
-            revokePermissionHandler);
+        var resumeProjectHandler =
+            new ResumeProjectHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.ProjectMemberRepository,
+                fixture.PermissionRepository,
+                fixture.UnitOfWork);
+
+        return new ProjectsController(
+            createProjectHandler,
+            getProjectByPublicIdHandler,
+            listProjectsHandler,
+            updateProjectHandler,
+            startProjectHandler,
+            pauseProjectHandler,
+            resumeProjectHandler);
     }
 
     private static void SetAuthenticatedUser(
-        ProjectMembersController controller,
+        ProjectsController controller,
         Guid userPublicId)
     {
         var identity =
@@ -602,12 +645,29 @@ public sealed class ProjectMembersControllerTests
             };
     }
 
+    private static void SetUnauthenticatedUser(
+        ProjectsController controller)
+    {
+        controller.ControllerContext =
+            new ControllerContext
+            {
+                HttpContext =
+                    new DefaultHttpContext
+                    {
+                        User =
+                            new ClaimsPrincipal(
+                                new ClaimsIdentity(
+                                    authenticationType: "Test"))
+                    }
+            };
+    }
+
     private static Fixture CreateFixture(
         UserRole requesterRole)
     {
         var tenant =
             new Tenant(
-                "Empresa Project Members",
+                "Empresa Project Status API",
                 $"REG-{Guid.NewGuid():N}",
                 $"tenant-{Guid.NewGuid():N}@test.local");
 
@@ -627,23 +687,21 @@ public sealed class ProjectMembersControllerTests
             requester,
             10);
 
-        var userToAdd =
-            new User(
-                tenant.Id,
-                "Novo Membro",
-                $"member-{Guid.NewGuid():N}@test.local",
-                "password-hash",
-                UserRole.Member);
-
-        EntityTestHelper.SetId(
-            userToAdd,
-            20);
-
         var project =
             new Project(
                 tenant.Id,
-                "Projeto",
-                requester.Id);
+                "Projeto Status API",
+                requester.Id,
+                "Projeto utilizado nos testes de status.",
+                dueDate:
+                    new DateTime(
+                        2026,
+                        12,
+                        31,
+                        12,
+                        0,
+                        0,
+                        DateTimeKind.Utc));
 
         EntityTestHelper.SetId(
             project,
@@ -656,17 +714,10 @@ public sealed class ProjectMembersControllerTests
             };
 
         var userRepository =
-            new FakeUserRepository();
-
-        userRepository
-            .UsersByPublicIdToReturn[
-                requester.PublicId] =
-            requester;
-
-        userRepository
-            .UsersByPublicIdToReturn[
-                userToAdd.PublicId] =
-            userToAdd;
+            new FakeUserRepository
+            {
+                UserToReturn = requester
+            };
 
         var projectRepository =
             new FakeProjectRepository
@@ -674,26 +725,35 @@ public sealed class ProjectMembersControllerTests
                 ProjectToReturn = project
             };
 
+        var projectMemberRepository =
+            new FakeProjectMemberRepository();
+
+        var permissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
+        var unitOfWork =
+            new FakeUnitOfWork();
+
         return new Fixture(
             tenant,
             requester,
-            userToAdd,
             project,
             tenantRepository,
             userRepository,
             projectRepository,
-            new FakeProjectMemberRepository(),
-            new FakeUnitOfWork());
+            projectMemberRepository,
+            permissionRepository,
+            unitOfWork);
     }
 
     private sealed record Fixture(
         Tenant Tenant,
         User Requester,
-        User UserToAdd,
         Project Project,
         FakeTenantRepository TenantRepository,
         FakeUserRepository UserRepository,
         FakeProjectRepository ProjectRepository,
         FakeProjectMemberRepository ProjectMemberRepository,
+        FakeProjectMemberPermissionRepository PermissionRepository,
         FakeUnitOfWork UnitOfWork);
 }

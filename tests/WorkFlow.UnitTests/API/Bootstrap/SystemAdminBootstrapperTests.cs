@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Options;
 using WorkFlow.API.Bootstrap;
-using WorkFlow.UnitTests.Application.Tenants.Fakes;
+using WorkFlow.UnitTests.Common.Fakes;
 using WorkFlow.UnitTests.Application.Users.Fakes;
 
 namespace WorkFlow.UnitTests.API.Bootstrap;
