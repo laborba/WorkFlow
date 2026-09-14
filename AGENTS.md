@@ -274,3 +274,24 @@ Development is moving into ProjectTask operations.
 Task assignment is intentionally separate from task creation because `AssignTask` is a distinct permission.
 
 Preserve this separation.
+
+## Source of truth and legacy documentation
+
+Some files under `docs/` may contain historical decisions or older project states.
+
+Do not assume that every document under `docs/` represents the current implementation.
+
+When sources conflict, use this priority order:
+
+1. current Domain code and domain invariants;
+2. current automated tests;
+3. current Application/Infrastructure/API implementation;
+4. current README.md;
+5. AGENTS.md instructions and the current task prompt;
+6. documents under `docs/`.
+
+Documents under `docs/` should be used for additional domain context, terminology and historical decisions, but must not be used to revert newer behavior already established in code, tests or README.
+
+If an old document materially conflicts with the current implementation and the correct behavior cannot be determined from code, tests, README or the current task, stop and report the conflict instead of guessing.
+
+Do not rewrite or modernize legacy documentation merely because it is outdated unless the current task explicitly includes updating that document.
