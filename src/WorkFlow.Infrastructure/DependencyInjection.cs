@@ -46,6 +46,10 @@ public static class DependencyInjection
             ProjectMemberPermissionRepository>();
 
         services.AddScoped<
+            IProjectTaskRepository,
+            ProjectTaskRepository>();
+
+        services.AddScoped<
             IPasswordHasher,
             AspNetCorePasswordHasher>();
 

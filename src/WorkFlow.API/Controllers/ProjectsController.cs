@@ -13,6 +13,10 @@ using WorkFlow.Application.Projects.PauseProject;
 using WorkFlow.Application.Projects.ResumeProject;
 using WorkFlow.Application.Projects.StartProject;
 using WorkFlow.Application.Projects.UpdateProject;
+using WorkFlow.Application.Projects.ArchiveProject;
+using WorkFlow.Application.Projects.CompleteProject;
+using WorkFlow.Application.Projects.ReopenProject;
+using WorkFlow.Application.Projects.RestoreProject;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Enums;
@@ -45,6 +49,18 @@ public sealed class ProjectsController :
     private readonly ResumeProjectHandler
         _resumeProjectHandler;
 
+    private readonly CompleteProjectHandler
+        _completeProjectHandler;
+
+    private readonly ReopenProjectHandler
+        _reopenProjectHandler;
+
+    private readonly ArchiveProjectHandler
+        _archiveProjectHandler;
+
+    private readonly RestoreProjectHandler
+        _restoreProjectHandler;
+
     public ProjectsController(
         CreateProjectHandler createProjectHandler,
         GetProjectByPublicIdHandler getProjectByPublicIdHandler,
@@ -52,7 +68,11 @@ public sealed class ProjectsController :
         UpdateProjectHandler updateProjectHandler,
         StartProjectHandler startProjectHandler,
         PauseProjectHandler pauseProjectHandler,
-        ResumeProjectHandler resumeProjectHandler)
+        ResumeProjectHandler resumeProjectHandler,
+        CompleteProjectHandler completeProjectHandler,
+        ReopenProjectHandler reopenProjectHandler,
+        ArchiveProjectHandler archiveProjectHandler,
+        RestoreProjectHandler restoreProjectHandler)
     {
         _createProjectHandler =
             createProjectHandler;
@@ -74,6 +94,18 @@ public sealed class ProjectsController :
 
         _resumeProjectHandler =
             resumeProjectHandler;
+
+        _completeProjectHandler =
+            completeProjectHandler;
+
+        _reopenProjectHandler =
+            reopenProjectHandler;
+
+        _archiveProjectHandler =
+            archiveProjectHandler;
+
+        _restoreProjectHandler =
+            restoreProjectHandler;
     }
 
     [Authorize(
@@ -661,6 +693,222 @@ public sealed class ProjectsController :
                 result.Value!));
     }
 
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpPatch("{projectPublicId:guid}/complete")]
+    [ProducesResponseType<ProjectStatusResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ProjectStatusResponse>> Complete(
+        Guid tenantPublicId,
+        Guid projectPublicId,
+        CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var userPublicId))
+        {
+            return Unauthorized();
+        }
+
+        var command =
+            new CompleteProjectCommand(
+                tenantPublicId,
+                projectPublicId,
+                userPublicId);
+
+        var result =
+            await _completeProjectHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return MapProjectStatusError(
+                result.Error!);
+        }
+
+        return Ok(
+            CreateProjectStatusResponse(
+                result.Value!));
+    }
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpPatch("{projectPublicId:guid}/reopen")]
+    [ProducesResponseType<ProjectStatusResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ProjectStatusResponse>> Reopen(
+        Guid tenantPublicId,
+        Guid projectPublicId,
+        [FromBody] ReopenProjectRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var userPublicId))
+        {
+            return Unauthorized();
+        }
+
+        var command =
+            new ReopenProjectCommand(
+                tenantPublicId,
+                projectPublicId,
+                userPublicId,
+                request.Reason);
+
+        var result =
+            await _reopenProjectHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return MapProjectStatusError(
+                result.Error!);
+        }
+
+        return Ok(
+            CreateProjectStatusResponse(
+                result.Value!));
+    }
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpPatch("{projectPublicId:guid}/archive")]
+    [ProducesResponseType<ProjectStatusResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ProjectStatusResponse>> Archive(
+        Guid tenantPublicId,
+        Guid projectPublicId,
+        CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var userPublicId))
+        {
+            return Unauthorized();
+        }
+
+        var command =
+            new ArchiveProjectCommand(
+                tenantPublicId,
+                projectPublicId,
+                userPublicId);
+
+        var result =
+            await _archiveProjectHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return MapProjectStatusError(
+                result.Error!);
+        }
+
+        return Ok(
+            CreateProjectStatusResponse(
+                result.Value!));
+    }
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpPatch("{projectPublicId:guid}/restore")]
+    [ProducesResponseType<ProjectStatusResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ProjectStatusResponse>> Restore(
+        Guid tenantPublicId,
+        Guid projectPublicId,
+        CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var userPublicId))
+        {
+            return Unauthorized();
+        }
+
+        var command =
+            new RestoreProjectCommand(
+                tenantPublicId,
+                projectPublicId,
+                userPublicId);
+
+        var result =
+            await _restoreProjectHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return MapProjectStatusError(
+                result.Error!);
+        }
+
+        return Ok(
+            CreateProjectStatusResponse(
+                result.Value!));
+    }
+
+
+
     private ActionResult<ProjectStatusResponse>
         MapProjectStatusError(
             Error error)
@@ -680,6 +928,8 @@ public sealed class ProjectsController :
 
         if (error == TenantErrors.Inactive ||
             error == ProjectErrors.InvalidStatusTransition ||
+            error == ProjectErrors.HasNoTasks ||
+            error == ProjectErrors.HasOpenTasks ||
             error == ProjectErrors.Archived)
         {
             return Conflict(

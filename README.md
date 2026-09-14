@@ -115,8 +115,20 @@ Atualmente estão implementados:
 - a pausa exige um motivo válido;
 - retomada de projetos através da transição `Paused → InProgress`;
 - ao retomar um projeto, o prazo atual pode ser mantido ou substituído por um novo `DueDate`;
-- `TenantAdmin` pode iniciar, pausar e retomar qualquer projeto do próprio Tenant sem depender de permissão específica;
-- `ProjectManager` e `Member` precisam possuir participação ativa e a permissão `EditProject` para iniciar, pausar ou retomar projetos;
+- conclusão de projetos através da transição `InProgress → Completed`;
+- um projeto só pode ser concluído quando possui pelo menos uma tarefa;
+- todas as tarefas precisam estar em `Done` ou `Cancelled` para permitir a conclusão;
+- reabertura de projetos através da transição `Completed → InProgress`;
+- a reabertura exige uma justificativa;
+- arquivamento de projetos nos estados `Planning` ou `Completed`;
+- restauração de projetos arquivados para o status existente antes do arquivamento;
+- projetos arquivados a partir de `Planning` retornam para `Planning`;
+- projetos arquivados a partir de `Completed` retornam para `Completed`;
+- `TenantAdmin` possui bypass administrativo nos fluxos de status do próprio Tenant;
+- `ProjectManager` e `Member` precisam possuir participação ativa e `EditProject` para iniciar, pausar ou retomar projetos;
+- `ProjectManager` e `Member` precisam possuir participação ativa e `CompleteProject` para concluir projetos;
+- `ProjectManager` e `Member` precisam possuir participação ativa e `ReopenProject` para reabrir projetos;
+- `ProjectManager` e `Member` precisam possuir participação ativa e `ArchiveProject` para arquivar ou restaurar projetos;
 - usuários sem participação ativa ou sem `EditProject` não podem executar essas transições;
 - transições incompatíveis com o estado atual do projeto são rejeitadas;
 - alterações de status utilizam a entidade rastreada pelo Entity Framework Core e são persistidas através do `UnitOfWork`;
@@ -224,7 +236,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-969 testes automatizados aprovados
+1033 testes automatizados aprovados
 0 falhas
 ```
 
@@ -329,6 +341,23 @@ A autenticação e autorização possuem testes cobrindo, entre outros cenários
 - início de projeto através da transição `Planning → InProgress`;
 - pausa de projeto através da transição `InProgress → Paused`;
 - retomada de projeto através da transição `Paused → InProgress`;
+- conclusão de projeto somente quando existem tarefas e todas estão `Done` ou `Cancelled`;
+- bloqueio de conclusão de projeto sem tarefas;
+- bloqueio de conclusão de projeto com tarefas abertas;
+- consulta dos status das tarefas reais através de `ProjectTaskRepository`;
+- isolamento das tarefas utilizadas na conclusão pelo `ProjectId`;
+- autorização de conclusão através de `CompleteProject`;
+- reabertura de projetos concluídos através de `ReopenProject`;
+- exigência de justificativa para reabertura;
+- autorização de reabertura através de `ReopenProject`;
+- arquivamento de projetos em `Planning` ou `Completed`;
+- bloqueio de arquivamento em estados incompatíveis;
+- autorização de arquivamento através de `ArchiveProject`;
+- restauração de projetos arquivados;
+- restauração do status anterior ao arquivamento;
+- uso de `ArchiveProject` também para autorização da restauração;
+- persistência real de conclusão, reabertura, arquivamento e restauração no PostgreSQL;
+- testes da camada HTTP para conclusão, reabertura, arquivamento e restauração;
 - manutenção do prazo atual durante a retomada quando nenhum novo prazo é informado;
 - alteração do prazo durante a retomada quando um novo `DueDate` é informado;
 - autorização de `TenantAdmin` para alterações de status através de bypass administrativo;
@@ -594,11 +623,14 @@ Atualmente:
 
 - `ManageProjectPermissions` protege concessão, consulta e revogação de permissões;
 - `EditProject` protege a atualização dos dados básicos e as operações de início, pausa e retomada do projeto;
+- `CompleteProject` protege a conclusão do projeto;
+- `ReopenProject` protege a reabertura do projeto;
+- `ArchiveProject` protege o arquivamento e a restauração do projeto;
 - `ManageProjectMembers` protege inclusão e remoção de membros;
 - `TenantAdmin` possui bypass administrativo nessas operações dentro do próprio Tenant;
 - `ProjectManager` e `Member` precisam possuir participação ativa e a permissão exigida pela operação.
 
-As demais permissões existentes no domínio serão integradas progressivamente aos fluxos de conclusão, reabertura, arquivamento e tarefas.
+As permissões de ciclo de vida do projeto já estão integradas. As demais permissões serão incorporadas progressivamente aos fluxos de tarefas.
 
 ---
 
@@ -2018,6 +2050,128 @@ Projects.StatusChangeNotAllowed
 
 ---
 
+### Concluir projeto
+
+```http
+PATCH /api/tenants/{tenantPublicId}/projects/{projectPublicId}/complete
+```
+
+Transição:
+
+```text
+InProgress
+↓
+Completed
+```
+
+A conclusão somente é permitida quando:
+
+```text
+o projeto possui pelo menos uma tarefa
++
+todas as tarefas estão Done ou Cancelled
+```
+
+Caso o projeto não possua tarefas:
+
+```text
+409 Conflict
+Projects.HasNoTasks
+```
+
+Caso exista alguma tarefa aberta:
+
+```text
+409 Conflict
+Projects.HasOpenTasks
+```
+
+Para autorização:
+
+```text
+TenantAdmin
+→ bypass administrativo
+
+ProjectManager / Member
+→ participação ativa + CompleteProject
+```
+
+---
+
+### Reabrir projeto
+
+```http
+PATCH /api/tenants/{tenantPublicId}/projects/{projectPublicId}/reopen
+```
+
+Exemplo:
+
+```json
+{
+  "reason": "Novos ajustes foram solicitados."
+}
+```
+
+Transição:
+
+```text
+Completed
+↓
+InProgress
+```
+
+A justificativa é obrigatória.
+
+Para `ProjectManager` e `Member`, a operação exige participação ativa e `ReopenProject`.
+
+---
+
+### Arquivar projeto
+
+```http
+PATCH /api/tenants/{tenantPublicId}/projects/{projectPublicId}/archive
+```
+
+Podem ser arquivados projetos nos estados:
+
+```text
+Planning
+Completed
+```
+
+O status anterior é preservado para permitir restauração posterior.
+
+Para `ProjectManager` e `Member`, a operação exige participação ativa e `ArchiveProject`.
+
+---
+
+### Restaurar projeto
+
+```http
+PATCH /api/tenants/{tenantPublicId}/projects/{projectPublicId}/restore
+```
+
+A restauração retorna o projeto ao estado existente antes do arquivamento:
+
+```text
+Archived ← Planning
+→ Planning
+
+Archived ← Completed
+→ Completed
+```
+
+A operação também utiliza a permissão `ArchiveProject`.
+
+Tentar restaurar um projeto que não esteja arquivado retorna:
+
+```text
+409 Conflict
+Projects.InvalidStatusTransition
+```
+
+---
+
 ### Adicionar membro ao projeto
 
 ```http
@@ -2900,6 +3054,8 @@ Projects.ViewNotAllowed
 Projects.UpdateNotAllowed
 Projects.StatusChangeNotAllowed
 Projects.InvalidStatusTransition
+Projects.HasNoTasks
+Projects.HasOpenTasks
 Projects.Archived
 
 ProjectMembers.AddNotAllowed
@@ -3097,7 +3253,7 @@ Os arquivos possuem responsabilidades separadas:
 → cadastro, consulta, listagem, atualização, status e perfil de usuários
 
 04-Projects.http
-→ criação, consulta individual, listagem, atualização, início, pausa e retomada de projetos; inclusão, listagem e remoção de membros; concessão, listagem e revogação de permissões; filtros e autorização
+→ criação, consulta individual, listagem, atualização e ciclo completo de status de projetos; inclusão, listagem e remoção de membros; concessão, listagem e revogação de permissões; filtros e autorização
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -3499,7 +3655,10 @@ Atualmente já são permissões operacionais efetivas:
 
 - `EditProject`: permite atualização dos dados básicos e início, pausa e retomada do projeto;
 - `ManageProjectMembers`: permite inclusão e remoção de membros;
-- `ManageProjectPermissions`: permite concessão, consulta e revogação de permissões.
+- `ManageProjectPermissions`: permite concessão, consulta e revogação de permissões;
+- `CompleteProject`: permite concluir o projeto quando as regras das tarefas forem atendidas;
+- `ReopenProject`: permite reabrir projetos concluídos;
+- `ArchiveProject`: permite arquivar e restaurar projetos.
 
 Quando um `ProjectManager` cria um novo projeto, sua participação inicial recebe automaticamente:
 
@@ -3509,7 +3668,7 @@ Quando um `ProjectManager` cria um novo projeto, sua participação inicial rece
 
 O `TenantAdmin` não depende dessas permissões específicas nas operações atualmente cobertas por bypass administrativo.
 
-As demais permissões serão integradas aos respectivos casos de uso conforme os fluxos de conclusão, reabertura, arquivamento e tarefas forem implementados.
+As permissões restantes serão integradas aos respectivos casos de uso conforme os fluxos operacionais de tarefas forem implementados.
 
 # Notificações
 
@@ -3662,7 +3821,9 @@ Essa camada ainda não está implementada.
 - [x] Integração de `ManageProjectMembers` à inclusão e remoção de membros
 - [x] Permissões administrativas iniciais automáticas para `ProjectManager` criador
 - [x] Integração de `EditProject` aos fluxos de início, pausa e retomada de projetos
-- [ ] Integração de `CompleteProject`, `ReopenProject` e `ArchiveProject` aos respectivos fluxos
+- [x] Integração de `CompleteProject` à conclusão de projetos
+- [x] Integração de `ReopenProject` à reabertura de projetos
+- [x] Integração de `ArchiveProject` ao arquivamento e restauração de projetos
 - [ ] Integração das permissões específicas aos fluxos de tarefas
 - [ ] Rate limiting
 - [ ] MFA
@@ -3697,9 +3858,10 @@ Essa camada ainda não está implementada.
 - [x] Início de projeto — `Planning → InProgress`
 - [x] Pausa de projeto — `InProgress → Paused`
 - [x] Retomada de projeto — `Paused → InProgress`
-- [ ] Conclusão de projeto
-- [ ] Reabertura de projeto
-- [ ] Arquivamento e restauração de projeto
+- [x] Conclusão de projeto — `InProgress → Completed`
+- [x] Reabertura de projeto — `Completed → InProgress`
+- [x] Arquivamento de projeto
+- [x] Restauração de projeto
 - [ ] Histórico
 - [ ] Kanban
 
@@ -3898,20 +4060,41 @@ ManageProjectPermissions possui efeito efetivo na autorização
 EditProject possui efeito efetivo na autorização de atualização
 ManageProjectMembers possui efeito efetivo na autorização de inclusão e remoção de membros
 EditProject possui efeito efetivo nos fluxos de início, pausa e retomada de projetos
+CompleteProject possui efeito efetivo na autorização de conclusão de projetos
+ReopenProject possui efeito efetivo na autorização de reabertura de projetos
+ArchiveProject possui efeito efetivo na autorização de arquivamento e restauração de projetos
 Projetos podem ser iniciados através da transição Planning → InProgress
 Projetos InProgress podem ser pausados
 Projetos Paused podem ser retomados para InProgress
 Retomada pode manter o prazo atual ou definir um novo DueDate
-TenantAdmin possui bypass administrativo nas operações atuais de status
+Projetos InProgress podem ser concluídos quando possuem pelo menos uma tarefa
+Projetos sem tarefas não podem ser concluídos
+Projetos com tarefas abertas não podem ser concluídos
+Todas as tarefas precisam estar Done ou Cancelled para permitir conclusão do projeto
+Projetos Completed podem ser reabertos para InProgress
+Reabertura de projeto exige justificativa
+Projetos Planning podem ser arquivados
+Projetos Completed podem ser arquivados
+Projetos arquivados preservam o status anterior
+Projetos arquivados a partir de Planning podem ser restaurados para Planning
+Projetos arquivados a partir de Completed podem ser restaurados para Completed
+TenantAdmin possui bypass administrativo nas operações de status
 ProjectManager e Member dependem de participação ativa e EditProject para início, pausa e retomada
+ProjectManager e Member dependem de participação ativa e CompleteProject para conclusão
+ProjectManager e Member dependem de participação ativa e ReopenProject para reabertura
+ProjectManager e Member dependem de participação ativa e ArchiveProject para arquivamento e restauração
 Transições incompatíveis com o estado atual são bloqueadas
+Consulta dos status das tarefas para conclusão utiliza ProjectTaskRepository
+Consulta de tarefas para conclusão é isolada pelo ProjectId
 Persistência das alterações de status validada com PostgreSQL real
+Ciclo completo de status de projetos validado com PostgreSQL real
 Endpoints PATCH de start, pause e resume validados manualmente
+Endpoints PATCH de complete, reopen, archive e restore validados manualmente
 Projetos Archived permitem consulta, mas bloqueiam concessão e revogação de permissões
 Usuários alvo inativos podem ter permissões consultadas e revogadas
 SystemAdmin não possui acesso operacional aos projetos de Tenant
 Requisições HTTP manuais organizadas por módulo
-969 testes automatizados aprovados
+1033 testes automatizados aprovados
 0 falhas
 ```
 

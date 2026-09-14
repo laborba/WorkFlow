@@ -24,6 +24,10 @@ using WorkFlow.Application.Users.CreateUser;
 using WorkFlow.Application.Users.GetUserByPublicId;
 using WorkFlow.Application.Users.ListUsers;
 using WorkFlow.Application.Users.UpdateUser;
+using WorkFlow.Application.Projects.ArchiveProject;
+using WorkFlow.Application.Projects.CompleteProject;
+using WorkFlow.Application.Projects.ReopenProject;
+using WorkFlow.Application.Projects.RestoreProject;
 
 namespace WorkFlow.Application;
 
@@ -54,6 +58,10 @@ public static class DependencyInjection
         services.AddScoped<StartProjectHandler>();
         services.AddScoped<PauseProjectHandler>();
         services.AddScoped<ResumeProjectHandler>();
+        services.AddScoped<CompleteProjectHandler>();
+        services.AddScoped<ReopenProjectHandler>();
+        services.AddScoped<ArchiveProjectHandler>();
+        services.AddScoped<RestoreProjectHandler>();
 
         services.AddScoped<AddProjectMemberHandler>();
         services.AddScoped<ListProjectMembersHandler>();

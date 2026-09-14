@@ -6,10 +6,14 @@ using WorkFlow.API.Contracts.Projects;
 using WorkFlow.API.Controllers;
 using WorkFlow.Application.Abstractions.Persistence.Models;
 using WorkFlow.Application.Common.Pagination;
+using WorkFlow.Application.Projects.ArchiveProject;
+using WorkFlow.Application.Projects.CompleteProject;
 using WorkFlow.Application.Projects.CreateProject;
 using WorkFlow.Application.Projects.GetProjectByPublicId;
 using WorkFlow.Application.Projects.ListProjects;
 using WorkFlow.Application.Projects.PauseProject;
+using WorkFlow.Application.Projects.ReopenProject;
+using WorkFlow.Application.Projects.RestoreProject;
 using WorkFlow.Application.Projects.ResumeProject;
 using WorkFlow.Application.Projects.StartProject;
 using WorkFlow.Application.Projects.UpdateProject;
@@ -404,7 +408,11 @@ public sealed class ListProjectsControllerTests
             CreateUnusedUpdateProjectHandler(),
             CreateUnusedStartProjectHandler(),
             CreateUnusedPauseProjectHandler(),
-            CreateUnusedResumeProjectHandler());
+            CreateUnusedResumeProjectHandler(),
+            CreateUnusedCompleteProjectHandler(),
+            CreateUnusedReopenProjectHandler(),
+            CreateUnusedArchiveProjectHandler(),
+            CreateUnusedRestoreProjectHandler());
     }
 
     private static void SetAuthenticatedUser(
@@ -508,6 +516,55 @@ public sealed class ListProjectsControllerTests
         CreateUnusedResumeProjectHandler()
     {
         return new ResumeProjectHandler(
+            new FakeTenantRepository(),
+            new FakeUserRepository(),
+            new FakeProjectRepository(),
+            new FakeProjectMemberRepository(),
+            new FakeProjectMemberPermissionRepository(),
+            new FakeUnitOfWork());
+    }
+
+    private static CompleteProjectHandler
+        CreateUnusedCompleteProjectHandler()
+    {
+        return new CompleteProjectHandler(
+            new FakeTenantRepository(),
+            new FakeUserRepository(),
+            new FakeProjectRepository(),
+            new FakeProjectMemberRepository(),
+            new FakeProjectMemberPermissionRepository(),
+            new FakeProjectTaskRepository(),
+            new FakeUnitOfWork());
+    }
+
+    private static ReopenProjectHandler
+        CreateUnusedReopenProjectHandler()
+    {
+        return new ReopenProjectHandler(
+            new FakeTenantRepository(),
+            new FakeUserRepository(),
+            new FakeProjectRepository(),
+            new FakeProjectMemberRepository(),
+            new FakeProjectMemberPermissionRepository(),
+            new FakeUnitOfWork());
+    }
+
+    private static ArchiveProjectHandler
+        CreateUnusedArchiveProjectHandler()
+    {
+        return new ArchiveProjectHandler(
+            new FakeTenantRepository(),
+            new FakeUserRepository(),
+            new FakeProjectRepository(),
+            new FakeProjectMemberRepository(),
+            new FakeProjectMemberPermissionRepository(),
+            new FakeUnitOfWork());
+    }
+
+    private static RestoreProjectHandler
+        CreateUnusedRestoreProjectHandler()
+    {
+        return new RestoreProjectHandler(
             new FakeTenantRepository(),
             new FakeUserRepository(),
             new FakeProjectRepository(),

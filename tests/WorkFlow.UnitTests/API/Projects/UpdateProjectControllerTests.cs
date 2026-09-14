@@ -5,10 +5,14 @@ using WorkFlow.API.Contracts.Common;
 using WorkFlow.API.Contracts.Projects;
 using WorkFlow.API.Controllers;
 using WorkFlow.Application.Projects;
+using WorkFlow.Application.Projects.ArchiveProject;
+using WorkFlow.Application.Projects.CompleteProject;
 using WorkFlow.Application.Projects.CreateProject;
 using WorkFlow.Application.Projects.GetProjectByPublicId;
 using WorkFlow.Application.Projects.ListProjects;
 using WorkFlow.Application.Projects.PauseProject;
+using WorkFlow.Application.Projects.ReopenProject;
+using WorkFlow.Application.Projects.RestoreProject;
 using WorkFlow.Application.Projects.ResumeProject;
 using WorkFlow.Application.Projects.StartProject;
 using WorkFlow.Application.Projects.UpdateProject;
@@ -705,6 +709,43 @@ public sealed class UpdateProjectControllerTests
                 projectMemberPermissionRepository,
                 unitOfWork);
 
+        var completeProjectHandler =
+            new CompleteProjectHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository,
+                projectMemberRepository,
+                projectMemberPermissionRepository,
+                new FakeProjectTaskRepository(),
+                unitOfWork);
+
+        var reopenProjectHandler =
+            new ReopenProjectHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository,
+                projectMemberRepository,
+                projectMemberPermissionRepository,
+                unitOfWork);
+
+        var archiveProjectHandler =
+            new ArchiveProjectHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository,
+                projectMemberRepository,
+                projectMemberPermissionRepository,
+                unitOfWork);
+
+        var restoreProjectHandler =
+            new RestoreProjectHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository,
+                projectMemberRepository,
+                projectMemberPermissionRepository,
+                unitOfWork);
+
         return new ProjectsController(
             createProjectHandler,
             getProjectByPublicIdHandler,
@@ -712,7 +753,11 @@ public sealed class UpdateProjectControllerTests
             updateProjectHandler,
             startProjectHandler,
             pauseProjectHandler,
-            resumeProjectHandler);
+            resumeProjectHandler,
+            completeProjectHandler,
+            reopenProjectHandler,
+            archiveProjectHandler,
+            restoreProjectHandler);
     }
 
     private static void SetAuthenticatedUser(

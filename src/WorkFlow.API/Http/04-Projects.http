@@ -1321,6 +1321,89 @@ Authorization: Bearer {{tenantAdminToken}}
 Accept: application/json
 
 ### ============================================================
+### PROJECTS — CICLO DE VIDA — CONCLUSÃO E ARQUIVAMENTO
+###
+### Regras:
+### - Complete exige projeto InProgress.
+### - Complete exige pelo menos uma tarefa.
+### - Todas as tarefas precisam estar Done ou Cancelled.
+### - Reopen exige projeto Completed.
+### - Archive aceita projetos Planning ou Completed.
+### - Restore retorna o projeto ao status anterior ao arquivamento.
+### - TenantAdmin possui bypass administrativo.
+### ============================================================
+
+### Projects - Concluir projeto InProgress sem tarefas - deve retornar 409 Conflict com HasNoTasks
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/complete
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Reabrir projeto que não está Completed - deve retornar 409 Conflict
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/reopen
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "Novos ajustes foram solicitados."
+}
+
+
+### Projects - TenantAdmin arquivar projeto Planning - deve retornar 200 OK e status Archived
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/archive
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Confirmar projeto arquivado - deve retornar 200 OK com status Archived
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Restaurar projeto arquivado - deve retornar 200 OK e status Planning
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/restore
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Confirmar projeto restaurado - deve retornar 200 OK com status Planning
+GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Restaurar novamente projeto não arquivado - deve retornar 409 Conflict
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/restore
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Arquivar projeto InProgress - deve retornar 409 Conflict
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/archive
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### Projects - Alterar ciclo de vida sem token - deve retornar 401 Unauthorized
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/archive
+Accept: application/json
+
+
+### Projects - SystemAdmin tentar arquivar projeto operacional - deve retornar 403 Forbidden
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/archive
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### Projects - Usuário de outro Tenant tentar arquivar projeto - deve retornar 403 Forbidden
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/archive
+Authorization: Bearer {{otherTenantToken}}
+Accept: application/json
+
+
+### ============================================================
 ### PROJECTS — DADOS DE APOIO
 ###
 ### Não execute novamente sem necessidade.
