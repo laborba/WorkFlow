@@ -1,4 +1,5 @@
 ﻿using WorkFlow.Application.Abstractions.Persistence;
+using WorkFlow.Domain.Entities;
 using WorkFlow.Domain.Enums;
 
 namespace WorkFlow.UnitTests.Application.Projects.Fakes;
@@ -13,6 +14,8 @@ public sealed class FakeProjectTaskRepository :
 
     public long? CheckedProjectId { get; private set; }
 
+    public ProjectTask? AddedProjectTask { get; private set; }
+
     public Task<IReadOnlyCollection<ProjectTaskStatus>>
         GetStatusesByProjectIdAsync(
             long projectId,
@@ -23,5 +26,15 @@ public sealed class FakeProjectTaskRepository :
 
         return Task.FromResult(
             StatusesToReturn);
+    }
+
+    public Task AddAsync(
+        ProjectTask projectTask,
+        CancellationToken cancellationToken = default)
+    {
+        AddedProjectTask =
+            projectTask;
+
+        return Task.CompletedTask;
     }
 }

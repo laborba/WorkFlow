@@ -1,0 +1,224 @@
+### ============================================================
+### PROJECT TASKS — CRIAÇÃO
+###
+### Regras:
+### - TenantAdmin possui bypass administrativo no próprio Tenant.
+### - ProjectManager e Member precisam ser membros ativos e possuir CreateTask.
+### - SystemAdmin não possui acesso operacional ao Tenant.
+### - A tarefa nasce em Backlog.
+### - ResponsibleUserPublicId nasce null.
+### - Planning, InProgress e Paused permitem criação.
+### - Completed e Archived bloqueiam criação.
+### - A atribuição de responsável pertence à vertical AssignTask.
+### - DueDate deve possuir UTC (Z) ou offset explícito.
+###
+### ProjectPermission.CreateTask = 7
+###
+### Este arquivo reutiliza os projetos de referência já existentes:
+### - projetoProjectManagerPublicId: utilizado como projeto Planning.
+### - projetoTenantAdminPublicId: utilizado como projeto InProgress.
+###
+### Execute as requisições de preparação na ordem indicada quando
+### precisar testar Paused ou Archived.
+### ============================================================
+
+
+### ProjectTasks - TenantAdmin criar em Planning com DueDate UTC - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa em planejamento",
+  "description": "Criação de tarefa em projeto Planning.",
+  "priority": 3,
+  "dueDate": "2027-01-31T18:00:00Z"
+}
+
+
+### ProjectTasks - DueDate com offset -03:00 deve normalizar para UTC - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa com fuso horário",
+  "description": "O retorno deve normalizar o prazo para UTC.",
+  "priority": 2,
+  "dueDate": "2027-01-31T18:00:00-03:00"
+}
+
+
+### ProjectTasks - DueDate sem UTC ou offset - 400
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa com prazo ambíguo",
+  "description": null,
+  "priority": 2,
+  "dueDate": "2027-01-31T18:00:00"
+}
+
+
+### ProjectTasks - TenantAdmin criar em InProgress - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa em andamento",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Preparação pausar projeto InProgress - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/pause
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "Preparação para teste de criação de tarefa em projeto pausado."
+}
+
+
+### ProjectTasks - TenantAdmin criar em Paused - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa criada durante pausa",
+  "description": "Criação é permitida enquanto o projeto está pausado.",
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Restaurar projeto Paused para InProgress - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/resume
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "newDueDate": null
+}
+
+
+### ProjectTasks - Sem autenticação - 401
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa sem autenticação",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - SystemAdmin sem acesso operacional - 403
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa por SystemAdmin",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Usuário de outro Tenant - 403
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks
+Authorization: Bearer {{otherTenantToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa por usuário de outro Tenant",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Projeto inexistente - 404
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/11111111-1111-1111-1111-111111111111/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa em projeto inexistente",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Título vazio - 400
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "   ",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Prioridade inválida - 400
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa com prioridade inválida",
+  "description": null,
+  "priority": 99,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Preparação arquivar projeto Planning - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/archive
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Projeto Archived bloqueia criação - 409
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa em projeto arquivado",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Restaurar projeto após teste Archived - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/restore
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json

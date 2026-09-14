@@ -13,6 +13,11 @@ using WorkFlow.Application.Projects.ResumeProject;
 using WorkFlow.Application.Projects.RevokeProjectMemberPermission;
 using WorkFlow.Application.Projects.StartProject;
 using WorkFlow.Application.Projects.UpdateProject;
+using WorkFlow.Application.Projects.ArchiveProject;
+using WorkFlow.Application.Projects.CompleteProject;
+using WorkFlow.Application.Projects.ReopenProject;
+using WorkFlow.Application.Projects.RestoreProject;
+using WorkFlow.Application.ProjectTasks.CreateProjectTask;
 using WorkFlow.Application.Tenants.ChangeTenantStatus;
 using WorkFlow.Application.Tenants.CreateTenant;
 using WorkFlow.Application.Tenants.GetTenantByPublicId;
@@ -24,10 +29,6 @@ using WorkFlow.Application.Users.CreateUser;
 using WorkFlow.Application.Users.GetUserByPublicId;
 using WorkFlow.Application.Users.ListUsers;
 using WorkFlow.Application.Users.UpdateUser;
-using WorkFlow.Application.Projects.ArchiveProject;
-using WorkFlow.Application.Projects.CompleteProject;
-using WorkFlow.Application.Projects.ReopenProject;
-using WorkFlow.Application.Projects.RestoreProject;
 
 namespace WorkFlow.Application;
 
@@ -62,6 +63,8 @@ public static class DependencyInjection
         services.AddScoped<ReopenProjectHandler>();
         services.AddScoped<ArchiveProjectHandler>();
         services.AddScoped<RestoreProjectHandler>();
+
+        services.AddScoped<CreateProjectTaskHandler>();
 
         services.AddScoped<AddProjectMemberHandler>();
         services.AddScoped<ListProjectMembersHandler>();

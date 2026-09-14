@@ -1,4 +1,5 @@
-﻿using WorkFlow.Domain.Enums;
+﻿using WorkFlow.Domain.Entities;
+using WorkFlow.Domain.Enums;
 
 namespace WorkFlow.Application.Abstractions.Persistence;
 
@@ -8,4 +9,8 @@ public interface IProjectTaskRepository
         GetStatusesByProjectIdAsync(
             long projectId,
             CancellationToken cancellationToken = default);
+
+    Task AddAsync(
+        ProjectTask projectTask,
+        CancellationToken cancellationToken = default);
 }

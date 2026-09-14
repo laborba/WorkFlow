@@ -51,6 +51,29 @@ public sealed class WorkFlowDbContext : DbContext, IUnitOfWork
     public async Task<IUnitOfWorkTransaction> BeginTransactionAsync(
         CancellationToken cancellationToken = default)
     {
+        var currentTransaction =
+            Database.CurrentTransaction;
+
+        if (currentTransaction is not null)
+        {
+            if (!currentTransaction.SupportsSavepoints)
+            {
+                throw new InvalidOperationException(
+                    "A transação atual não suporta savepoints.");
+            }
+
+            var savepointName =
+                $"workflow_{Guid.NewGuid():N}";
+
+            await currentTransaction.CreateSavepointAsync(
+                savepointName,
+                cancellationToken);
+
+            return new EfCoreSavepointUnitOfWorkTransaction(
+                currentTransaction,
+                savepointName);
+        }
+
         var transaction =
             await Database.BeginTransactionAsync(
                 cancellationToken);

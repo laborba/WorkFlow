@@ -69,49 +69,80 @@ public sealed class ArchiveProjectHandler
             return Result<ProjectStatusResult>.Failure(
                 UserErrors.Inactive);
 
-        var project =
-            await _projectRepository.GetTrackedByPublicIdAsync(
-                tenant.Id,
-                command.ProjectPublicId,
+        await using var transaction =
+            await _unitOfWork.BeginTransactionAsync(
                 cancellationToken);
 
-        if (project is null)
-            return Result<ProjectStatusResult>.Failure(
-                ProjectErrors.NotFound);
-
-        var canExecute =
-            await ProjectStatusAuthorization.CanExecuteAsync(
-                requestedByUser,
-                project,
-                ProjectPermission.ArchiveProject,
-                _projectMemberRepository,
-                _projectMemberPermissionRepository,
-                cancellationToken);
-
-        if (!canExecute)
-            return Result<ProjectStatusResult>.Failure(
-                ProjectErrors.StatusChangeNotAllowed);
-
-        if (project.Status != ProjectStatus.Planning &&
-            project.Status != ProjectStatus.Completed)
+        try
         {
-            return Result<ProjectStatusResult>.Failure(
-                ProjectErrors.InvalidStatusTransition);
+            var project =
+                await _projectRepository
+                    .GetForUpdateByPublicIdAsync(
+                        tenant.Id,
+                        command.ProjectPublicId,
+                        cancellationToken);
+
+            if (project is null)
+            {
+                await transaction.RollbackAsync(
+                    cancellationToken);
+
+                return Result<ProjectStatusResult>.Failure(
+                    ProjectErrors.NotFound);
+            }
+
+            var canExecute =
+                await ProjectStatusAuthorization.CanExecuteAsync(
+                    requestedByUser,
+                    project,
+                    ProjectPermission.ArchiveProject,
+                    _projectMemberRepository,
+                    _projectMemberPermissionRepository,
+                    cancellationToken);
+
+            if (!canExecute)
+            {
+                await transaction.RollbackAsync(
+                    cancellationToken);
+
+                return Result<ProjectStatusResult>.Failure(
+                    ProjectErrors.StatusChangeNotAllowed);
+            }
+
+            if (project.Status != ProjectStatus.Planning &&
+                project.Status != ProjectStatus.Completed)
+            {
+                await transaction.RollbackAsync(
+                    cancellationToken);
+
+                return Result<ProjectStatusResult>.Failure(
+                    ProjectErrors.InvalidStatusTransition);
+            }
+
+            project.Archive();
+
+            await _unitOfWork.SaveChangesAsync(
+                cancellationToken);
+
+            await transaction.CommitAsync(
+                cancellationToken);
+
+            return Result<ProjectStatusResult>.Success(
+                new ProjectStatusResult(
+                    project.PublicId,
+                    tenant.PublicId,
+                    project.Status,
+                    project.DueDate,
+                    project.UpdatedAt,
+                    project.ArchivedAt));
         }
+        catch
+        {
+            await transaction.RollbackAsync(
+                cancellationToken);
 
-        project.Archive();
-
-        await _unitOfWork.SaveChangesAsync(
-            cancellationToken);
-
-        return Result<ProjectStatusResult>.Success(
-            new ProjectStatusResult(
-                project.PublicId,
-                tenant.PublicId,
-                project.Status,
-                project.DueDate,
-                project.UpdatedAt,
-                project.ArchivedAt));
+            throw;
+        }
     }
 
     private static void ValidatePublicIds(

@@ -181,6 +181,25 @@ Atualmente estão implementados:
 - isolamento das operações de permissões pelo Tenant autenticado.
 
 
+### Tarefas — CreateProjectTask
+
+- criação de tarefas no projeto do Tenant autenticado;
+- tarefa criada em `Backlog`, com `ResponsibleUserId = null` e criador obtido do JWT;
+- request com `Title`, `Description` opcional, `Priority` e `DueDate` opcional;
+- `TenantAdmin` possui bypass administrativo dentro do próprio Tenant;
+- `ProjectManager` e `Member` precisam de participação ativa e permissão `CreateTask` ativa;
+- criação permitida em `Planning`, `InProgress` e `Paused`, bloqueada em `Completed` e `Archived`;
+- `SystemAdmin` não possui acesso operacional às tarefas do Tenant;
+- `DueDate` aceita UTC (`Z`) ou offset explícito e é normalizado para UTC antes da persistência;
+- datas sem informação de fuso horário são rejeitadas com `400 Bad Request`;
+- criação de tarefa, conclusão de projeto e arquivamento coordenam o acesso concorrente ao projeto através de transação e bloqueio pessimista `FOR UPDATE`;
+- operações concorrentes não permitem que um projeto termine `Completed` ou `Archived` com uma nova tarefa criada de forma inconsistente;
+- persistência via `ProjectTaskRepository` e `UnitOfWork`, sem alteração de schema;
+- testes unitários, de Controller, integração e concorrência com PostgreSQL aprovados;
+- roteiro HTTP disponível e validação manual autenticada concluída.
+
+A atribuição de responsável será implementada separadamente, através de `AssignTask`.
+
 ### Autenticação e autorização
 
 - login de usuários vinculados a uma empresa;
@@ -236,11 +255,17 @@ SystemAdmin
 Última validação local:
 
 ```text
-1033 testes automatizados aprovados
+1125 testes automatizados aprovados
 0 falhas
 ```
 
 A solução possui testes unitários e testes de integração.
+
+`CreateProjectTask` possui cobertura automatizada para autorização, status do projeto, campos de criação, isolamento entre Tenants, persistência real, permissões revogadas e reinclusão de membros sem herdar permissões antigas.
+
+Também existem testes específicos para normalização de `DueDate`, persistência UTC no PostgreSQL e concorrência real entre conexões distintas. Os testes concorrentes validam a coordenação entre criação de tarefas, conclusão e arquivamento através do bloqueio pessimista do projeto.
+
+Os testes de Controller verificam o usuário autenticado, os contratos e o tratamento de erros. A validação manual autenticada do endpoint também foi concluída.
 
 A autenticação e autorização possuem testes cobrindo, entre outros cenários:
 
@@ -2594,6 +2619,84 @@ Isso já ocorre com `ManageProjectPermissions`: após sua revogação, `ProjectM
 ---
 
 
+## Tarefas
+
+### Criar tarefa no projeto
+
+```http
+POST /api/tenants/{tenantPublicId}/projects/{projectPublicId}/tasks
+```
+
+A policy `TenantAccess` exige autenticação e correspondência entre o Tenant da rota e o JWT. A Application consulta usuário e projeto dentro desse Tenant e valida seus estados atuais.
+
+`TenantAdmin` pode criar sem participação ou permissão específica no próprio Tenant. `ProjectManager` e `Member` precisam possuir participação ativa e `CreateTask` ativa nessa participação. Ser criador ou responsável pelo projeto não substitui essa autorização. `SystemAdmin` não possui acesso operacional.
+
+```json
+{
+  "title": "Implementar cadastro de tarefas",
+  "description": "Criar tarefa sem atribuir responsável.",
+  "priority": 3,
+  "dueDate": "2027-01-31T18:00:00Z"
+}
+```
+
+`Title` deve ser preenchido; espaços externos são removidos. `Description` vazia ou composta somente por espaços vira `null`. As prioridades são `1 = Low`, `2 = Medium`, `3 = High` e `4 = Critical`.
+
+`DueDate` é opcional. Quando informado, deve possuir UTC (`Z`) ou offset explícito:
+
+```text
+2027-01-31T18:00:00Z
+2027-01-31T18:00:00-03:00
+```
+
+Valores com offset são normalizados para UTC antes da persistência. Por exemplo:
+
+```text
+2027-01-31T18:00:00-03:00
+↓
+2027-01-31T21:00:00Z
+```
+
+Uma data sem informação de fuso horário, como:
+
+```text
+2027-01-31T18:00:00
+```
+
+é rejeitada com `400 Bad Request` e `Validation.InvalidArgument`.
+
+O request não possui campos de criador, responsável ou status. `CreatedByUserId` vem do usuário autenticado, `ResponsibleUserId` inicia `null` e a tarefa nasce em `Backlog`. A operação não atribui responsável nem exige `AssignTask`.
+
+| Status do projeto | Criação |
+| --- | --- |
+| Planning | Permitida |
+| InProgress | Permitida |
+| Paused | Permitida |
+| Completed | Bloqueada |
+| Archived | Bloqueada |
+
+O sucesso retorna `201 Created` com `PublicId`, `TenantPublicId`, `ProjectPublicId`, `CreatedByUserPublicId`, `ResponsibleUserPublicId` nulo, `Title`, `Description`, `Status`, `Priority`, `DueDate` e `CreatedAt`. Identificadores internos não são expostos. Esta vertical não implementa consulta individual da tarefa.
+
+| Situação | Resposta |
+| --- | --- |
+| Sem autenticação ou identificador de usuário inválido | 401 Unauthorized |
+| JWT de outro Tenant ou de SystemAdmin | 403 Forbidden |
+| Usuário inativo ou sem autorização no projeto | 403 Forbidden |
+| Tenant, usuário ou projeto não encontrado no escopo consultado | 404 Not Found |
+| Tenant inativo | 409 Conflict — `Tenants.Inactive` |
+| Projeto Completed ou Archived | 409 Conflict — `ProjectTasks.CreationBlockedByProjectStatus` |
+| Título, prioridade ou identificador obrigatório inválido | 400 Bad Request |
+
+A ausência de autorização no projeto usa `ProjectTasks.CreationNotAllowed`.
+
+A criação é executada dentro de uma transação e obtém bloqueio pessimista `FOR UPDATE` sobre o projeto antes de validar seu estado e persistir a tarefa.
+
+A mesma coordenação é utilizada pelos fluxos de conclusão e arquivamento do projeto. Dessa forma, operações concorrentes são serializadas e não podem produzir estados inconsistentes, como um projeto `Completed` contendo uma nova tarefa `Backlog`.
+
+Quando já existe uma transação externa, como nos testes de integração, o `UnitOfWork` utiliza savepoint em vez de abrir uma nova transação PostgreSQL sobre a mesma conexão.
+
+Os cenários manuais estão em `src/WorkFlow.API/Http/05-ProjectTasks.http`. A validação automatizada e a validação manual autenticada foram concluídas.
+
 ## Autenticação
 
 ### Realizar login
@@ -3236,6 +3339,7 @@ src/WorkFlow.API/Http
 ├── 02-Tenants.http
 ├── 03-Users.http
 ├── 04-Projects.http
+├── 05-ProjectTasks.http
 ├── http-client.env.json
 └── http-client.env.json.user
 ```
@@ -3254,6 +3358,9 @@ Os arquivos possuem responsabilidades separadas:
 
 04-Projects.http
 → criação, consulta individual, listagem, atualização e ciclo completo de status de projetos; inclusão, listagem e remoção de membros; concessão, listagem e revogação de permissões; filtros e autorização
+
+05-ProjectTasks.http
+→ criação de tarefas, autorização por CreateTask, status do projeto e isolamento entre Tenants
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -3482,7 +3589,7 @@ As permissões `ManageProjectPermissions`, `EditProject` e `ManageProjectMembers
 
 `EditProject` também é utilizada nos fluxos de início, pausa e retomada de projetos.
 
-A autorização continuará sendo evoluída integrando `CompleteProject`, `ReopenProject`, `ArchiveProject` e as permissões específicas de tarefas aos respectivos casos de uso.
+`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas; as demais permissões de tarefas serão incorporadas aos próximos casos de uso.
 
 ```text
 Permissões específicas por recurso
@@ -3554,6 +3661,10 @@ Archived
 ---
 
 # Tarefas
+
+`CreateProjectTask` já está implementado na Application, persistência e API, com testes automatizados e validação manual autenticada aprovados. A criação usa `CreateTask`, inicia em `Backlog` e mantém o responsável nulo.
+
+O prazo opcional aceita UTC ou offset explícito e é normalizado para UTC. A criação também participa da coordenação concorrente do projeto através de transação e bloqueio pessimista, evitando inconsistências com conclusão ou arquivamento executados simultaneamente.
 
 O módulo de tarefas deverá contemplar:
 
@@ -3658,7 +3769,8 @@ Atualmente já são permissões operacionais efetivas:
 - `ManageProjectPermissions`: permite concessão, consulta e revogação de permissões;
 - `CompleteProject`: permite concluir o projeto quando as regras das tarefas forem atendidas;
 - `ReopenProject`: permite reabrir projetos concluídos;
-- `ArchiveProject`: permite arquivar e restaurar projetos.
+- `ArchiveProject`: permite arquivar e restaurar projetos;
+- `CreateTask`: permite criar tarefas em projetos Planning, InProgress ou Paused, com participação ativa para ProjectManager e Member.
 
 Quando um `ProjectManager` cria um novo projeto, sua participação inicial recebe automaticamente:
 
@@ -3824,7 +3936,8 @@ Essa camada ainda não está implementada.
 - [x] Integração de `CompleteProject` à conclusão de projetos
 - [x] Integração de `ReopenProject` à reabertura de projetos
 - [x] Integração de `ArchiveProject` ao arquivamento e restauração de projetos
-- [ ] Integração das permissões específicas aos fluxos de tarefas
+- [x] Integração de `CreateTask` à criação de tarefas
+- [ ] Integração das demais permissões aos fluxos de tarefas
 - [ ] Rate limiting
 - [ ] MFA
 - [ ] Recuperação de conta
@@ -3870,8 +3983,16 @@ Essa camada ainda não está implementada.
 - [x] Entidade e regras centrais de domínio
 - [x] Colaboradores no domínio
 - [x] Comentários no domínio
-- [ ] Casos de uso
-- [ ] Endpoints
+- [x] Caso de uso CreateProjectTask e persistência
+- [x] Endpoint POST de criação de tarefas
+- [x] Testes de criação, autorização e isolamento multi-tenant
+- [x] Validação de DueDate e normalização para UTC
+- [x] Proteção contra concorrência com conclusão e arquivamento de projetos
+- [x] Validação manual autenticada de CreateProjectTask
+- [ ] Atribuição de responsável através de AssignTask
+- [ ] Validação manual autenticada de CreateProjectTask
+- [ ] Atribuição de responsável através de AssignTask
+- [ ] Demais casos de uso e endpoints
 - [ ] Fluxo operacional completo
 - [ ] Validação
 - [ ] Histórico
@@ -4094,7 +4215,22 @@ Projetos Archived permitem consulta, mas bloqueiam concessão e revogação de p
 Usuários alvo inativos podem ter permissões consultadas e revogadas
 SystemAdmin não possui acesso operacional aos projetos de Tenant
 Requisições HTTP manuais organizadas por módulo
-1033 testes automatizados aprovados
+CreateProjectTask implementado na Application, persistência e API
+Tarefas criadas em Backlog, sem responsável e com criador autenticado
+CreateTask exigida de ProjectManager e Member com participação ativa
+TenantAdmin possui bypass para criação de tarefas no próprio Tenant
+Criação de tarefas permitida em Planning, InProgress e Paused
+Criação de tarefas bloqueada em Completed e Archived
+DueDate de tarefas aceita UTC ou offset explícito
+DueDate com offset é normalizado para UTC antes da persistência
+DueDate sem informação de fuso horário é rejeitado
+Criação de tarefas utiliza transação e bloqueio pessimista do projeto
+Conclusão, arquivamento e criação de tarefas são protegidos contra condições de corrida
+Transações externas são compatibilizadas através de savepoints
+Concorrência real validada com conexões PostgreSQL distintas
+Criação de tarefas validada automaticamente com PostgreSQL real
+Validação manual autenticada de CreateProjectTask concluída
+1125 testes automatizados aprovados
 0 falhas
 ```
 

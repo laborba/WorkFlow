@@ -72,61 +72,105 @@ public sealed class CompleteProjectHandler
             return Result<ProjectStatusResult>.Failure(
                 UserErrors.Inactive);
 
-        var project =
-            await _projectRepository.GetTrackedByPublicIdAsync(
-                tenant.Id,
-                command.ProjectPublicId,
+        await using var transaction =
+            await _unitOfWork.BeginTransactionAsync(
                 cancellationToken);
 
-        if (project is null)
-            return Result<ProjectStatusResult>.Failure(
-                ProjectErrors.NotFound);
+        try
+        {
+            var project =
+                await _projectRepository
+                    .GetForUpdateByPublicIdAsync(
+                        tenant.Id,
+                        command.ProjectPublicId,
+                        cancellationToken);
 
-        var canExecute =
-            await ProjectStatusAuthorization.CanExecuteAsync(
-                requestedByUser,
-                project,
-                ProjectPermission.CompleteProject,
-                _projectMemberRepository,
-                _projectMemberPermissionRepository,
+            if (project is null)
+            {
+                await transaction.RollbackAsync(
+                    cancellationToken);
+
+                return Result<ProjectStatusResult>.Failure(
+                    ProjectErrors.NotFound);
+            }
+
+            var canExecute =
+                await ProjectStatusAuthorization.CanExecuteAsync(
+                    requestedByUser,
+                    project,
+                    ProjectPermission.CompleteProject,
+                    _projectMemberRepository,
+                    _projectMemberPermissionRepository,
+                    cancellationToken);
+
+            if (!canExecute)
+            {
+                await transaction.RollbackAsync(
+                    cancellationToken);
+
+                return Result<ProjectStatusResult>.Failure(
+                    ProjectErrors.StatusChangeNotAllowed);
+            }
+
+            if (project.Status != ProjectStatus.InProgress)
+            {
+                await transaction.RollbackAsync(
+                    cancellationToken);
+
+                return Result<ProjectStatusResult>.Failure(
+                    ProjectErrors.InvalidStatusTransition);
+            }
+
+            var taskStatuses =
+                await _projectTaskRepository
+                    .GetStatusesByProjectIdAsync(
+                        project.Id,
+                        cancellationToken);
+
+            if (taskStatuses.Count == 0)
+            {
+                await transaction.RollbackAsync(
+                    cancellationToken);
+
+                return Result<ProjectStatusResult>.Failure(
+                    ProjectErrors.HasNoTasks);
+            }
+
+            var hasOpenTasks =
+                taskStatuses.Any(status =>
+                    status != ProjectTaskStatus.Done &&
+                    status != ProjectTaskStatus.Cancelled);
+
+            if (hasOpenTasks)
+            {
+                await transaction.RollbackAsync(
+                    cancellationToken);
+
+                return Result<ProjectStatusResult>.Failure(
+                    ProjectErrors.HasOpenTasks);
+            }
+
+            project.Complete(
+                taskStatuses);
+
+            await _unitOfWork.SaveChangesAsync(
                 cancellationToken);
 
-        if (!canExecute)
-            return Result<ProjectStatusResult>.Failure(
-                ProjectErrors.StatusChangeNotAllowed);
-
-        if (project.Status != ProjectStatus.InProgress)
-            return Result<ProjectStatusResult>.Failure(
-                ProjectErrors.InvalidStatusTransition);
-
-        var taskStatuses =
-            await _projectTaskRepository.GetStatusesByProjectIdAsync(
-                project.Id,
+            await transaction.CommitAsync(
                 cancellationToken);
 
-        if (taskStatuses.Count == 0)
-            return Result<ProjectStatusResult>.Failure(
-                ProjectErrors.HasNoTasks);
+            return Result<ProjectStatusResult>.Success(
+                CreateResult(
+                    project,
+                    tenant.PublicId));
+        }
+        catch
+        {
+            await transaction.RollbackAsync(
+                cancellationToken);
 
-        var hasOpenTasks =
-            taskStatuses.Any(status =>
-                status != ProjectTaskStatus.Done &&
-                status != ProjectTaskStatus.Cancelled);
-
-        if (hasOpenTasks)
-            return Result<ProjectStatusResult>.Failure(
-                ProjectErrors.HasOpenTasks);
-
-        project.Complete(
-            taskStatuses);
-
-        await _unitOfWork.SaveChangesAsync(
-            cancellationToken);
-
-        return Result<ProjectStatusResult>.Success(
-            CreateResult(
-                project,
-                tenant.PublicId));
+            throw;
+        }
     }
 
     private static void ValidatePublicIds(

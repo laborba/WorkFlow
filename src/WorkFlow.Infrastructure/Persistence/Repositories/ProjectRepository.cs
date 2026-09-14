@@ -44,6 +44,34 @@ public sealed class ProjectRepository : IProjectRepository
                 cancellationToken);
     }
 
+    public async Task<Project?> GetForUpdateByPublicIdAsync(
+        long tenantId,
+        Guid publicId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_context.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException(
+                "A leitura de projeto com bloqueio exige uma transação ativa.");
+        }
+
+        var projects =
+            await _context.Projects
+                .FromSqlInterpolated(
+                    $"""
+                SELECT *
+                FROM projects
+                WHERE tenant_id = {tenantId}
+                  AND public_id = {publicId}
+                FOR UPDATE
+                """)
+                .AsTracking()
+                .ToListAsync(
+                    cancellationToken);
+
+        return projects.SingleOrDefault();
+    }
+
     public async Task<PagedData<ProjectListItemData>> GetPagedAsync(
         long tenantId,
         long? activeMemberUserId,

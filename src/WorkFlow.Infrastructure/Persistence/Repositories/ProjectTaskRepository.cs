@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using WorkFlow.Application.Abstractions.Persistence;
+using WorkFlow.Domain.Entities;
 using WorkFlow.Domain.Enums;
 
 namespace WorkFlow.Infrastructure.Persistence.Repositories;
@@ -28,5 +29,14 @@ public sealed class ProjectTaskRepository :
                 task.Status)
             .ToArrayAsync(
                 cancellationToken);
+    }
+
+    public async Task AddAsync(
+        ProjectTask projectTask,
+        CancellationToken cancellationToken = default)
+    {
+        await _context.ProjectTasks.AddAsync(
+            projectTask,
+            cancellationToken);
     }
 }

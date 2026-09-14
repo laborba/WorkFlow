@@ -17,6 +17,11 @@ public interface IProjectRepository
         Guid publicId,
         CancellationToken cancellationToken = default);
 
+    Task<Project?> GetForUpdateByPublicIdAsync(
+        long tenantId,
+        Guid publicId,
+        CancellationToken cancellationToken = default);
+
     Task<PagedData<ProjectListItemData>> GetPagedAsync(
         long tenantId,
         long? activeMemberUserId,

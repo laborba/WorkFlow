@@ -13,10 +13,7 @@ internal sealed class FakeProjectRepository :
 
     public Project? ProjectToReturn { get; set; }
 
-    public PagedData<ProjectListItemData> PagedDataToReturn { get; set; } =
-        new(
-            Array.Empty<ProjectListItemData>(),
-            0);
+    public PagedData<ProjectListItemData> PagedDataToReturn { get; set; } = new( Array.Empty<ProjectListItemData>(), 0);
 
     public long? LastTenantId { get; private set; }
 
@@ -31,6 +28,8 @@ internal sealed class FakeProjectRepository :
     public ProjectStatus? LastStatus { get; private set; }
 
     public Guid? LastResponsibleUserPublicId { get; private set; }
+
+    public List<(long TenantId, Guid PublicId)> GetForUpdateCalls { get; } = new();
 
     public Task<Project?> GetByPublicIdAsync(
         long tenantId,
@@ -55,6 +54,27 @@ internal sealed class FakeProjectRepository :
         Guid publicId,
         CancellationToken cancellationToken = default)
     {
+        if (ProjectToReturn is null)
+            return Task.FromResult<Project?>(null);
+
+        if (ProjectToReturn.TenantId != tenantId ||
+            ProjectToReturn.PublicId != publicId)
+        {
+            return Task.FromResult<Project?>(null);
+        }
+
+        return Task.FromResult<Project?>(
+            ProjectToReturn);
+    }
+
+    public Task<Project?> GetForUpdateByPublicIdAsync(
+        long tenantId,
+        Guid publicId,
+        CancellationToken cancellationToken = default)
+    {
+        GetForUpdateCalls.Add(
+            (tenantId, publicId));
+
         if (ProjectToReturn is null)
             return Task.FromResult<Project?>(null);
 
