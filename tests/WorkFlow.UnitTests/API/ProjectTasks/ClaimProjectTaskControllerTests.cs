@@ -18,21 +18,17 @@ using WorkFlow.Application.Users;
 using WorkFlow.Domain.Entities;
 using WorkFlow.Domain.Enums;
 using WorkFlow.UnitTests.Application.Projects.Fakes;
+using WorkFlow.UnitTests.Application.Tenants.Fakes;
 using WorkFlow.UnitTests.Application.Users.Fakes;
 using WorkFlow.UnitTests.Common;
-
-using FakeTenantRepository =
-    WorkFlow.UnitTests.Application.Tenants.Fakes.FakeTenantRepository;
-
-using FakeUnitOfWork =
-    WorkFlow.UnitTests.Common.Fakes.FakeUnitOfWork;
+using WorkFlow.UnitTests.Common.Fakes;
 
 namespace WorkFlow.UnitTests.API.ProjectTasks;
 
-public sealed class AssignProjectTaskResponsibleControllerTests
+public sealed class ClaimProjectTaskControllerTests
 {
     [Fact]
-    public async Task AssignResponsible_ShouldReturnOk_WhenAssignmentIsValid()
+    public async Task Claim_ShouldReturnOk_WhenClaimIsValid()
     {
         var fixture =
             CreateFixture();
@@ -42,16 +38,11 @@ public sealed class AssignProjectTaskResponsibleControllerTests
                 fixture,
                 fixture.Requester.PublicId.ToString());
 
-        var request =
-            new AssignProjectTaskResponsibleRequest(
-                fixture.ResponsibleUser.PublicId);
-
         var result =
-            await controller.AssignResponsible(
+            await controller.Claim(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
                 fixture.ProjectTask.PublicId,
-                request,
                 CancellationToken.None);
 
         var okResult =
@@ -63,7 +54,7 @@ public sealed class AssignProjectTaskResponsibleControllerTests
             okResult.StatusCode);
 
         var response =
-            Assert.IsType<AssignProjectTaskResponsibleResponse>(
+            Assert.IsType<ClaimProjectTaskResponse>(
                 okResult.Value);
 
         Assert.Equal(
@@ -79,7 +70,7 @@ public sealed class AssignProjectTaskResponsibleControllerTests
             response.ProjectPublicId);
 
         Assert.Equal(
-            fixture.ResponsibleUser.PublicId,
+            fixture.Requester.PublicId,
             response.ResponsibleUserPublicId);
 
         Assert.Equal(
@@ -90,7 +81,7 @@ public sealed class AssignProjectTaskResponsibleControllerTests
             response.UpdatedAt);
 
         Assert.Equal(
-            fixture.ResponsibleUser.Id,
+            fixture.Requester.Id,
             fixture.ProjectTask.ResponsibleUserId);
 
         Assert.Equal(
@@ -115,7 +106,7 @@ public sealed class AssignProjectTaskResponsibleControllerTests
     [InlineData("")]
     [InlineData("invalid")]
     [InlineData("00000000-0000-0000-0000-000000000000")]
-    public async Task AssignResponsible_ShouldReturnUnauthorized_WhenRequesterClaimIsInvalid(
+    public async Task Claim_ShouldReturnUnauthorized_WhenUserClaimIsInvalid(
         string? claim)
     {
         var fixture =
@@ -127,12 +118,10 @@ public sealed class AssignProjectTaskResponsibleControllerTests
                 claim);
 
         var result =
-            await controller.AssignResponsible(
+            await controller.Claim(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
                 fixture.ProjectTask.PublicId,
-                new AssignProjectTaskResponsibleRequest(
-                    fixture.ResponsibleUser.PublicId),
                 CancellationToken.None);
 
         Assert.IsType<UnauthorizedResult>(
@@ -164,9 +153,6 @@ public sealed class AssignProjectTaskResponsibleControllerTests
         "task-missing",
         StatusCodes.Status404NotFound)]
     [InlineData(
-        "responsible-missing",
-        StatusCodes.Status404NotFound)]
-    [InlineData(
         "tenant-inactive",
         StatusCodes.Status409Conflict)]
     [InlineData(
@@ -179,15 +165,18 @@ public sealed class AssignProjectTaskResponsibleControllerTests
         "task-archived",
         StatusCodes.Status409Conflict)]
     [InlineData(
-        "responsible-inactive",
+        "task-inprogress",
         StatusCodes.Status409Conflict)]
     [InlineData(
-        "responsible-not-member",
+        "already-assigned",
         StatusCodes.Status409Conflict)]
+    [InlineData(
+        "no-membership",
+        StatusCodes.Status403Forbidden)]
     [InlineData(
         "no-permission",
         StatusCodes.Status403Forbidden)]
-    public async Task AssignResponsible_ShouldMapApplicationErrors(
+    public async Task Claim_ShouldMapApplicationErrors(
         string scenario,
         int expectedStatusCode)
     {
@@ -195,7 +184,7 @@ public sealed class AssignProjectTaskResponsibleControllerTests
             scenario == "no-permission"
                 ? CreateFixture(
                     UserRole.Member,
-                    grantAssignTask: false)
+                    grantClaimTask: false)
                 : CreateFixture();
 
         var expectedError =
@@ -209,12 +198,10 @@ public sealed class AssignProjectTaskResponsibleControllerTests
                 fixture.Requester.PublicId.ToString());
 
         var result =
-            await controller.AssignResponsible(
+            await controller.Claim(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
                 fixture.ProjectTask.PublicId,
-                new AssignProjectTaskResponsibleRequest(
-                    fixture.ResponsibleUser.PublicId),
                 CancellationToken.None);
 
         var failure =
@@ -240,13 +227,10 @@ public sealed class AssignProjectTaskResponsibleControllerTests
         Assert.Equal(
             0,
             fixture.UnitOfWork.SaveChangesCallCount);
-
-        Assert.Null(
-            fixture.ProjectTask.ResponsibleUserId);
     }
 
     [Fact]
-    public void AssignResponsible_ShouldExposeTenantScopedPatchProtectedByTenantAccess()
+    public void Claim_ShouldExposeTenantScopedPatchProtectedByTenantAccess()
     {
         var controllerType =
             typeof(ProjectTasksController);
@@ -262,14 +246,14 @@ public sealed class AssignProjectTaskResponsibleControllerTests
 
         var method =
             controllerType.GetMethod(
-                nameof(ProjectTasksController.AssignResponsible))!;
+                nameof(ProjectTasksController.Claim))!;
 
         var patchAttribute =
             Assert.Single(
                 method.GetCustomAttributes<HttpPatchAttribute>());
 
         Assert.Equal(
-            "{taskPublicId:guid}/responsible",
+            "{taskPublicId:guid}/claim",
             patchAttribute.Template);
 
         Assert.Equal(
@@ -281,15 +265,11 @@ public sealed class AssignProjectTaskResponsibleControllerTests
         Assert.Empty(
             method.GetCustomAttributes<AllowAnonymousAttribute>());
 
-        Assert.Equal(
-            new[]
-            {
-                "ResponsibleUserPublicId"
-            },
-            typeof(AssignProjectTaskResponsibleRequest)
-                .GetProperties()
-                .Select(property => property.Name)
-                .OrderBy(name => name));
+        Assert.DoesNotContain(
+            method.GetParameters(),
+                parameter =>
+                    parameter.GetCustomAttribute<FromBodyAttribute>()
+                        is not null);
     }
 
     private static Error ConfigureFailureScenario(
@@ -329,15 +309,6 @@ public sealed class AssignProjectTaskResponsibleControllerTests
                             null,
                     ProjectTaskErrors.NotFound),
 
-            "responsible-missing" =>
-                Configure(
-                    () =>
-                        fixture.UserRepository
-                            .UsersByPublicIdToReturn
-                            .Remove(
-                                fixture.ResponsibleUser.PublicId),
-                    ProjectTaskErrors.ResponsibleUserNotFound),
-
             "tenant-inactive" =>
                 Configure(
                     fixture.Tenant.Deactivate,
@@ -361,7 +332,7 @@ public sealed class AssignProjectTaskResponsibleControllerTests
                             });
                     },
                     ProjectTaskErrors
-                        .AssignmentBlockedByProjectStatus),
+                        .ClaimBlockedByProjectStatus),
 
             "task-archived" =>
                 Configure(
@@ -372,26 +343,40 @@ public sealed class AssignProjectTaskResponsibleControllerTests
                     },
                     ProjectTaskErrors.Archived),
 
-            "responsible-inactive" =>
+            "task-inprogress" =>
                 Configure(
-                    fixture.ResponsibleUser.Deactivate,
-                    ProjectTaskErrors.ResponsibleUserInactive),
+                    () =>
+                    {
+                        fixture.ProjectTask.AssignResponsible(
+                            999);
 
-            "responsible-not-member" =>
+                        fixture.ProjectTask.MoveToTodo();
+                        fixture.ProjectTask.Start();
+                    },
+                    ProjectTaskErrors
+                        .ClaimBlockedByTaskStatus),
+
+            "already-assigned" =>
+                Configure(
+                    () =>
+                        fixture.ProjectTask.AssignResponsible(
+                            999),
+                    ProjectTaskErrors.AlreadyAssigned),
+
+            "no-membership" =>
                 Configure(
                     () =>
                         fixture.MemberRepository
                             .ActiveMembersToReturn[
                                 (
                                     fixture.Project.Id,
-                                    fixture.ResponsibleUser.Id
+                                    fixture.Requester.Id
                                 )] =
                             null,
-                    ProjectTaskErrors
-                        .ResponsibleUserNotActiveMember),
+                    ProjectTaskErrors.ClaimNotAllowed),
 
             "no-permission" =>
-                ProjectTaskErrors.AssignmentNotAllowed,
+                ProjectTaskErrors.ClaimNotAllowed,
 
             _ =>
                 throw new ArgumentOutOfRangeException(
@@ -417,25 +402,15 @@ public sealed class AssignProjectTaskResponsibleControllerTests
                 ? Array.Empty<Claim>()
                 : new[]
                 {
-                new Claim(
-                    ClaimTypes.NameIdentifier,
-                    claim)
+                    new Claim(
+                        ClaimTypes.NameIdentifier,
+                        claim)
                 };
-
-        var claimProjectTaskHandler =
-            new ClaimProjectTaskHandler(
-                fixture.TenantRepository,
-                fixture.UserRepository,
-                fixture.ProjectRepository,
-                fixture.MemberRepository,
-                fixture.PermissionRepository,
-                fixture.TaskRepository,
-                fixture.UnitOfWork);
 
         return new ProjectTasksController(
             fixture.CreateProjectTaskHandler,
-            fixture.AssignHandler,
-            claimProjectTaskHandler)
+            fixture.AssignProjectTaskResponsibleHandler,
+            fixture.ClaimProjectTaskHandler)
         {
             ControllerContext =
                 new ControllerContext
@@ -455,11 +430,11 @@ public sealed class AssignProjectTaskResponsibleControllerTests
 
     private static Fixture CreateFixture(
         UserRole requesterRole = UserRole.TenantAdmin,
-        bool grantAssignTask = true)
+        bool grantClaimTask = true)
     {
         var tenant =
             new Tenant(
-                "Empresa Assign Task API",
+                "Empresa Claim Task API",
                 $"REG-{Guid.NewGuid():N}",
                 $"tenant-{Guid.NewGuid():N}@test.local");
 
@@ -470,8 +445,8 @@ public sealed class AssignProjectTaskResponsibleControllerTests
         var requester =
             new User(
                 tenant.Id,
-                "Usuário Solicitante",
-                $"requester-{Guid.NewGuid():N}@test.local",
+                "Usuário Claim",
+                $"claim-{Guid.NewGuid():N}@test.local",
                 "password-hash",
                 requesterRole);
 
@@ -479,22 +454,10 @@ public sealed class AssignProjectTaskResponsibleControllerTests
             requester,
             10);
 
-        var responsibleUser =
-            new User(
-                tenant.Id,
-                "Usuário Responsável",
-                $"responsible-{Guid.NewGuid():N}@test.local",
-                "password-hash",
-                UserRole.Member);
-
-        EntityTestHelper.SetId(
-            responsibleUser,
-            20);
-
         var project =
             new Project(
                 tenant.Id,
-                "Projeto Assign Task API",
+                "Projeto Claim Task API",
                 requester.Id);
 
         EntityTestHelper.SetId(
@@ -504,13 +467,23 @@ public sealed class AssignProjectTaskResponsibleControllerTests
         var projectTask =
             new ProjectTask(
                 project.Id,
-                "Tarefa API",
+                "Tarefa disponível",
                 ProjectTaskPriority.Medium,
                 requester.Id);
 
         EntityTestHelper.SetId(
             projectTask,
             200);
+
+        var requesterMember =
+            new ProjectMember(
+                project.Id,
+                requester.Id,
+                requester.Id);
+
+        EntityTestHelper.SetId(
+            requesterMember,
+            300);
 
         var tenantRepository =
             new FakeTenantRepository
@@ -527,11 +500,6 @@ public sealed class AssignProjectTaskResponsibleControllerTests
                 requester.PublicId] =
             requester;
 
-        userRepository
-            .UsersByPublicIdToReturn[
-                responsibleUser.PublicId] =
-            responsibleUser;
-
         var projectRepository =
             new FakeProjectRepository
             {
@@ -542,55 +510,27 @@ public sealed class AssignProjectTaskResponsibleControllerTests
         var memberRepository =
             new FakeProjectMemberRepository();
 
+        memberRepository
+            .ActiveMembersToReturn[
+                (
+                    project.Id,
+                    requester.Id
+                )] =
+            requesterMember;
+
         var permissionRepository =
             new FakeProjectMemberPermissionRepository();
 
         if (requesterRole != UserRole.TenantAdmin)
         {
-            var requesterMember =
-                new ProjectMember(
-                    project.Id,
-                    requester.Id,
-                    requester.Id);
-
-            EntityTestHelper.SetId(
-                requesterMember,
-                300);
-
-            memberRepository
-                .ActiveMembersToReturn[
-                    (
-                        project.Id,
-                        requester.Id
-                    )] =
-                requesterMember;
-
             permissionRepository
                 .IsActivePermissionResults[
                     (
                         requesterMember.Id,
-                        ProjectPermission.AssignTask
+                        ProjectPermission.ClaimTask
                     )] =
-                grantAssignTask;
+                grantClaimTask;
         }
-
-        var responsibleMember =
-            new ProjectMember(
-                project.Id,
-                responsibleUser.Id,
-                requester.Id);
-
-        EntityTestHelper.SetId(
-            responsibleMember,
-            301);
-
-        memberRepository
-            .ActiveMembersToReturn[
-                (
-                    project.Id,
-                    responsibleUser.Id
-                )] =
-            responsibleMember;
 
         var taskRepository =
             new FakeProjectTaskRepository
@@ -612,8 +552,18 @@ public sealed class AssignProjectTaskResponsibleControllerTests
                 taskRepository,
                 unitOfWork);
 
-        var assignHandler =
+        var assignProjectTaskResponsibleHandler =
             new AssignProjectTaskResponsibleHandler(
+                tenantRepository,
+                userRepository,
+                projectRepository,
+                memberRepository,
+                permissionRepository,
+                taskRepository,
+                unitOfWork);
+
+        var claimProjectTaskHandler =
+            new ClaimProjectTaskHandler(
                 tenantRepository,
                 userRepository,
                 projectRepository,
@@ -625,7 +575,6 @@ public sealed class AssignProjectTaskResponsibleControllerTests
         return new Fixture(
             tenant,
             requester,
-            responsibleUser,
             project,
             projectTask,
             tenantRepository,
@@ -636,13 +585,13 @@ public sealed class AssignProjectTaskResponsibleControllerTests
             taskRepository,
             unitOfWork,
             createProjectTaskHandler,
-            assignHandler);
+            assignProjectTaskResponsibleHandler,
+            claimProjectTaskHandler);
     }
 
     private sealed record Fixture(
         Tenant Tenant,
         User Requester,
-        User ResponsibleUser,
         Project Project,
         ProjectTask ProjectTask,
         FakeTenantRepository TenantRepository,
@@ -653,5 +602,7 @@ public sealed class AssignProjectTaskResponsibleControllerTests
         FakeProjectTaskRepository TaskRepository,
         FakeUnitOfWork UnitOfWork,
         CreateProjectTaskHandler CreateProjectTaskHandler,
-        AssignProjectTaskResponsibleHandler AssignHandler);
+        AssignProjectTaskResponsibleHandler
+            AssignProjectTaskResponsibleHandler,
+        ClaimProjectTaskHandler ClaimProjectTaskHandler);
 }

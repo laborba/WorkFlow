@@ -361,3 +361,138 @@ Accept: application/json
 {
   "responsibleUserPublicId": "{{usuarioConsultaPublicId}}"
 }
+
+### ============================================================
+### PROJECT TASKS — CLAIM TASK
+###
+### Regras:
+### - ClaimTask = 9.
+### - O próprio usuário autenticado assume a tarefa.
+### - Não existe ResponsibleUserPublicId no body.
+### - O usuário precisa ser membro ativo do projeto.
+### - TenantAdmin precisa ser membro ativo, mas possui bypass de ClaimTask.
+### - ProjectManager e Member precisam de participação ativa + ClaimTask.
+### - A tarefa precisa estar sem responsável.
+### - Backlog, Todo e Paused permitem claim.
+### - InProgress, Validation, Done e Cancelled bloqueiam claim.
+### - O claim não altera o status da tarefa.
+### - Completed e Archived bloqueiam claim.
+### ============================================================
+
+
+### ProjectTasks - Preparação criar tarefa para ClaimTask por TenantAdmin - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa para ClaimTask por TenantAdmin",
+  "description": "Tarefa sem responsável para validar o claim.",
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - TenantAdmin membro ativo assumir tarefa - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimTaskTenantAdminPublicId}}/claim
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Tentar assumir tarefa que já possui responsável - 409
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimTaskTenantAdminPublicId}}/claim
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Preparação criar tarefa em projeto sem participação do TenantAdmin - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa para validar participação no ClaimTask",
+  "description": "TenantAdmin não deve assumir se não for membro ativo do projeto.",
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - TenantAdmin sem participação ativa tentar assumir tarefa - 403
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks/{{claimTaskNoMembershipPublicId}}/claim
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Preparação criar tarefa para ClaimTask por Member - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa para ClaimTask por Member",
+  "description": "Validação da permissão ClaimTask.",
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Member sem ClaimTask tentar assumir tarefa - 403
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimTaskMemberPublicId}}/claim
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### ProjectTasks - Preparação conceder ClaimTask ao Member - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 9
+}
+
+
+### ProjectTasks - Member com ClaimTask assumir tarefa - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimTaskMemberPublicId}}/claim
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### ProjectTasks - ClaimTask sem autenticação - 401
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimTaskMemberPublicId}}/claim
+Accept: application/json
+
+
+### ProjectTasks - SystemAdmin tentando assumir tarefa - 403
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimTaskMemberPublicId}}/claim
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Usuário de outro Tenant tentando assumir tarefa - 403
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimTaskMemberPublicId}}/claim
+Authorization: Bearer {{otherTenantToken}}
+Accept: application/json
+
+
+### ProjectTasks - ClaimTask com tarefa pertencente a outro projeto - 404
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimTaskNoMembershipPublicId}}/claim
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### ProjectTasks - ClaimTask com tarefa inexistente - 404
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/11111111-1111-1111-1111-111111111111/claim
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### ProjectTasks - Limpeza revogar ClaimTask do Member - 200
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/9
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json

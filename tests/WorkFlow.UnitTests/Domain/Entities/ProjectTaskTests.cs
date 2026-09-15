@@ -257,6 +257,181 @@ public class ProjectTaskTests
     }
 
     [Fact]
+    public void ClaimResponsible_ShouldAssignResponsibleAndPreserveBacklogStatus()
+    {
+        var task = CreateTask();
+
+        task.ClaimResponsible(20);
+
+        Assert.Equal(20, task.ResponsibleUserId);
+        Assert.Equal(ProjectTaskStatus.Backlog, task.Status);
+        Assert.Null(task.StatusBeforePause);
+        Assert.NotNull(task.UpdatedAt);
+    }
+
+    [Fact]
+    public void ClaimResponsible_ShouldAssignResponsibleAndPreserveTodoStatus()
+    {
+        var task = CreateTask();
+        task.MoveToTodo();
+
+        task.ClaimResponsible(20);
+
+        Assert.Equal(20, task.ResponsibleUserId);
+        Assert.Equal(ProjectTaskStatus.Todo, task.Status);
+        Assert.Null(task.StatusBeforePause);
+        Assert.NotNull(task.UpdatedAt);
+    }
+
+    [Fact]
+    public void ClaimResponsible_ShouldAssignResponsibleAndPreservePausedStatus()
+    {
+        var task = CreateTask();
+        task.MoveToTodo();
+        task.Pause("Aguardando definição.");
+
+        var statusBeforePause =
+            task.StatusBeforePause;
+
+        task.ClaimResponsible(20);
+
+        Assert.Equal(20, task.ResponsibleUserId);
+        Assert.Equal(ProjectTaskStatus.Paused, task.Status);
+        Assert.Equal(
+            statusBeforePause,
+            task.StatusBeforePause);
+        Assert.Equal(
+            ProjectTaskStatus.Todo,
+            task.StatusBeforePause);
+        Assert.NotNull(task.UpdatedAt);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void ClaimResponsible_ShouldThrowAndPreserveTask_WhenIdIsInvalid(
+        long invalidResponsibleUserId)
+    {
+        var task = CreateTask();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            task.ClaimResponsible(invalidResponsibleUserId));
+
+        Assert.Null(task.ResponsibleUserId);
+        Assert.Equal(ProjectTaskStatus.Backlog, task.Status);
+        Assert.Null(task.UpdatedAt);
+    }
+
+    [Fact]
+    public void ClaimResponsible_ShouldThrowAndPreserveTask_WhenTaskAlreadyHasResponsible()
+    {
+        var task =
+            CreateTask(
+                responsibleUserId: 20);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            task.ClaimResponsible(30));
+
+        Assert.Equal(20, task.ResponsibleUserId);
+        Assert.Equal(ProjectTaskStatus.Backlog, task.Status);
+        Assert.Null(task.UpdatedAt);
+    }
+
+    [Theory]
+    [InlineData(ProjectTaskStatus.InProgress)]
+    [InlineData(ProjectTaskStatus.Validation)]
+    [InlineData(ProjectTaskStatus.Done)]
+    [InlineData(ProjectTaskStatus.Cancelled)]
+    public void ClaimResponsible_ShouldThrowAndPreserveTask_WhenStatusDoesNotAllowClaim(
+        ProjectTaskStatus status)
+    {
+        var task =
+            status switch
+            {
+                ProjectTaskStatus.InProgress =>
+                    CreateInProgressTask(),
+
+                ProjectTaskStatus.Validation =>
+                    CreateTaskInValidation(),
+
+                ProjectTaskStatus.Done =>
+                    CreateDoneTask(),
+
+                ProjectTaskStatus.Cancelled =>
+                    CreateCancelledTaskWithoutResponsible(),
+
+                _ =>
+                    throw new ArgumentOutOfRangeException(
+                        nameof(status))
+            };
+
+        var responsibleUserIdBeforeClaim =
+            task.ResponsibleUserId;
+
+        var updatedAtBeforeClaim =
+            task.UpdatedAt;
+
+        var statusBeforePauseBeforeClaim =
+            task.StatusBeforePause;
+
+        Assert.Throws<InvalidOperationException>(() =>
+            task.ClaimResponsible(40));
+
+        Assert.Equal(
+            status,
+            task.Status);
+
+        Assert.Equal(
+            responsibleUserIdBeforeClaim,
+            task.ResponsibleUserId);
+
+        Assert.Equal(
+            statusBeforePauseBeforeClaim,
+            task.StatusBeforePause);
+
+        Assert.Equal(
+            updatedAtBeforeClaim,
+            task.UpdatedAt);
+    }
+
+    [Fact]
+    public void ClaimResponsible_ShouldThrowAndPreserveTask_WhenTaskIsArchived()
+    {
+        var task =
+            CreateDoneTask();
+
+        task.Archive();
+
+        var responsibleUserIdBeforeClaim =
+            task.ResponsibleUserId;
+
+        var archivedAtBeforeClaim =
+            task.ArchivedAt;
+
+        var updatedAtBeforeClaim =
+            task.UpdatedAt;
+
+        Assert.Throws<InvalidOperationException>(() =>
+            task.ClaimResponsible(40));
+
+        Assert.Equal(
+            responsibleUserIdBeforeClaim,
+            task.ResponsibleUserId);
+
+        Assert.Equal(
+            ProjectTaskStatus.Done,
+            task.Status);
+
+        Assert.Equal(
+            archivedAtBeforeClaim,
+            task.ArchivedAt);
+
+        Assert.Equal(
+            updatedAtBeforeClaim,
+            task.UpdatedAt);
+    }
+
+    [Fact]
     public void RemoveResponsible_ShouldRemoveResponsibleAndSetUpdatedAt()
     {
         var task = CreateTask(responsibleUserId: 20);
@@ -1103,6 +1278,16 @@ public class ProjectTaskTests
     {
         var task = CreateClaimedValidationTask(30);
         task.ApproveValidation(30);
+
+        return task;
+    }
+
+    private static ProjectTask CreateCancelledTaskWithoutResponsible()
+    {
+        var task =
+            CreateTask();
+
+        task.Cancel();
 
         return task;
     }

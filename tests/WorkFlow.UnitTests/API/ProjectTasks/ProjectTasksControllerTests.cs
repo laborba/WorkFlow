@@ -12,11 +12,12 @@ using WorkFlow.API.Controllers;
 using WorkFlow.API.Exceptions;
 using WorkFlow.Application.Projects;
 using WorkFlow.Application.ProjectTasks;
+using WorkFlow.Application.ProjectTasks.AssignProjectTaskResponsible;
+using WorkFlow.Application.ProjectTasks.ClaimProjectTask;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Enums;
 using WorkFlow.UnitTests.Application.ProjectTasks;
-using WorkFlow.Application.ProjectTasks.AssignProjectTaskResponsible;
 
 namespace WorkFlow.UnitTests.API.ProjectTasks;
 
@@ -317,20 +318,34 @@ public sealed class ProjectTasksControllerTests
                 fixture.TaskRepository,
                 fixture.UnitOfWork);
 
+        var claimProjectTaskHandler =
+            new ClaimProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.PermissionRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
         return new ProjectTasksController(
             fixture.Handler,
-            assignProjectTaskResponsibleHandler)
+            assignProjectTaskResponsibleHandler,
+            claimProjectTaskHandler)
         {
-            ControllerContext = new ControllerContext
-            {
-                HttpContext = new DefaultHttpContext
+            ControllerContext =
+                new ControllerContext
                 {
-                    User = new ClaimsPrincipal(
-                        new ClaimsIdentity(
-                            claims,
-                            "Test"))
+                    HttpContext =
+                        new DefaultHttpContext
+                        {
+                            User =
+                                new ClaimsPrincipal(
+                                    new ClaimsIdentity(
+                                        claims,
+                                        "Test"))
+                        }
                 }
-            }
         };
     }
 

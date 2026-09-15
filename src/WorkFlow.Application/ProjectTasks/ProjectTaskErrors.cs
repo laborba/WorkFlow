@@ -44,6 +44,26 @@ public static class ProjectTaskErrors
             "ProjectTasks.ResponsibleUserNotActiveMember",
             "O responsável precisa possuir participação ativa no projeto.");
 
+    public static Error ClaimNotAllowed { get; } =
+        new(
+            "ProjectTasks.ClaimNotAllowed",
+            "O usuário informado não possui permissão para assumir esta tarefa.");
+
+    public static Error ClaimBlockedByProjectStatus { get; } =
+        new(
+            "ProjectTasks.ClaimBlockedByProjectStatus",
+            "Não é possível assumir tarefas de um projeto concluído ou arquivado.");
+
+    public static Error ClaimBlockedByTaskStatus { get; } =
+        new(
+            "ProjectTasks.ClaimBlockedByTaskStatus",
+            "O estado atual da tarefa não permite que ela seja assumida.");
+
+    public static Error AlreadyAssigned { get; } =
+        new(
+            "ProjectTasks.AlreadyAssigned",
+            "A tarefa já possui um responsável.");
+
     public static Error Archived { get; } =
         new(
             "ProjectTasks.Archived",

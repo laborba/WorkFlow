@@ -145,6 +145,31 @@ public class ProjectTask
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void ClaimResponsible(long responsibleUserId)
+    {
+        EnsureNotArchived();
+
+        if (responsibleUserId <= 0)
+            throw new ArgumentOutOfRangeException(
+                nameof(responsibleUserId),
+                "O identificador do responsável deve ser maior que zero.");
+
+        if (Status != ProjectTaskStatus.Backlog &&
+            Status != ProjectTaskStatus.Todo &&
+            Status != ProjectTaskStatus.Paused)
+        {
+            throw new InvalidOperationException(
+                "Somente tarefas no backlog, pendentes ou pausadas podem ser assumidas.");
+        }
+
+        if (ResponsibleUserId is not null)
+            throw new InvalidOperationException(
+                "A tarefa já possui um responsável.");
+
+        ResponsibleUserId = responsibleUserId;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void RemoveResponsible()
     {
         EnsureNotArchived();

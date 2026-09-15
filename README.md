@@ -283,6 +283,108 @@ Os cenários manuais estão disponíveis em:
 src/WorkFlow.API/Http/05-ProjectTasks.http
 ```
 
+### Tarefas — ClaimProjectTask
+
+O próprio usuário autenticado pode assumir uma tarefa disponível através da permissão `ClaimTask`.
+
+O endpoint utiliza:
+
+```http
+PATCH /api/tenants/{tenantPublicId}/projects/{projectPublicId}/tasks/{taskPublicId}/claim
+```
+
+O endpoint não recebe body.
+
+O usuário autenticado é utilizado como responsável da tarefa.
+
+As regras atuais são:
+
+- o usuário precisa estar ativo;
+- o usuário precisa possuir participação ativa no projeto;
+- `TenantAdmin` precisa ser membro ativo, mas possui bypass da permissão `ClaimTask`;
+- `ProjectManager` e `Member` precisam possuir participação ativa e `ClaimTask`;
+- `SystemAdmin` não possui acesso operacional;
+- a tarefa precisa estar sem responsável;
+- tarefas em `Backlog`, `Todo` ou `Paused` podem ser assumidas;
+- tarefas em `InProgress`, `Validation`, `Done` ou `Cancelled` não podem ser assumidas;
+- tarefas arquivadas não podem ser assumidas;
+- projetos `Planning`, `InProgress` e `Paused` permitem claim;
+- projetos `Completed` e `Archived` bloqueiam claim.
+
+O claim não altera o status da tarefa.
+
+Exemplos:
+
+```text
+Backlog + ClaimTask
+→ continua Backlog
+
+Todo + ClaimTask
+→ continua Todo
+
+Paused + ClaimTask
+→ continua Paused
+```
+
+A diferença entre `AssignTask` e `ClaimTask` é:
+
+```text
+AssignTask
+→ usuário autorizado escolhe o responsável
+
+ClaimTask
+→ o próprio usuário autenticado assume a tarefa
+```
+
+A operação utiliza transação e bloqueio pessimista.
+
+A ordem dos locks é:
+
+```text
+Project FOR UPDATE
+↓
+ProjectTask FOR UPDATE
+```
+
+Essa coordenação impede que dois usuários assumam simultaneamente a mesma tarefa.
+
+Quando duas requisições concorrentes tentam assumir a mesma tarefa, somente a primeira operação confirmada pode definir o responsável. A segunda recebe:
+
+```text
+409 Conflict
+ProjectTasks.AlreadyAssigned
+```
+
+O sucesso retorna `200 OK` com:
+
+```text
+PublicId
+TenantPublicId
+ProjectPublicId
+ResponsibleUserPublicId
+Status
+UpdatedAt
+```
+
+Os principais erros são:
+
+```text
+ProjectTasks.ClaimNotAllowed
+ProjectTasks.ClaimBlockedByProjectStatus
+ProjectTasks.ClaimBlockedByTaskStatus
+ProjectTasks.AlreadyAssigned
+ProjectTasks.Archived
+```
+
+A implementação possui testes de domínio, Application, Controller, integração com PostgreSQL, concorrência real entre conexões independentes e validação manual autenticada.
+
+Os cenários manuais estão disponíveis em:
+
+```text
+src/WorkFlow.API/Http/05-ProjectTasks.http
+```
+
+
 ### Autenticação e autorização
 
 - login de usuários vinculados a uma empresa;
@@ -3262,6 +3364,10 @@ ProjectTasks.ResponsibleUserNotFound
 ProjectTasks.ResponsibleUserInactive
 ProjectTasks.ResponsibleUserNotActiveMember
 ProjectTasks.Archived
+ProjectTasks.ClaimNotAllowed
+ProjectTasks.ClaimBlockedByProjectStatus
+ProjectTasks.ClaimBlockedByTaskStatus
+ProjectTasks.AlreadyAssigned
 
 Validation.InvalidArgument
 ```
@@ -3453,7 +3559,7 @@ Os arquivos possuem responsabilidades separadas:
 → criação, consulta individual, listagem, atualização e ciclo completo de status de projetos; inclusão, listagem e remoção de membros; concessão, listagem e revogação de permissões; filtros e autorização
 
 05-ProjectTasks.http
-→ criação de tarefas, atribuição e reatribuição de responsável, autorização por CreateTask e AssignTask, status do projeto e isolamento entre Tenants
+→ criação de tarefas, atribuição e reatribuição de responsável, ClaimTask, autorização por CreateTask, AssignTask e ClaimTask, status do projeto e isolamento entre Tenants
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -3682,7 +3788,7 @@ As permissões `ManageProjectPermissions`, `EditProject` e `ManageProjectMembers
 
 `EditProject` também é utilizada nos fluxos de início, pausa e retomada de projetos.
 
-`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas e `AssignTask` está integrada à atribuição e reatribuição de responsável; as demais permissões de tarefas serão incorporadas aos próximos casos de uso.
+`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas, `AssignTask` à atribuição e reatribuição de responsável e `ClaimTask` ao fluxo em que o próprio membro assume uma tarefa disponível; as demais permissões de tarefas serão incorporadas aos próximos casos de uso.
 
 ```text
 Permissões específicas por recurso
@@ -3764,6 +3870,16 @@ O prazo opcional aceita UTC ou offset explícito e é normalizado para UTC. A cr
 A atribuição utiliza `AssignTask`, permite primeira atribuição e reatribuição, exige que o responsável esteja ativo e possua participação ativa no projeto e não altera o status atual da tarefa.
 
 A operação coordena concorrência através de transação e bloqueio pessimista `FOR UPDATE`, bloqueando primeiro o projeto e depois a tarefa.
+
+`ClaimProjectTask` também está implementado na Application, persistência e API.
+
+O claim utiliza `ClaimTask` e permite que o próprio usuário autenticado assuma uma tarefa disponível.
+
+A participação ativa no projeto é obrigatória inclusive para `TenantAdmin`. `ProjectManager` e `Member` também precisam possuir `ClaimTask`.
+
+Somente tarefas sem responsável e nos estados `Backlog`, `Todo` ou `Paused` podem ser assumidas. O claim preserva o status atual da tarefa.
+
+A operação utiliza transação e bloqueio pessimista do projeto e da tarefa. Testes de concorrência com duas conexões PostgreSQL distintas confirmam que somente um usuário consegue assumir uma mesma tarefa.
 
 O módulo de tarefas deverá contemplar:
 
@@ -3870,7 +3986,8 @@ Atualmente já são permissões operacionais efetivas:
 - `ReopenProject`: permite reabrir projetos concluídos;
 - `ArchiveProject`: permite arquivar e restaurar projetos;
 - `CreateTask`: permite criar tarefas em projetos Planning, InProgress ou Paused, com participação ativa para ProjectManager e Member;
-- `AssignTask`: permite atribuir e reatribuir responsáveis às tarefas, com participação ativa e a permissão correspondente para ProjectManager e Member.
+- `AssignTask`: permite atribuir e reatribuir responsáveis às tarefas, com participação ativa e a permissão correspondente para ProjectManager e Member;
+- `ClaimTask`: permite que o próprio membro ativo assuma uma tarefa disponível; `ProjectManager` e `Member` precisam possuir a permissão, enquanto `TenantAdmin` possui bypass da permissão, mas continua precisando ser membro ativo do projeto.
 
 Quando um `ProjectManager` cria um novo projeto, sua participação inicial recebe automaticamente:
 
@@ -4038,6 +4155,7 @@ Essa camada ainda não está implementada.
 - [x] Integração de `ArchiveProject` ao arquivamento e restauração de projetos
 - [x] Integração de `CreateTask` à criação de tarefas
 - [x] Integração de `AssignTask` à atribuição e reatribuição de responsável
+- [x] Integração de `ClaimTask` ao fluxo de assumir tarefas
 - [ ] Integração das demais permissões aos fluxos de tarefas
 - [ ] Rate limiting
 - [ ] MFA
@@ -4097,6 +4215,12 @@ Essa camada ainda não está implementada.
 - [x] Proteção concorrente com bloqueio do projeto e da tarefa
 - [x] Testes unitários, de Controller e integração de AssignTask
 - [x] Validação manual autenticada de AssignTask
+- [x] Claim de tarefa pelo próprio usuário através de ClaimTask
+- [x] Participação ativa obrigatória no ClaimTask
+- [x] Preservação do status durante ClaimTask
+- [x] Proteção concorrente para impedir dois usuários assumindo a mesma tarefa
+- [x] Testes unitários, de Controller, integração e concorrência de ClaimTask
+- [x] Validação manual autenticada de ClaimTask
 - [ ] Demais casos de uso e endpoints
 - [ ] Fluxo operacional completo
 - [ ] Validação
@@ -4348,7 +4472,21 @@ Projeto e tarefa são bloqueados com FOR UPDATE durante a atribuição
 Persistência real de AssignTask validada com PostgreSQL
 Testes de Controller de AssignTask aprovados
 Validação manual autenticada de AssignTask concluída
-1186 testes automatizados aprovados
+ClaimProjectTask implementado na Application, persistência e API
+ClaimTask integrada ao fluxo de usuário assumir tarefa
+TenantAdmin precisa ser membro ativo para assumir tarefa, mas possui bypass de ClaimTask
+ProjectManager e Member dependem de participação ativa e ClaimTask
+Claim permitido somente para tarefas sem responsável
+Claim permitido em Backlog, Todo e Paused
+Claim bloqueado em InProgress, Validation, Done e Cancelled
+Claim preserva o status atual da tarefa
+Projetos Completed e Archived bloqueiam ClaimTask
+Tarefas arquivadas bloqueiam ClaimTask
+Projeto e tarefa são bloqueados com FOR UPDATE durante o claim
+Concorrência real entre dois usuários validada com conexões PostgreSQL distintas
+Somente um usuário pode vencer a disputa concorrente pela mesma tarefa
+Validação manual autenticada de ClaimTask concluída
+1267 testes automatizados aprovados
 0 falhas
 ```
 
