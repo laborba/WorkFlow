@@ -198,7 +198,90 @@ Atualmente estão implementados:
 - testes unitários, de Controller, integração e concorrência com PostgreSQL aprovados;
 - roteiro HTTP disponível e validação manual autenticada concluída.
 
-A atribuição de responsável será implementada separadamente, através de `AssignTask`.
+### Tarefas — AssignProjectTaskResponsible
+
+A atribuição e a reatribuição de responsável para uma tarefa já estão implementadas através da permissão `AssignTask`.
+
+O endpoint utiliza:
+
+```http
+PATCH /api/tenants/{tenantPublicId}/projects/{projectPublicId}/tasks/{taskPublicId}/responsible
+```
+
+O request informa somente:
+
+```json
+{
+  "responsibleUserPublicId": "00000000-0000-0000-0000-000000000000"
+}
+```
+
+As regras atuais são:
+
+- `TenantAdmin` possui bypass administrativo dentro do próprio Tenant;
+- `ProjectManager` e `Member` precisam possuir participação ativa no projeto e `AssignTask` ativa na participação atual;
+- `SystemAdmin` não possui acesso operacional às tarefas de um Tenant;
+- o responsável precisa existir dentro do mesmo Tenant;
+- o responsável precisa estar ativo;
+- o responsável precisa possuir participação ativa no projeto;
+- a tarefa precisa pertencer ao projeto informado na rota;
+- projetos `Planning`, `InProgress` e `Paused` permitem atribuição;
+- projetos `Completed` e `Archived` bloqueiam atribuição;
+- tarefas arquivadas não podem ter seu responsável alterado.
+
+A atribuição não altera o status da tarefa.
+
+Por exemplo:
+
+```text
+Backlog + atribuição
+→ continua Backlog
+
+InProgress + reatribuição
+→ continua InProgress
+```
+
+A operação permite tanto a primeira atribuição quanto a substituição do responsável atual.
+
+A remoção de responsável será tratada separadamente.
+
+A atribuição também não substitui o fluxo futuro de `ClaimTask`, que representa o próprio usuário assumindo uma tarefa.
+
+A operação é executada dentro de uma transação.
+
+Primeiro é obtido bloqueio pessimista `FOR UPDATE` sobre o projeto e, depois, sobre a tarefa.
+
+Essa ordem mantém a operação coordenada com os demais fluxos concorrentes que dependem do estado do projeto.
+
+O sucesso retorna `200 OK` com:
+
+```text
+PublicId
+TenantPublicId
+ProjectPublicId
+ResponsibleUserPublicId
+Status
+UpdatedAt
+```
+
+Os principais erros são:
+
+```text
+ProjectTasks.AssignmentNotAllowed
+ProjectTasks.AssignmentBlockedByProjectStatus
+ProjectTasks.ResponsibleUserNotFound
+ProjectTasks.ResponsibleUserInactive
+ProjectTasks.ResponsibleUserNotActiveMember
+ProjectTasks.Archived
+```
+
+A implementação possui testes unitários, testes de Controller, testes de integração com PostgreSQL e validação manual autenticada.
+
+Os cenários manuais estão disponíveis em:
+
+```text
+src/WorkFlow.API/Http/05-ProjectTasks.http
+```
 
 ### Autenticação e autorização
 
@@ -255,7 +338,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-1125 testes automatizados aprovados
+1186 testes automatizados aprovados
 0 falhas
 ```
 
@@ -3170,6 +3253,16 @@ ProjectMemberPermissions.ManageNotAllowed
 ProjectMemberPermissions.AlreadyActive
 ProjectMemberPermissions.NotActive
 
+ProjectTasks.NotFound
+ProjectTasks.CreationNotAllowed
+ProjectTasks.CreationBlockedByProjectStatus
+ProjectTasks.AssignmentNotAllowed
+ProjectTasks.AssignmentBlockedByProjectStatus
+ProjectTasks.ResponsibleUserNotFound
+ProjectTasks.ResponsibleUserInactive
+ProjectTasks.ResponsibleUserNotActiveMember
+ProjectTasks.Archived
+
 Validation.InvalidArgument
 ```
 
@@ -3360,7 +3453,7 @@ Os arquivos possuem responsabilidades separadas:
 → criação, consulta individual, listagem, atualização e ciclo completo de status de projetos; inclusão, listagem e remoção de membros; concessão, listagem e revogação de permissões; filtros e autorização
 
 05-ProjectTasks.http
-→ criação de tarefas, autorização por CreateTask, status do projeto e isolamento entre Tenants
+→ criação de tarefas, atribuição e reatribuição de responsável, autorização por CreateTask e AssignTask, status do projeto e isolamento entre Tenants
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -3589,7 +3682,7 @@ As permissões `ManageProjectPermissions`, `EditProject` e `ManageProjectMembers
 
 `EditProject` também é utilizada nos fluxos de início, pausa e retomada de projetos.
 
-`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas; as demais permissões de tarefas serão incorporadas aos próximos casos de uso.
+`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas e `AssignTask` está integrada à atribuição e reatribuição de responsável; as demais permissões de tarefas serão incorporadas aos próximos casos de uso.
 
 ```text
 Permissões específicas por recurso
@@ -3665,6 +3758,12 @@ Archived
 `CreateProjectTask` já está implementado na Application, persistência e API, com testes automatizados e validação manual autenticada aprovados. A criação usa `CreateTask`, inicia em `Backlog` e mantém o responsável nulo.
 
 O prazo opcional aceita UTC ou offset explícito e é normalizado para UTC. A criação também participa da coordenação concorrente do projeto através de transação e bloqueio pessimista, evitando inconsistências com conclusão ou arquivamento executados simultaneamente.
+
+`AssignProjectTaskResponsible` também está implementado na Application, persistência e API.
+
+A atribuição utiliza `AssignTask`, permite primeira atribuição e reatribuição, exige que o responsável esteja ativo e possua participação ativa no projeto e não altera o status atual da tarefa.
+
+A operação coordena concorrência através de transação e bloqueio pessimista `FOR UPDATE`, bloqueando primeiro o projeto e depois a tarefa.
 
 O módulo de tarefas deverá contemplar:
 
@@ -3770,7 +3869,8 @@ Atualmente já são permissões operacionais efetivas:
 - `CompleteProject`: permite concluir o projeto quando as regras das tarefas forem atendidas;
 - `ReopenProject`: permite reabrir projetos concluídos;
 - `ArchiveProject`: permite arquivar e restaurar projetos;
-- `CreateTask`: permite criar tarefas em projetos Planning, InProgress ou Paused, com participação ativa para ProjectManager e Member.
+- `CreateTask`: permite criar tarefas em projetos Planning, InProgress ou Paused, com participação ativa para ProjectManager e Member;
+- `AssignTask`: permite atribuir e reatribuir responsáveis às tarefas, com participação ativa e a permissão correspondente para ProjectManager e Member.
 
 Quando um `ProjectManager` cria um novo projeto, sua participação inicial recebe automaticamente:
 
@@ -3937,6 +4037,7 @@ Essa camada ainda não está implementada.
 - [x] Integração de `ReopenProject` à reabertura de projetos
 - [x] Integração de `ArchiveProject` ao arquivamento e restauração de projetos
 - [x] Integração de `CreateTask` à criação de tarefas
+- [x] Integração de `AssignTask` à atribuição e reatribuição de responsável
 - [ ] Integração das demais permissões aos fluxos de tarefas
 - [ ] Rate limiting
 - [ ] MFA
@@ -3989,9 +4090,13 @@ Essa camada ainda não está implementada.
 - [x] Validação de DueDate e normalização para UTC
 - [x] Proteção contra concorrência com conclusão e arquivamento de projetos
 - [x] Validação manual autenticada de CreateProjectTask
-- [ ] Atribuição de responsável através de AssignTask
-- [ ] Validação manual autenticada de CreateProjectTask
-- [ ] Atribuição de responsável através de AssignTask
+- [x] Atribuição e reatribuição de responsável através de AssignTask
+- [x] Endpoint PATCH de atribuição de responsável
+- [x] Validação de responsável ativo e membro ativo do projeto
+- [x] Preservação do status da tarefa durante atribuição e reatribuição
+- [x] Proteção concorrente com bloqueio do projeto e da tarefa
+- [x] Testes unitários, de Controller e integração de AssignTask
+- [x] Validação manual autenticada de AssignTask
 - [ ] Demais casos de uso e endpoints
 - [ ] Fluxo operacional completo
 - [ ] Validação
@@ -4230,7 +4335,20 @@ Transações externas são compatibilizadas através de savepoints
 Concorrência real validada com conexões PostgreSQL distintas
 Criação de tarefas validada automaticamente com PostgreSQL real
 Validação manual autenticada de CreateProjectTask concluída
-1125 testes automatizados aprovados
+AssignProjectTaskResponsible implementado na Application, persistência e API
+AssignTask integrada à autorização de atribuição de responsável
+TenantAdmin possui bypass administrativo para atribuição no próprio Tenant
+ProjectManager e Member dependem de participação ativa e AssignTask
+Responsável precisa existir no mesmo Tenant, estar ativo e ser membro ativo do projeto
+Atribuição permitida em projetos Planning, InProgress e Paused
+Atribuição bloqueada em projetos Completed e Archived
+Tarefas arquivadas bloqueiam alteração de responsável
+Atribuição e reatribuição preservam o status atual da tarefa
+Projeto e tarefa são bloqueados com FOR UPDATE durante a atribuição
+Persistência real de AssignTask validada com PostgreSQL
+Testes de Controller de AssignTask aprovados
+Validação manual autenticada de AssignTask concluída
+1186 testes automatizados aprovados
 0 falhas
 ```
 

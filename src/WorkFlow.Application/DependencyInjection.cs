@@ -18,6 +18,7 @@ using WorkFlow.Application.Projects.CompleteProject;
 using WorkFlow.Application.Projects.ReopenProject;
 using WorkFlow.Application.Projects.RestoreProject;
 using WorkFlow.Application.ProjectTasks.CreateProjectTask;
+using WorkFlow.Application.ProjectTasks.AssignProjectTaskResponsible;
 using WorkFlow.Application.Tenants.ChangeTenantStatus;
 using WorkFlow.Application.Tenants.CreateTenant;
 using WorkFlow.Application.Tenants.GetTenantByPublicId;
@@ -65,6 +66,7 @@ public static class DependencyInjection
         services.AddScoped<RestoreProjectHandler>();
 
         services.AddScoped<CreateProjectTaskHandler>();
+        services.AddScoped<AssignProjectTaskResponsibleHandler>();
 
         services.AddScoped<AddProjectMemberHandler>();
         services.AddScoped<ListProjectMembersHandler>();

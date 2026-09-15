@@ -222,3 +222,142 @@ Accept: application/json
 PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/restore
 Authorization: Bearer {{tenantAdminToken}}
 Accept: application/json
+
+### ============================================================
+### PROJECT TASKS — ATRIBUIÇÃO DE RESPONSÁVEL
+###
+### Regras:
+### - TenantAdmin possui bypass administrativo no próprio Tenant.
+### - ProjectManager e Member precisam de participação ativa + AssignTask.
+### - O responsável precisa existir, estar ativo e ser membro ativo do projeto.
+### - A atribuição não altera o status da tarefa.
+### - ProjectPermission.AssignTask = 10.
+###
+### Para os testes abaixo:
+### - execute primeiro a criação da tarefa;
+### - copie o publicId retornado para assignTaskPublicId
+###   em http-client.env.json.user.
+### ============================================================
+
+
+### ProjectTasks - Preparação criar tarefa para AssignTask - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa para teste de atribuição",
+  "description": "Tarefa criada especificamente para validar AssignTask.",
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - TenantAdmin atribuir responsável Member - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{assignTaskPublicId}}/responsible
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "responsibleUserPublicId": "{{memberUserPublicId}}"
+}
+
+
+### ProjectTasks - Responsável sem participação ativa no projeto - 409
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{assignTaskPublicId}}/responsible
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "responsibleUserPublicId": "{{usuarioConsultaPublicId}}"
+}
+
+
+### ProjectTasks - Member sem AssignTask tentar atribuir responsável - 403
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{assignTaskPublicId}}/responsible
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "responsibleUserPublicId": "{{memberUserPublicId}}"
+}
+
+
+### ProjectTasks - AssignTask sem autenticação - 401
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{assignTaskPublicId}}/responsible
+Content-Type: application/json
+Accept: application/json
+
+{
+  "responsibleUserPublicId": "{{memberUserPublicId}}"
+}
+
+
+### ProjectTasks - SystemAdmin tentando atribuir responsável - 403
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{assignTaskPublicId}}/responsible
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "responsibleUserPublicId": "{{memberUserPublicId}}"
+}
+
+
+### ProjectTasks - Usuário de outro Tenant tentando atribuir responsável - 403
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{assignTaskPublicId}}/responsible
+Authorization: Bearer {{otherTenantToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "responsibleUserPublicId": "{{memberUserPublicId}}"
+}
+
+
+### ProjectTasks - AssignTask com tarefa de outro projeto - 404
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks/{{assignTaskPublicId}}/responsible
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "responsibleUserPublicId": "{{usuarioConsultaPublicId}}"
+}
+
+
+### ProjectTasks - Responsável inexistente - 404
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{assignTaskPublicId}}/responsible
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "responsibleUserPublicId": "11111111-1111-1111-1111-111111111111"
+}
+
+
+### ProjectTasks - Preparação adicionar segundo responsável ao projeto - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userPublicId": "{{usuarioConsultaPublicId}}"
+}
+
+
+### ProjectTasks - TenantAdmin reatribuir responsável - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{assignTaskPublicId}}/responsible
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "responsibleUserPublicId": "{{usuarioConsultaPublicId}}"
+}

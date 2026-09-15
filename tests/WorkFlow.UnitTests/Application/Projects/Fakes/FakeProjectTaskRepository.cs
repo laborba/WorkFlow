@@ -16,6 +16,11 @@ public sealed class FakeProjectTaskRepository :
 
     public ProjectTask? AddedProjectTask { get; private set; }
 
+    public ProjectTask? ProjectTaskForUpdateToReturn { get; set; }
+
+    public List<(long ProjectId, Guid PublicId)> GetForUpdateCalls { get; } = [];
+
+
     public Task<IReadOnlyCollection<ProjectTaskStatus>>
         GetStatusesByProjectIdAsync(
             long projectId,
@@ -26,6 +31,18 @@ public sealed class FakeProjectTaskRepository :
 
         return Task.FromResult(
             StatusesToReturn);
+    }
+
+    public Task<ProjectTask?> GetForUpdateByPublicIdAsync(
+        long projectId,
+        Guid publicId,
+        CancellationToken cancellationToken = default)
+    {
+        GetForUpdateCalls.Add(
+            (projectId, publicId));
+
+        return Task.FromResult(
+            ProjectTaskForUpdateToReturn);
     }
 
     public Task AddAsync(

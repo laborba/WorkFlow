@@ -10,6 +10,11 @@ public interface IProjectTaskRepository
             long projectId,
             CancellationToken cancellationToken = default);
 
+    Task<ProjectTask?> GetForUpdateByPublicIdAsync(
+        long projectId,
+        Guid publicId,
+        CancellationToken cancellationToken = default);
+
     Task AddAsync(
         ProjectTask projectTask,
         CancellationToken cancellationToken = default);

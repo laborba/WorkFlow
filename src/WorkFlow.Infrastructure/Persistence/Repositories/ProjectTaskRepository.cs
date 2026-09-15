@@ -31,6 +31,34 @@ public sealed class ProjectTaskRepository :
                 cancellationToken);
     }
 
+    public async Task<ProjectTask?> GetForUpdateByPublicIdAsync(
+        long projectId,
+        Guid publicId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_context.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException(
+                "A leitura de tarefa com bloqueio exige uma transação ativa.");
+        }
+
+        var projectTasks =
+            await _context.ProjectTasks
+                .FromSqlInterpolated(
+                    $"""
+                    SELECT *
+                    FROM project_tasks
+                    WHERE project_id = {projectId}
+                      AND public_id = {publicId}
+                    FOR UPDATE
+                    """)
+                .AsTracking()
+                .ToListAsync(
+                    cancellationToken);
+
+        return projectTasks.SingleOrDefault();
+    }
+
     public async Task AddAsync(
         ProjectTask projectTask,
         CancellationToken cancellationToken = default)

@@ -16,6 +16,7 @@ using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Enums;
 using WorkFlow.UnitTests.Application.ProjectTasks;
+using WorkFlow.Application.ProjectTasks.AssignProjectTaskResponsible;
 
 namespace WorkFlow.UnitTests.API.ProjectTasks;
 
@@ -293,18 +294,41 @@ public sealed class ProjectTasksControllerTests
             typeof(CreateProjectTaskRequest).GetProperties().Select(property => property.Name).OrderBy(name => name));
     }
 
-    private static ProjectTasksController CreateController(CreateProjectTaskTestFixture fixture, string? claim)
+    private static ProjectTasksController CreateController(
+        CreateProjectTaskTestFixture fixture,
+        string? claim)
     {
         var claims = claim is null
             ? Array.Empty<Claim>()
-            : new[] { new Claim(ClaimTypes.NameIdentifier, claim) };
-        return new ProjectTasksController(fixture.Handler)
+            : new[]
+            {
+            new Claim(
+                ClaimTypes.NameIdentifier,
+                claim)
+            };
+
+        var assignProjectTaskResponsibleHandler =
+            new AssignProjectTaskResponsibleHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.PermissionRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        return new ProjectTasksController(
+            fixture.Handler,
+            assignProjectTaskResponsibleHandler)
         {
             ControllerContext = new ControllerContext
             {
                 HttpContext = new DefaultHttpContext
                 {
-                    User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"))
+                    User = new ClaimsPrincipal(
+                        new ClaimsIdentity(
+                            claims,
+                            "Test"))
                 }
             }
         };
