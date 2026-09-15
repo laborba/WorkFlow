@@ -26,10 +26,10 @@ using WorkFlow.UnitTests.Common.Fakes;
 
 namespace WorkFlow.UnitTests.API.ProjectTasks;
 
-public sealed class ClaimProjectTaskControllerTests
+public sealed class RemoveProjectTaskResponsibleControllerTests
 {
     [Fact]
-    public async Task Claim_ShouldReturnOk_WhenClaimIsValid()
+    public async Task RemoveResponsible_ShouldReturnOk_WhenRemovalIsValid()
     {
         var fixture =
             CreateFixture();
@@ -40,7 +40,7 @@ public sealed class ClaimProjectTaskControllerTests
                 fixture.Requester.PublicId.ToString());
 
         var result =
-            await controller.Claim(
+            await controller.RemoveResponsible(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
                 fixture.ProjectTask.PublicId,
@@ -55,7 +55,7 @@ public sealed class ClaimProjectTaskControllerTests
             okResult.StatusCode);
 
         var response =
-            Assert.IsType<ClaimProjectTaskResponse>(
+            Assert.IsType<RemoveProjectTaskResponsibleResponse>(
                 okResult.Value);
 
         Assert.Equal(
@@ -70,8 +70,7 @@ public sealed class ClaimProjectTaskControllerTests
             fixture.Project.PublicId,
             response.ProjectPublicId);
 
-        Assert.Equal(
-            fixture.Requester.PublicId,
+        Assert.Null(
             response.ResponsibleUserPublicId);
 
         Assert.Equal(
@@ -81,8 +80,7 @@ public sealed class ClaimProjectTaskControllerTests
         Assert.NotNull(
             response.UpdatedAt);
 
-        Assert.Equal(
-            fixture.Requester.Id,
+        Assert.Null(
             fixture.ProjectTask.ResponsibleUserId);
 
         Assert.Equal(
@@ -102,12 +100,60 @@ public sealed class ClaimProjectTaskControllerTests
             fixture.UnitOfWork.RollbackCallCount);
     }
 
+    [Fact]
+    public async Task RemoveResponsible_ShouldReturnTodo_WhenTaskWasInProgress()
+    {
+        var fixture =
+            CreateFixture();
+
+        fixture.ProjectTask.MoveToTodo();
+        fixture.ProjectTask.Start();
+
+        Assert.Equal(
+            ProjectTaskStatus.InProgress,
+            fixture.ProjectTask.Status);
+
+        var controller =
+            CreateController(
+                fixture,
+                fixture.Requester.PublicId.ToString());
+
+        var result =
+            await controller.RemoveResponsible(
+                fixture.Tenant.PublicId,
+                fixture.Project.PublicId,
+                fixture.ProjectTask.PublicId,
+                CancellationToken.None);
+
+        var okResult =
+            Assert.IsType<OkObjectResult>(
+                result.Result);
+
+        var response =
+            Assert.IsType<RemoveProjectTaskResponsibleResponse>(
+                okResult.Value);
+
+        Assert.Null(
+            response.ResponsibleUserPublicId);
+
+        Assert.Equal(
+            ProjectTaskStatus.Todo,
+            response.Status);
+
+        Assert.Null(
+            fixture.ProjectTask.ResponsibleUserId);
+
+        Assert.Equal(
+            ProjectTaskStatus.Todo,
+            fixture.ProjectTask.Status);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("invalid")]
     [InlineData("00000000-0000-0000-0000-000000000000")]
-    public async Task Claim_ShouldReturnUnauthorized_WhenUserClaimIsInvalid(
+    public async Task RemoveResponsible_ShouldReturnUnauthorized_WhenUserClaimIsInvalid(
         string? claim)
     {
         var fixture =
@@ -119,7 +165,7 @@ public sealed class ClaimProjectTaskControllerTests
                 claim);
 
         var result =
-            await controller.Claim(
+            await controller.RemoveResponsible(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
                 fixture.ProjectTask.PublicId,
@@ -136,7 +182,7 @@ public sealed class ClaimProjectTaskControllerTests
             0,
             fixture.UnitOfWork.SaveChangesCallCount);
 
-        Assert.Null(
+        Assert.NotNull(
             fixture.ProjectTask.ResponsibleUserId);
     }
 
@@ -160,16 +206,16 @@ public sealed class ClaimProjectTaskControllerTests
         "requester-inactive",
         StatusCodes.Status403Forbidden)]
     [InlineData(
-        "completed",
+        "completed-project",
+        StatusCodes.Status409Conflict)]
+    [InlineData(
+        "archived-project",
         StatusCodes.Status409Conflict)]
     [InlineData(
         "task-archived",
         StatusCodes.Status409Conflict)]
     [InlineData(
-        "task-inprogress",
-        StatusCodes.Status409Conflict)]
-    [InlineData(
-        "already-assigned",
+        "task-validation",
         StatusCodes.Status409Conflict)]
     [InlineData(
         "no-membership",
@@ -177,15 +223,17 @@ public sealed class ClaimProjectTaskControllerTests
     [InlineData(
         "no-permission",
         StatusCodes.Status403Forbidden)]
-    public async Task Claim_ShouldMapApplicationErrors(
+    public async Task RemoveResponsible_ShouldMapApplicationErrors(
         string scenario,
         int expectedStatusCode)
     {
         var fixture =
+            scenario == "no-membership" ||
             scenario == "no-permission"
                 ? CreateFixture(
                     UserRole.Member,
-                    grantClaimTask: false)
+                    grantAssignTask:
+                        scenario != "no-permission")
                 : CreateFixture();
 
         var expectedError =
@@ -199,7 +247,7 @@ public sealed class ClaimProjectTaskControllerTests
                 fixture.Requester.PublicId.ToString());
 
         var result =
-            await controller.Claim(
+            await controller.RemoveResponsible(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
                 fixture.ProjectTask.PublicId,
@@ -231,7 +279,7 @@ public sealed class ClaimProjectTaskControllerTests
     }
 
     [Fact]
-    public void Claim_ShouldExposeTenantScopedPatchProtectedByTenantAccess()
+    public void RemoveResponsible_ShouldExposeTenantScopedDeleteProtectedByTenantAccess()
     {
         var controllerType =
             typeof(ProjectTasksController);
@@ -247,15 +295,15 @@ public sealed class ClaimProjectTaskControllerTests
 
         var method =
             controllerType.GetMethod(
-                nameof(ProjectTasksController.Claim))!;
+                nameof(ProjectTasksController.RemoveResponsible))!;
 
-        var patchAttribute =
+        var deleteAttribute =
             Assert.Single(
-                method.GetCustomAttributes<HttpPatchAttribute>());
+                method.GetCustomAttributes<HttpDeleteAttribute>());
 
         Assert.Equal(
-            "{taskPublicId:guid}/claim",
-            patchAttribute.Template);
+            "{taskPublicId:guid}/responsible",
+            deleteAttribute.Template);
 
         Assert.Equal(
             AuthorizationPolicyNames.TenantAccess,
@@ -263,14 +311,11 @@ public sealed class ClaimProjectTaskControllerTests
                 method.GetCustomAttributes<AuthorizeAttribute>())
                 .Policy);
 
-        Assert.Empty(
-            method.GetCustomAttributes<AllowAnonymousAttribute>());
-
         Assert.DoesNotContain(
             method.GetParameters(),
-                parameter =>
-                    parameter.GetCustomAttribute<FromBodyAttribute>()
-                        is not null);
+            parameter =>
+                parameter.GetCustomAttribute<FromBodyAttribute>()
+                is not null);
     }
 
     private static Error ConfigureFailureScenario(
@@ -320,7 +365,7 @@ public sealed class ClaimProjectTaskControllerTests
                     fixture.Requester.Deactivate,
                     UserErrors.Inactive),
 
-            "completed" =>
+            "completed-project" =>
                 Configure(
                     () =>
                     {
@@ -333,7 +378,13 @@ public sealed class ClaimProjectTaskControllerTests
                             });
                     },
                     ProjectTaskErrors
-                        .ClaimBlockedByProjectStatus),
+                        .ResponsibleRemovalBlockedByProjectStatus),
+
+            "archived-project" =>
+                Configure(
+                    fixture.Project.Archive,
+                    ProjectTaskErrors
+                        .ResponsibleRemovalBlockedByProjectStatus),
 
             "task-archived" =>
                 Configure(
@@ -344,25 +395,16 @@ public sealed class ClaimProjectTaskControllerTests
                     },
                     ProjectTaskErrors.Archived),
 
-            "task-inprogress" =>
+            "task-validation" =>
                 Configure(
                     () =>
                     {
-                        fixture.ProjectTask.AssignResponsible(
-                            999);
-
                         fixture.ProjectTask.MoveToTodo();
                         fixture.ProjectTask.Start();
+                        fixture.ProjectTask.SendToValidation();
                     },
                     ProjectTaskErrors
-                        .ClaimBlockedByTaskStatus),
-
-            "already-assigned" =>
-                Configure(
-                    () =>
-                        fixture.ProjectTask.AssignResponsible(
-                            999),
-                    ProjectTaskErrors.AlreadyAssigned),
+                        .ResponsibleRemovalBlockedByTaskStatus),
 
             "no-membership" =>
                 Configure(
@@ -374,10 +416,12 @@ public sealed class ClaimProjectTaskControllerTests
                                     fixture.Requester.Id
                                 )] =
                             null,
-                    ProjectTaskErrors.ClaimNotAllowed),
+                    ProjectTaskErrors
+                        .ResponsibleRemovalNotAllowed),
 
             "no-permission" =>
-                ProjectTaskErrors.ClaimNotAllowed,
+                ProjectTaskErrors
+                    .ResponsibleRemovalNotAllowed,
 
             _ =>
                 throw new ArgumentOutOfRangeException(
@@ -431,12 +475,13 @@ public sealed class ClaimProjectTaskControllerTests
     }
 
     private static Fixture CreateFixture(
-        UserRole requesterRole = UserRole.TenantAdmin,
-        bool grantClaimTask = true)
+        UserRole requesterRole =
+            UserRole.TenantAdmin,
+        bool grantAssignTask = true)
     {
         var tenant =
             new Tenant(
-                "Empresa Claim Task API",
+                "Empresa Remove Responsible API",
                 $"REG-{Guid.NewGuid():N}",
                 $"tenant-{Guid.NewGuid():N}@test.local");
 
@@ -447,8 +492,8 @@ public sealed class ClaimProjectTaskControllerTests
         var requester =
             new User(
                 tenant.Id,
-                "Usuário Claim",
-                $"claim-{Guid.NewGuid():N}@test.local",
+                "Usuário Solicitante",
+                $"requester-{Guid.NewGuid():N}@test.local",
                 "password-hash",
                 requesterRole);
 
@@ -459,7 +504,7 @@ public sealed class ClaimProjectTaskControllerTests
         var project =
             new Project(
                 tenant.Id,
-                "Projeto Claim Task API",
+                "Projeto Remove Responsible API",
                 requester.Id);
 
         EntityTestHelper.SetId(
@@ -469,23 +514,15 @@ public sealed class ClaimProjectTaskControllerTests
         var projectTask =
             new ProjectTask(
                 project.Id,
-                "Tarefa disponível",
+                "Tarefa com responsável",
                 ProjectTaskPriority.Medium,
-                requester.Id);
+                requester.Id,
+                responsibleUserId:
+                    requester.Id);
 
         EntityTestHelper.SetId(
             projectTask,
             200);
-
-        var requesterMember =
-            new ProjectMember(
-                project.Id,
-                requester.Id,
-                requester.Id);
-
-        EntityTestHelper.SetId(
-            requesterMember,
-            300);
 
         var tenantRepository =
             new FakeTenantRepository
@@ -512,26 +549,37 @@ public sealed class ClaimProjectTaskControllerTests
         var memberRepository =
             new FakeProjectMemberRepository();
 
-        memberRepository
-            .ActiveMembersToReturn[
-                (
-                    project.Id,
-                    requester.Id
-                )] =
-            requesterMember;
-
         var permissionRepository =
             new FakeProjectMemberPermissionRepository();
 
-        if (requesterRole != UserRole.TenantAdmin)
+        if (requesterRole == UserRole.ProjectManager ||
+            requesterRole == UserRole.Member)
         {
+            var requesterMember =
+                new ProjectMember(
+                    project.Id,
+                    requester.Id,
+                    requester.Id);
+
+            EntityTestHelper.SetId(
+                requesterMember,
+                300);
+
+            memberRepository
+                .ActiveMembersToReturn[
+                    (
+                        project.Id,
+                        requester.Id
+                    )] =
+                requesterMember;
+
             permissionRepository
                 .IsActivePermissionResults[
                     (
                         requesterMember.Id,
-                        ProjectPermission.ClaimTask
+                        ProjectPermission.AssignTask
                     )] =
-                grantClaimTask;
+                grantAssignTask;
         }
 
         var taskRepository =
@@ -615,7 +663,9 @@ public sealed class ClaimProjectTaskControllerTests
         FakeProjectTaskRepository TaskRepository,
         FakeUnitOfWork UnitOfWork,
         CreateProjectTaskHandler CreateProjectTaskHandler,
-        AssignProjectTaskResponsibleHandler AssignProjectTaskResponsibleHandler,
+        AssignProjectTaskResponsibleHandler
+            AssignProjectTaskResponsibleHandler,
         ClaimProjectTaskHandler ClaimProjectTaskHandler,
-        RemoveProjectTaskResponsibleHandler RemoveProjectTaskResponsibleHandler);
+        RemoveProjectTaskResponsibleHandler
+            RemoveProjectTaskResponsibleHandler);
 }

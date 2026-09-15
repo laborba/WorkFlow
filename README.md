@@ -384,6 +384,87 @@ Os cenários manuais estão disponíveis em:
 src/WorkFlow.API/Http/05-ProjectTasks.http
 ```
 
+### Tarefas — RemoveProjectTaskResponsible
+
+A remoção do responsável de uma tarefa está implementada através da mesma permissão `AssignTask` utilizada na atribuição e reatribuição.
+
+O endpoint utiliza:
+
+```http
+DELETE /api/tenants/{tenantPublicId}/projects/{projectPublicId}/tasks/{taskPublicId}/responsible
+```
+
+O endpoint não recebe body.
+
+As regras atuais são:
+
+- `TenantAdmin` possui bypass administrativo dentro do próprio Tenant;
+- `ProjectManager` e `Member` precisam possuir participação ativa no projeto e `AssignTask`;
+- `SystemAdmin` não possui acesso operacional às tarefas do Tenant;
+- projetos `Planning`, `InProgress` e `Paused` permitem remoção;
+- projetos `Completed` e `Archived` bloqueiam remoção;
+- tarefas arquivadas bloqueiam remoção;
+- tarefas em `Validation` bloqueiam remoção;
+- remover o responsável de uma tarefa que já está sem responsável é uma operação idempotente.
+
+A remoção pode alterar o estado operacional da tarefa quando necessário:
+
+```text
+Backlog
+→ permanece Backlog
+
+Todo
+→ permanece Todo
+
+InProgress
+→ retorna para Todo
+
+Paused originada de Todo
+→ permanece Paused
+→ retomada retorna para Todo
+
+Paused originada de InProgress
+→ permanece Paused
+→ estado de retomada é ajustado para Todo
+```
+
+A operação utiliza transação e bloqueio pessimista na mesma ordem adotada pelos demais fluxos concorrentes:
+
+```text
+Project FOR UPDATE
+↓
+ProjectTask FOR UPDATE
+```
+
+O sucesso retorna `200 OK` com:
+
+```text
+PublicId
+TenantPublicId
+ProjectPublicId
+ResponsibleUserPublicId = null
+Status
+UpdatedAt
+```
+
+Os principais erros são:
+
+```text
+ProjectTasks.ResponsibleRemovalNotAllowed
+ProjectTasks.ResponsibleRemovalBlockedByProjectStatus
+ProjectTasks.ResponsibleRemovalBlockedByTaskStatus
+ProjectTasks.Archived
+```
+
+A implementação possui testes de domínio, Application, Controller e integração real com PostgreSQL.
+
+A validação manual autenticada também foi concluída.
+
+Os cenários manuais estão disponíveis em:
+
+```text
+src/WorkFlow.API/Http/05-ProjectTasks.http
+```
 
 ### Autenticação e autorização
 
@@ -440,7 +521,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-1186 testes automatizados aprovados
+1335 testes automatizados aprovados
 0 falhas
 ```
 
@@ -3363,6 +3444,9 @@ ProjectTasks.AssignmentBlockedByProjectStatus
 ProjectTasks.ResponsibleUserNotFound
 ProjectTasks.ResponsibleUserInactive
 ProjectTasks.ResponsibleUserNotActiveMember
+ProjectTasks.ResponsibleRemovalNotAllowed
+ProjectTasks.ResponsibleRemovalBlockedByProjectStatus
+ProjectTasks.ResponsibleRemovalBlockedByTaskStatus
 ProjectTasks.Archived
 ProjectTasks.ClaimNotAllowed
 ProjectTasks.ClaimBlockedByProjectStatus
@@ -3559,7 +3643,7 @@ Os arquivos possuem responsabilidades separadas:
 → criação, consulta individual, listagem, atualização e ciclo completo de status de projetos; inclusão, listagem e remoção de membros; concessão, listagem e revogação de permissões; filtros e autorização
 
 05-ProjectTasks.http
-→ criação de tarefas, atribuição e reatribuição de responsável, ClaimTask, autorização por CreateTask, AssignTask e ClaimTask, status do projeto e isolamento entre Tenants
+→ criação de tarefas, atribuição, reatribuição e remoção de responsável, ClaimTask, autorização por CreateTask, AssignTask e ClaimTask, status do projeto e isolamento entre Tenants
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -3788,7 +3872,7 @@ As permissões `ManageProjectPermissions`, `EditProject` e `ManageProjectMembers
 
 `EditProject` também é utilizada nos fluxos de início, pausa e retomada de projetos.
 
-`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas, `AssignTask` à atribuição e reatribuição de responsável e `ClaimTask` ao fluxo em que o próprio membro assume uma tarefa disponível; as demais permissões de tarefas serão incorporadas aos próximos casos de uso.
+`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas, `AssignTask` à atribuição, reatribuição e remoção de responsável e `ClaimTask` ao fluxo em que o próprio membro assume uma tarefa disponível; as demais permissões de tarefas serão incorporadas aos próximos casos de uso.
 
 ```text
 Permissões específicas por recurso
@@ -3880,6 +3964,18 @@ A participação ativa no projeto é obrigatória inclusive para `TenantAdmin`. 
 Somente tarefas sem responsável e nos estados `Backlog`, `Todo` ou `Paused` podem ser assumidas. O claim preserva o status atual da tarefa.
 
 A operação utiliza transação e bloqueio pessimista do projeto e da tarefa. Testes de concorrência com duas conexões PostgreSQL distintas confirmam que somente um usuário consegue assumir uma mesma tarefa.
+
+`RemoveProjectTaskResponsible` também está implementado na Application, persistência e API.
+
+A remoção utiliza `AssignTask`. `TenantAdmin` possui bypass administrativo, enquanto `ProjectManager` e `Member` precisam possuir participação ativa e `AssignTask`.
+
+A operação é idempotente quando a tarefa já está sem responsável.
+
+A remoção preserva `Backlog` e `Todo`, transforma `InProgress` em `Todo` e mantém tarefas `Paused` nesse estado, ajustando o estado de retomada para `Todo` quando necessário.
+
+Tarefas em `Validation` ou arquivadas bloqueiam a remoção. Projetos `Completed` e `Archived` também bloqueiam a operação.
+
+Projeto e tarefa são bloqueados com `FOR UPDATE`, mantendo a operação coordenada com os demais fluxos concorrentes de tarefas.
 
 O módulo de tarefas deverá contemplar:
 
@@ -3986,7 +4082,7 @@ Atualmente já são permissões operacionais efetivas:
 - `ReopenProject`: permite reabrir projetos concluídos;
 - `ArchiveProject`: permite arquivar e restaurar projetos;
 - `CreateTask`: permite criar tarefas em projetos Planning, InProgress ou Paused, com participação ativa para ProjectManager e Member;
-- `AssignTask`: permite atribuir e reatribuir responsáveis às tarefas, com participação ativa e a permissão correspondente para ProjectManager e Member;
+- `AssignTask`: permite atribuir, reatribuir e remover responsáveis das tarefas, com participação ativa e a permissão correspondente para ProjectManager e Member;
 - `ClaimTask`: permite que o próprio membro ativo assuma uma tarefa disponível; `ProjectManager` e `Member` precisam possuir a permissão, enquanto `TenantAdmin` possui bypass da permissão, mas continua precisando ser membro ativo do projeto.
 
 Quando um `ProjectManager` cria um novo projeto, sua participação inicial recebe automaticamente:
@@ -4154,7 +4250,7 @@ Essa camada ainda não está implementada.
 - [x] Integração de `ReopenProject` à reabertura de projetos
 - [x] Integração de `ArchiveProject` ao arquivamento e restauração de projetos
 - [x] Integração de `CreateTask` à criação de tarefas
-- [x] Integração de `AssignTask` à atribuição e reatribuição de responsável
+- [x] Integração de `AssignTask` à atribuição, reatribuição e remoção de responsável
 - [x] Integração de `ClaimTask` ao fluxo de assumir tarefas
 - [ ] Integração das demais permissões aos fluxos de tarefas
 - [ ] Rate limiting
@@ -4215,6 +4311,13 @@ Essa camada ainda não está implementada.
 - [x] Proteção concorrente com bloqueio do projeto e da tarefa
 - [x] Testes unitários, de Controller e integração de AssignTask
 - [x] Validação manual autenticada de AssignTask
+- [x] Remoção de responsável através de AssignTask
+- [x] Endpoint DELETE de remoção de responsável
+- [x] Remoção idempotente quando a tarefa já está sem responsável
+- [x] Retorno de InProgress para Todo após remoção do responsável
+- [x] Ajuste da retomada de tarefa Paused para Todo após remoção do responsável
+- [x] Testes unitários, de Controller e integração PostgreSQL da remoção de responsável
+- [x] Validação manual autenticada da remoção de responsável
 - [x] Claim de tarefa pelo próprio usuário através de ClaimTask
 - [x] Participação ativa obrigatória no ClaimTask
 - [x] Preservação do status durante ClaimTask
@@ -4486,7 +4589,23 @@ Projeto e tarefa são bloqueados com FOR UPDATE durante o claim
 Concorrência real entre dois usuários validada com conexões PostgreSQL distintas
 Somente um usuário pode vencer a disputa concorrente pela mesma tarefa
 Validação manual autenticada de ClaimTask concluída
-1267 testes automatizados aprovados
+RemoveProjectTaskResponsible implementado na Application, persistência e API
+Remoção de responsável protegida pela permissão AssignTask
+TenantAdmin possui bypass administrativo para remoção de responsável
+ProjectManager e Member dependem de participação ativa e AssignTask para remover responsável
+Remoção de responsável é idempotente quando a tarefa já está sem responsável
+Remoção em Backlog preserva Backlog
+Remoção em Todo preserva Todo
+Remoção em InProgress retorna a tarefa para Todo
+Remoção em Paused preserva Paused e ajusta o estado de retomada para Todo quando necessário
+Validation bloqueia remoção de responsável
+Projetos Completed e Archived bloqueiam remoção de responsável
+Tarefas arquivadas bloqueiam remoção de responsável
+Projeto e tarefa são bloqueados com FOR UPDATE durante a remoção
+Persistência real de RemoveProjectTaskResponsible validada com PostgreSQL
+Testes de Controller de RemoveProjectTaskResponsible aprovados
+Validação manual autenticada de RemoveProjectTaskResponsible concluída
+1335 testes automatizados aprovados
 0 falhas
 ```
 

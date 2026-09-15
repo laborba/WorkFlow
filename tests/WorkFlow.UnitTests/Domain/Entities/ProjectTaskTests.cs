@@ -526,6 +526,48 @@ public class ProjectTaskTests
     }
 
     [Fact]
+    public void RemoveResponsible_ShouldKeepTaskPausedAndChangeResumeStatusToTodo_WhenPausedFromInProgress()
+    {
+        var task =
+            CreateTask(
+                responsibleUserId: 20);
+
+        task.MoveToTodo();
+        task.Start();
+
+        task.Pause(
+            "Tarefa pausada para teste.");
+
+        task.RemoveResponsible();
+
+        Assert.Null(
+            task.ResponsibleUserId);
+
+        Assert.Equal(
+            ProjectTaskStatus.Paused,
+            task.Status);
+
+        Assert.Equal(
+            ProjectTaskStatus.Todo,
+            task.StatusBeforePause);
+
+        Assert.NotNull(
+            task.UpdatedAt);
+
+        task.Resume();
+
+        Assert.Equal(
+            ProjectTaskStatus.Todo,
+            task.Status);
+
+        Assert.Null(
+            task.ResponsibleUserId);
+
+        Assert.Null(
+            task.StatusBeforePause);
+    }
+
+    [Fact]
     public void SendToValidation_ShouldChangeStatusAndClearValidator()
     {
         var task = CreateInProgressTask();

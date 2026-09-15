@@ -18,6 +18,7 @@ using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Enums;
 using WorkFlow.UnitTests.Application.ProjectTasks;
+using WorkFlow.Application.ProjectTasks.RemoveProjectTaskResponsible;
 
 namespace WorkFlow.UnitTests.API.ProjectTasks;
 
@@ -328,10 +329,21 @@ public sealed class ProjectTasksControllerTests
                 fixture.TaskRepository,
                 fixture.UnitOfWork);
 
+        var removeProjectTaskResponsibleHandler =
+            new RemoveProjectTaskResponsibleHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.PermissionRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
         return new ProjectTasksController(
             fixture.Handler,
             assignProjectTaskResponsibleHandler,
-            claimProjectTaskHandler)
+            claimProjectTaskHandler,
+            removeProjectTaskResponsibleHandler)
         {
             ControllerContext =
                 new ControllerContext

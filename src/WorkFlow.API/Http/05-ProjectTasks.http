@@ -496,3 +496,139 @@ Accept: application/json
 DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/9
 Authorization: Bearer {{tenantAdminToken}}
 Accept: application/json
+
+### ============================================================
+### PROJECT TASKS — REMOVE RESPONSIBLE
+###
+### Regras:
+### - A remoção utiliza a permissão AssignTask = 10.
+### - TenantAdmin possui bypass administrativo.
+### - ProjectManager e Member precisam de participação ativa + AssignTask.
+### - A operação não possui body.
+### - Se a tarefa já estiver sem responsável, a operação é idempotente.
+### - Em Backlog e Todo, o status é preservado.
+### - InProgress retorna para Todo.
+### - Validation bloqueia a remoção.
+### - Projetos Completed e Archived bloqueiam a remoção.
+### - Tarefas arquivadas bloqueiam a remoção.
+### ============================================================
+
+
+### ProjectTasks - Preparação criar tarefa para remoção de responsável por TenantAdmin - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa para remover responsável",
+  "description": "Validação manual do RemoveProjectTaskResponsible.",
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Preparação atribuir responsável antes da remoção - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{removeResponsibleTaskPublicId}}/responsible
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "responsibleUserPublicId": "{{memberUserPublicId}}"
+}
+
+
+### ProjectTasks - TenantAdmin remover responsável - 200
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{removeResponsibleTaskPublicId}}/responsible
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Remover responsável novamente deve ser idempotente - 200
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{removeResponsibleTaskPublicId}}/responsible
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Preparação criar tarefa para validar AssignTask do Member - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa para remoção por Member",
+  "description": "Validação da permissão AssignTask na remoção.",
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Preparação atribuir responsável na tarefa do Member - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{removeResponsibleMemberTaskPublicId}}/responsible
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "responsibleUserPublicId": "{{memberUserPublicId}}"
+}
+
+
+### ProjectTasks - RemoveResponsible sem autenticação - 401
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{removeResponsibleMemberTaskPublicId}}/responsible
+Accept: application/json
+
+
+### ProjectTasks - SystemAdmin tentando remover responsável - 403
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{removeResponsibleMemberTaskPublicId}}/responsible
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Usuário de outro Tenant tentando remover responsável - 403
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{removeResponsibleMemberTaskPublicId}}/responsible
+Authorization: Bearer {{otherTenantToken}}
+Accept: application/json
+
+
+### ProjectTasks - RemoveResponsible com tarefa pertencente a outro projeto - 404
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks/{{removeResponsibleMemberTaskPublicId}}/responsible
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - RemoveResponsible com tarefa inexistente - 404
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/11111111-1111-1111-1111-111111111111/responsible
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Member sem AssignTask tentar remover responsável - 403
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{removeResponsibleMemberTaskPublicId}}/responsible
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### ProjectTasks - Preparação conceder AssignTask ao Member - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 10
+}
+
+
+### ProjectTasks - Member com AssignTask remover responsável - 200
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{removeResponsibleMemberTaskPublicId}}/responsible
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### ProjectTasks - Limpeza revogar AssignTask do Member - 200
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/10
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json

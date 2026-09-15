@@ -44,6 +44,21 @@ public static class ProjectTaskErrors
             "ProjectTasks.ResponsibleUserNotActiveMember",
             "O responsável precisa possuir participação ativa no projeto.");
 
+    public static Error ResponsibleRemovalNotAllowed { get; } =
+        new(
+            "ProjectTasks.ResponsibleRemovalNotAllowed",
+            "O usuário não possui permissão para remover o responsável desta tarefa.");
+
+    public static Error ResponsibleRemovalBlockedByProjectStatus { get; } =
+        new(
+            "ProjectTasks.ResponsibleRemovalBlockedByProjectStatus",
+            "Não é possível remover o responsável de tarefas de um projeto concluído ou arquivado.");
+
+    public static Error ResponsibleRemovalBlockedByTaskStatus { get; } =
+        new(
+            "ProjectTasks.ResponsibleRemovalBlockedByTaskStatus",
+            "O estado atual da tarefa não permite remover o responsável.");
+
     public static Error ClaimNotAllowed { get; } =
         new(
             "ProjectTasks.ClaimNotAllowed",

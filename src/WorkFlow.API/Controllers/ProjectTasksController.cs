@@ -7,8 +7,9 @@ using WorkFlow.API.Contracts.ProjectTasks;
 using WorkFlow.Application.Projects;
 using WorkFlow.Application.ProjectTasks;
 using WorkFlow.Application.ProjectTasks.AssignProjectTaskResponsible;
-using WorkFlow.Application.ProjectTasks.CreateProjectTask;
 using WorkFlow.Application.ProjectTasks.ClaimProjectTask;
+using WorkFlow.Application.ProjectTasks.CreateProjectTask;
+using WorkFlow.Application.ProjectTasks.RemoveProjectTaskResponsible;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 
@@ -28,10 +29,14 @@ public sealed class ProjectTasksController : ControllerBase
     private readonly ClaimProjectTaskHandler
         _claimProjectTaskHandler;
 
+    private readonly RemoveProjectTaskResponsibleHandler
+        _removeProjectTaskResponsibleHandler;
+
     public ProjectTasksController(
         CreateProjectTaskHandler createProjectTaskHandler,
         AssignProjectTaskResponsibleHandler assignProjectTaskResponsibleHandler,
-        ClaimProjectTaskHandler claimProjectTaskHandler)
+        ClaimProjectTaskHandler claimProjectTaskHandler,
+        RemoveProjectTaskResponsibleHandler removeProjectTaskResponsibleHandler)
     {
         _createProjectTaskHandler =
             createProjectTaskHandler;
@@ -41,6 +46,9 @@ public sealed class ProjectTasksController : ControllerBase
 
         _claimProjectTaskHandler =
             claimProjectTaskHandler;
+
+        _removeProjectTaskResponsibleHandler =
+            removeProjectTaskResponsibleHandler;
     }
 
     [Authorize(
@@ -356,6 +364,114 @@ public sealed class ProjectTasksController : ControllerBase
 
         var response =
             new ClaimProjectTaskResponse(
+                task.PublicId,
+                task.TenantPublicId,
+                task.ProjectPublicId,
+                task.ResponsibleUserPublicId,
+                task.Status,
+                task.UpdatedAt);
+
+        return Ok(
+            response);
+    }
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpDelete("{taskPublicId:guid}/responsible")]
+    [ProducesResponseType<RemoveProjectTaskResponsibleResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<RemoveProjectTaskResponsibleResponse>>
+    RemoveResponsible(
+        Guid tenantPublicId,
+        Guid projectPublicId,
+        Guid taskPublicId,
+        CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var requestedByUserPublicId) ||
+            requestedByUserPublicId == Guid.Empty)
+        {
+            return Unauthorized();
+        }
+
+        var command =
+            new RemoveProjectTaskResponsibleCommand(
+                tenantPublicId,
+                projectPublicId,
+                taskPublicId,
+                requestedByUserPublicId);
+
+        var result =
+            await _removeProjectTaskResponsibleHandler
+                .HandleAsync(
+                    command,
+                    cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound ||
+                error == UserErrors.NotFound ||
+                error == ProjectErrors.NotFound ||
+                error == ProjectTaskErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            if (error == UserErrors.Inactive ||
+                error ==
+                ProjectTaskErrors.ResponsibleRemovalNotAllowed)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    errorResponse);
+            }
+
+            if (error == TenantErrors.Inactive ||
+                error ==
+                ProjectTaskErrors
+                    .ResponsibleRemovalBlockedByProjectStatus ||
+                error ==
+                ProjectTaskErrors
+                    .ResponsibleRemovalBlockedByTaskStatus ||
+                error == ProjectTaskErrors.Archived)
+            {
+                return Conflict(
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var task =
+            result.Value!;
+
+        var response =
+            new RemoveProjectTaskResponsibleResponse(
                 task.PublicId,
                 task.TenantPublicId,
                 task.ProjectPublicId,
