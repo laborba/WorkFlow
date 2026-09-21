@@ -466,6 +466,87 @@ Os cenários manuais estão disponíveis em:
 src/WorkFlow.API/Http/05-ProjectTasks.http
 ```
 
+### Tarefas — UpdateProjectTask
+
+A atualização dos dados básicos de uma tarefa está implementada na Application, persistência e API.
+
+O endpoint utiliza:
+
+```http
+PUT /api/tenants/{tenantPublicId}/projects/{projectPublicId}/tasks/{taskPublicId}
+```
+
+O request permite alterar exclusivamente:
+
+- `Title`;
+- `Description`;
+- `Priority`;
+- `DueDate`.
+
+Exemplo de requisição:
+
+```json
+{
+  "title": "Tarefa atualizada",
+  "description": "Nova descrição",
+  "priority": 3,
+  "dueDate": "2027-02-01T12:00:00Z"
+}
+```
+
+O título é obrigatório. Espaços externos são removidos, e uma descrição vazia ou composta somente por espaços é normalizada para `null`.
+
+`DueDate` aceita UTC (`Z`) ou offset explícito. Datas com offset são normalizadas para UTC. Datas sem informação de fuso horário são rejeitadas com `400 Bad Request`.
+
+Enviar `DueDate = null` remove o prazo existente.
+
+A operação preserva:
+
+- `Status`;
+- `ResponsibleUserId`;
+- `ValidatorUserId`;
+- `CreatedByUserId`;
+- `CreatedAt`.
+
+A autorização utiliza a policy `TenantAccess` e as regras específicas da Application:
+
+- `TenantAdmin` possui bypass administrativo de `EditTask` dentro do próprio Tenant;
+- `ProjectManager` e `Member` precisam possuir participação ativa e permissão `EditTask`;
+- `SystemAdmin` não possui acesso operacional às tarefas do Tenant;
+- usuários inativos não podem atualizar tarefas.
+
+Projetos `Planning`, `InProgress`, `Paused` e `Completed` permitem atualização dos dados básicos das tarefas.
+
+Projetos `Archived` e tarefas arquivadas bloqueiam a atualização.
+
+A operação utiliza transação e bloqueio pessimista `FOR UPDATE`, obtendo primeiro o bloqueio do projeto e depois o da tarefa.
+
+O sucesso retorna `200 OK` com os identificadores públicos, título, descrição, status, prioridade, prazo e `UpdatedAt`.
+
+Principais respostas de erro:
+
+- `400 Bad Request`: argumentos inválidos, prioridade inválida ou prazo sem fuso horário;
+- `401 Unauthorized`: ausência de autenticação ou identificador inválido do usuário autenticado;
+- `403 Forbidden`: ausência de autorização ou usuário inativo;
+- `404 Not Found`: Tenant, usuário, projeto ou tarefa não encontrado;
+- `409 Conflict`: Tenant inativo, projeto arquivado ou tarefa arquivada.
+
+Erros específicos da operação:
+
+```text
+ProjectTasks.UpdateNotAllowed
+ProjectTasks.UpdateBlockedByProjectStatus
+ProjectTasks.Archived
+```
+
+A implementação possui testes unitários da Application, testes de Controller, testes de integração com PostgreSQL e validação manual autenticada.
+
+Os cenários manuais estão disponíveis em:
+
+```text
+src/WorkFlow.API/Http/05-ProjectTasks.http
+```
+
 ### Autenticação e autorização
 
 - login de usuários vinculados a uma empresa;
@@ -521,7 +602,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-1335 testes automatizados aprovados
+1419 testes automatizados aprovados
 0 falhas
 ```
 
@@ -2963,6 +3044,28 @@ Quando já existe uma transação externa, como nos testes de integração, o `U
 
 Os cenários manuais estão em `src/WorkFlow.API/Http/05-ProjectTasks.http`. A validação automatizada e a validação manual autenticada foram concluídas.
 
+
+### Atualizar tarefa
+
+```http
+PUT /api/tenants/{tenantPublicId}/projects/{projectPublicId}/tasks/{taskPublicId}
+```
+
+A operação exige `TenantAccess`.
+
+`TenantAdmin` possui bypass administrativo. `ProjectManager` e `Member` precisam de participação ativa e `EditTask`.
+
+Campos editáveis: `title`, `description`, `priority` e `dueDate`.
+
+O endpoint preserva status, responsável, validador e criador. Permite remover o prazo com `dueDate: null` e normaliza datas com offset para UTC.
+
+Projetos `Planning`, `InProgress`, `Paused` e `Completed` permitem atualização. Projetos `Archived` e tarefas arquivadas bloqueiam a operação.
+
+O sucesso retorna `200 OK`. A atualização utiliza transação e bloqueio pessimista do projeto e da tarefa.
+
+Os testes manuais estão em `src/WorkFlow.API/Http/05-ProjectTasks.http`.
+
+
 ## Autenticação
 
 ### Realizar login
@@ -3452,6 +3555,8 @@ ProjectTasks.ClaimNotAllowed
 ProjectTasks.ClaimBlockedByProjectStatus
 ProjectTasks.ClaimBlockedByTaskStatus
 ProjectTasks.AlreadyAssigned
+ProjectTasks.UpdateNotAllowed
+ProjectTasks.UpdateBlockedByProjectStatus
 
 Validation.InvalidArgument
 ```
@@ -3643,7 +3748,7 @@ Os arquivos possuem responsabilidades separadas:
 → criação, consulta individual, listagem, atualização e ciclo completo de status de projetos; inclusão, listagem e remoção de membros; concessão, listagem e revogação de permissões; filtros e autorização
 
 05-ProjectTasks.http
-→ criação de tarefas, atribuição, reatribuição e remoção de responsável, ClaimTask, autorização por CreateTask, AssignTask e ClaimTask, status do projeto e isolamento entre Tenants
+→ criação e atualização de tarefas, atribuição, reatribuição e remoção de responsável, ClaimTask, autorização por CreateTask, EditTask, AssignTask e ClaimTask, status do projeto e isolamento entre Tenants
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -3872,7 +3977,7 @@ As permissões `ManageProjectPermissions`, `EditProject` e `ManageProjectMembers
 
 `EditProject` também é utilizada nos fluxos de início, pausa e retomada de projetos.
 
-`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas, `AssignTask` à atribuição, reatribuição e remoção de responsável e `ClaimTask` ao fluxo em que o próprio membro assume uma tarefa disponível; as demais permissões de tarefas serão incorporadas aos próximos casos de uso.
+`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas, `EditTask` à atualização dos dados básicos, `AssignTask` à atribuição, reatribuição e remoção de responsável e `ClaimTask` ao fluxo em que o próprio membro assume uma tarefa disponível; as demais permissões de tarefas serão incorporadas aos próximos casos de uso.
 
 ```text
 Permissões específicas por recurso
@@ -4082,6 +4187,7 @@ Atualmente já são permissões operacionais efetivas:
 - `ReopenProject`: permite reabrir projetos concluídos;
 - `ArchiveProject`: permite arquivar e restaurar projetos;
 - `CreateTask`: permite criar tarefas em projetos Planning, InProgress ou Paused, com participação ativa para ProjectManager e Member;
+- `EditTask`: permite atualizar título, descrição, prioridade e prazo das tarefas, com participação ativa e a permissão correspondente para ProjectManager e Member;
 - `AssignTask`: permite atribuir, reatribuir e remover responsáveis das tarefas, com participação ativa e a permissão correspondente para ProjectManager e Member;
 - `ClaimTask`: permite que o próprio membro ativo assuma uma tarefa disponível; `ProjectManager` e `Member` precisam possuir a permissão, enquanto `TenantAdmin` possui bypass da permissão, mas continua precisando ser membro ativo do projeto.
 
@@ -4252,6 +4358,7 @@ Essa camada ainda não está implementada.
 - [x] Integração de `CreateTask` à criação de tarefas
 - [x] Integração de `AssignTask` à atribuição, reatribuição e remoção de responsável
 - [x] Integração de `ClaimTask` ao fluxo de assumir tarefas
+- [x] Integração de `EditTask` à atualização dos dados básicos das tarefas
 - [ ] Integração das demais permissões aos fluxos de tarefas
 - [ ] Rate limiting
 - [ ] MFA
@@ -4324,6 +4431,11 @@ Essa camada ainda não está implementada.
 - [x] Proteção concorrente para impedir dois usuários assumindo a mesma tarefa
 - [x] Testes unitários, de Controller, integração e concorrência de ClaimTask
 - [x] Validação manual autenticada de ClaimTask
+- [x] UpdateProjectTask para atualização de título, descrição, prioridade e prazo
+- [x] Endpoint PUT de atualização de tarefas
+- [x] Autorização por participação ativa e EditTask
+- [x] Testes unitários, de Controller e integração PostgreSQL de UpdateProjectTask
+- [x] Validação manual autenticada de UpdateProjectTask
 - [ ] Demais casos de uso e endpoints
 - [ ] Fluxo operacional completo
 - [ ] Validação
@@ -4605,7 +4717,20 @@ Projeto e tarefa são bloqueados com FOR UPDATE durante a remoção
 Persistência real de RemoveProjectTaskResponsible validada com PostgreSQL
 Testes de Controller de RemoveProjectTaskResponsible aprovados
 Validação manual autenticada de RemoveProjectTaskResponsible concluída
-1335 testes automatizados aprovados
+UpdateProjectTask implementado na Application, persistência e API
+Atualização de título, descrição, prioridade e prazo implementada
+EditTask integrada à autorização de atualização de tarefas
+TenantAdmin possui bypass administrativo para atualização
+ProjectManager e Member dependem de participação ativa e EditTask
+Projetos Planning, InProgress, Paused e Completed permitem atualização
+Projetos Archived e tarefas arquivadas bloqueiam atualização
+Status, responsável, validador e criador são preservados
+DueDate aceita UTC ou offset explícito e permite remoção com null
+Projeto e tarefa são bloqueados com FOR UPDATE durante a atualização
+Persistência real de UpdateProjectTask validada com PostgreSQL
+Testes de Controller de UpdateProjectTask aprovados
+Validação manual autenticada de UpdateProjectTask concluída
+1419 testes automatizados aprovados
 0 falhas
 ```
 
