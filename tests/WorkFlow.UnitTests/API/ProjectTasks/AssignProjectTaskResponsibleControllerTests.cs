@@ -14,6 +14,7 @@ using WorkFlow.Application.ProjectTasks.AssignProjectTaskResponsible;
 using WorkFlow.Application.ProjectTasks.ClaimProjectTask;
 using WorkFlow.Application.ProjectTasks.CreateProjectTask;
 using WorkFlow.Application.ProjectTasks.RemoveProjectTaskResponsible;
+using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Entities;
@@ -447,7 +448,15 @@ public sealed class AssignProjectTaskResponsibleControllerTests
             fixture.CreateProjectTaskHandler,
             fixture.AssignHandler,
             claimProjectTaskHandler,
-            removeProjectTaskResponsibleHandler)
+            removeProjectTaskResponsibleHandler,
+            new UpdateProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.PermissionRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork))
         {
             ControllerContext =
                 new ControllerContext

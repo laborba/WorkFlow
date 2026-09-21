@@ -632,3 +632,319 @@ Accept: application/json
 DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/10
 Authorization: Bearer {{tenantAdminToken}}
 Accept: application/json
+
+
+### ============================================================
+### PROJECT TASKS — UPDATE TASK
+###
+### Regras:
+### - Atualiza Title, Description, Priority e DueDate.
+### - Preserva Status, ResponsibleUserId, ValidatorUserId e CreatedByUserId.
+### - TenantAdmin possui bypass administrativo de EditTask.
+### - ProjectManager e Member exigem participação ativa + EditTask.
+### - SystemAdmin não possui acesso operacional.
+### - Planning, InProgress, Paused e Completed permitem atualização.
+### - Projeto Archived e tarefa arquivada bloqueiam atualização.
+### - DueDate aceita UTC ou offset explícito.
+### - DueDate null remove o prazo.
+### - Description vazia ou somente espaços vira null.
+### - ProjectPermission.EditTask = 8.
+###
+### Preparação:
+### - Execute a criação da tarefa abaixo.
+### - Copie o publicId retornado para updateTaskPublicId
+###   em http-client.env.json.
+### ============================================================
+
+
+### ProjectTasks - Preparação criar tarefa para UpdateTask - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa para teste de atualização",
+  "description": "Descrição original da tarefa.",
+  "priority": 2,
+  "dueDate": "2027-01-30T12:00:00Z"
+}
+
+
+### ProjectTasks - TenantAdmin atualizar tarefa com DueDate UTC - 200
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{updateTaskPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa atualizada pelo administrador",
+  "description": "Descrição atualizada com sucesso.",
+  "priority": 3,
+  "dueDate": "2027-02-01T12:00:00Z"
+}
+
+
+### ProjectTasks - Atualizar DueDate com offset e normalizar para UTC - 200
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{updateTaskPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa com prazo atualizado",
+  "description": "Verificar normalização para UTC.",
+  "priority": 2,
+  "dueDate": "2027-01-31T18:00:00-03:00"
+}
+
+
+### ProjectTasks - Remover DueDate e normalizar descrição vazia - 200
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{updateTaskPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa sem prazo",
+  "description": "   ",
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - UpdateTask com título vazio - 400
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{updateTaskPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "   ",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - UpdateTask com prioridade inválida - 400
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{updateTaskPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa com prioridade inválida",
+  "description": null,
+  "priority": 99,
+  "dueDate": null
+}
+
+
+### ProjectTasks - UpdateTask com DueDate sem UTC ou offset - 400
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{updateTaskPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa com prazo ambíguo",
+  "description": null,
+  "priority": 2,
+  "dueDate": "2027-01-31T18:00:00"
+}
+
+
+### ProjectTasks - UpdateTask sem autenticação - 401
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{updateTaskPublicId}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Atualização sem autenticação",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - SystemAdmin tentando atualizar tarefa - 403
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{updateTaskPublicId}}
+Authorization: Bearer {{systemAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Atualização por SystemAdmin",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Usuário de outro Tenant tentando atualizar tarefa - 403
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{updateTaskPublicId}}
+Authorization: Bearer {{otherTenantToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Atualização entre empresas",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - UpdateTask com projeto inexistente - 404
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/11111111-1111-1111-1111-111111111111/tasks/{{updateTaskPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Atualização em projeto inexistente",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - UpdateTask com tarefa inexistente - 404
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/11111111-1111-1111-1111-111111111111
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Atualização de tarefa inexistente",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - UpdateTask com tarefa pertencente a outro projeto - 404
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks/{{updateTaskPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Atualização em projeto incorreto",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ============================================================
+### UPDATE TASK — PERMISSÃO DO MEMBER
+###
+### Execute esta sequência na ordem indicada.
+### O Member precisa manter participação ativa no projeto.
+### O primeiro DELETE garante ausência de EditTask:
+### - 200 se a permissão existia;
+### - 404 se já estava ausente.
+### ============================================================
+
+
+### ProjectTasks - Preparação garantir Member sem EditTask - 200 ou 404
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/8
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Member sem EditTask tentar atualizar tarefa - 403
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{updateTaskPublicId}}
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Atualização não autorizada",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Preparação conceder EditTask ao Member - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 8
+}
+
+
+### ProjectTasks - Member com EditTask atualizar tarefa - 200
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{updateTaskPublicId}}
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa atualizada pelo Member",
+  "description": "Member autorizado com EditTask.",
+  "priority": 3,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Limpeza revogar EditTask do Member - 200
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/8
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ============================================================
+### UPDATE TASK — PROJETO ARQUIVADO
+###
+### Utiliza uma tarefa separada no projeto do ProjectManager.
+### Execute a criação e salve o publicId em
+### updateArchivedProjectTaskPublicId no http-client.env.json.
+### Em seguida, arquive, teste o bloqueio e restaure o projeto.
+### ============================================================
+
+
+### ProjectTasks - Preparação criar tarefa para testar projeto arquivado - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa para teste de projeto arquivado",
+  "description": "Preparação para UpdateTask.",
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Preparação arquivar projeto para UpdateTask - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/archive
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Projeto Archived bloqueia UpdateTask - 409
+PUT {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks/{{updateArchivedProjectTaskPublicId}}
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Atualização em projeto arquivado",
+  "description": null,
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Limpeza restaurar projeto após UpdateTask - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/restore
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json

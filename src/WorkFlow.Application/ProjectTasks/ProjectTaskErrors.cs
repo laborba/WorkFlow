@@ -79,8 +79,19 @@ public static class ProjectTaskErrors
             "ProjectTasks.AlreadyAssigned",
             "A tarefa já possui um responsável.");
 
+    public static Error UpdateNotAllowed { get; } =
+        new(
+            "ProjectTasks.UpdateNotAllowed",
+            "O usuário informado não possui permissão para atualizar esta tarefa.");
+
+    public static Error UpdateBlockedByProjectStatus { get; } =
+        new(
+            "ProjectTasks.UpdateBlockedByProjectStatus",
+            "Não é possível atualizar tarefas de um projeto arquivado.");
+
     public static Error Archived { get; } =
         new(
             "ProjectTasks.Archived",
             "Uma tarefa arquivada não pode ter seu responsável alterado.");
+
 }
