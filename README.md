@@ -547,6 +547,94 @@ Os cenários manuais estão disponíveis em:
 src/WorkFlow.API/Http/05-ProjectTasks.http
 ```
 
+### Tarefas — ListProjectTasks
+
+A listagem de tarefas de um projeto está implementada através do endpoint:
+
+```http
+GET /api/tenants/{tenantPublicId}/projects/{projectPublicId}/tasks
+```
+
+A consulta é paginada e suporta os filtros:
+
+- `pageNumber`;
+- `pageSize`;
+- `search`;
+- `status`;
+- `priority`;
+- `responsibleUserPublicId`;
+- `isArchived`.
+
+A paginação utiliza:
+
+```text
+PageNumber padrão = 1
+PageSize padrão = 20
+PageSize máximo = 100
+```
+
+A busca por texto considera `Title` e `Description` sem diferenciar letras maiúsculas e minúsculas.
+
+As tarefas são ordenadas por:
+
+```text
+CreatedAt DESC
+Id DESC
+```
+
+As regras de autorização são:
+
+- `TenantAdmin` pode consultar as tarefas de qualquer projeto do próprio Tenant;
+- `ProjectManager` e `Member` precisam possuir participação ativa no projeto;
+- a consulta não exige `EditTask` nem outra permissão operacional de tarefa;
+- `SystemAdmin` não possui acesso operacional aos projetos e tarefas de um Tenant;
+- usuários de outro Tenant não podem consultar as tarefas do projeto.
+
+Projetos arquivados continuam disponíveis para consulta quando o usuário possui autorização de leitura.
+
+Por padrão, tarefas arquivadas não são retornadas.
+
+```text
+isArchived ausente
+→ retorna tarefas não arquivadas
+
+isArchived=false
+→ retorna tarefas não arquivadas
+
+isArchived=true
+→ retorna somente tarefas arquivadas
+```
+
+A resposta contém somente identificadores públicos e inclui, quando aplicável:
+
+```text
+PublicId
+CreatedByUserPublicId
+ResponsibleUserPublicId
+ResponsibleUserName
+ValidatorUserPublicId
+Title
+Description
+Status
+Priority
+DueDate
+CreatedAt
+UpdatedAt
+ArchivedAt
+```
+
+O `TotalCount` é calculado depois da aplicação das regras de isolamento e dos filtros, mas antes da paginação.
+
+A consulta utiliza `AsNoTracking` e não abre transação de escrita nem utiliza bloqueio pessimista `FOR UPDATE`.
+
+A implementação possui cobertura de Application, Controller e integração real com PostgreSQL para autorização, isolamento multi-tenant, filtros, paginação, ordenação, tarefas arquivadas e relacionamentos públicos de usuário.
+
+A validação manual autenticada está disponível em:
+
+```text
+src/WorkFlow.API/Http/05-ProjectTasks.http
+```
+
 ### Autenticação e autorização
 
 - login de usuários vinculados a uma empresa;
@@ -602,7 +690,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-1419 testes automatizados aprovados
+1474 testes automatizados aprovados
 0 falhas
 ```
 
@@ -613,6 +701,10 @@ A solução possui testes unitários e testes de integração.
 Também existem testes específicos para normalização de `DueDate`, persistência UTC no PostgreSQL e concorrência real entre conexões distintas. Os testes concorrentes validam a coordenação entre criação de tarefas, conclusão e arquivamento através do bloqueio pessimista do projeto.
 
 Os testes de Controller verificam o usuário autenticado, os contratos e o tratamento de erros. A validação manual autenticada do endpoint também foi concluída.
+
+`ListProjectTasks` possui cobertura automatizada para autorização, participação ativa no projeto, isolamento entre Tenants, paginação, busca, filtros por status, prioridade e responsável, comportamento de tarefas arquivadas, ordenação, resolução de identificadores públicos de usuários, páginas vazias e mapeamento HTTP do Controller.
+
+A persistência da listagem também é validada através de testes de integração com PostgreSQL real.
 
 A autenticação e autorização possuem testes cobrindo, entre outros cenários:
 
@@ -3066,6 +3158,87 @@ O sucesso retorna `200 OK`. A atualização utiliza transação e bloqueio pessi
 Os testes manuais estão em `src/WorkFlow.API/Http/05-ProjectTasks.http`.
 
 
+### Listar tarefas do projeto
+
+```http
+GET /api/tenants/{tenantPublicId}/projects/{projectPublicId}/tasks
+```
+
+A operação exige `TenantAccess`.
+
+As regras atuais de acesso são:
+
+```text
+TenantAdmin
+-> pode listar tarefas de qualquer projeto do próprio Tenant
+
+ProjectManager
+-> precisa possuir participação ativa no projeto
+
+Member
+-> precisa possuir participação ativa no projeto
+
+SystemAdmin
+-> não possui acesso operacional às tarefas de um Tenant
+```
+
+A listagem não exige `EditTask` nem outra permissão operacional específica de tarefa.
+
+Parâmetros disponíveis:
+
+```text
+pageNumber
+pageSize
+search
+status
+priority
+responsibleUserPublicId
+isArchived
+```
+
+Regras de paginação:
+
+```text
+pageNumber >= 1
+pageSize entre 1 e 100
+```
+
+A busca utiliza `Title` e `Description` sem diferenciação entre letras maiúsculas e minúsculas.
+
+Por padrão, tarefas arquivadas não são retornadas.
+
+```text
+isArchived ausente
+-> tarefas não arquivadas
+
+isArchived=false
+-> tarefas não arquivadas
+
+isArchived=true
+-> somente tarefas arquivadas
+```
+
+Projetos arquivados continuam permitindo a consulta das tarefas quando o usuário possui autorização de leitura do projeto.
+
+A ordenação padrão utiliza:
+
+```text
+CreatedAt DESC
+Id DESC
+```
+
+A resposta expõe somente identificadores públicos das relações com usuários.
+
+O sucesso retorna `200 OK`, inclusive quando nenhum item corresponde à consulta. Nesse caso:
+
+```text
+items = []
+totalCount = 0
+totalPages = 0
+```
+
+Os testes manuais estão em `src/WorkFlow.API/Http/05-ProjectTasks.http`.
+
 ## Autenticação
 
 ### Realizar login
@@ -3748,7 +3921,7 @@ Os arquivos possuem responsabilidades separadas:
 → criação, consulta individual, listagem, atualização e ciclo completo de status de projetos; inclusão, listagem e remoção de membros; concessão, listagem e revogação de permissões; filtros e autorização
 
 05-ProjectTasks.http
-→ criação e atualização de tarefas, atribuição, reatribuição e remoção de responsável, ClaimTask, autorização por CreateTask, EditTask, AssignTask e ClaimTask, status do projeto e isolamento entre Tenants
+-> criação, atualização e listagem de tarefas; atribuição, reatribuição e remoção de responsável; ClaimTask; paginação, busca e filtros da listagem; autorização por TenantAccess, participação ativa, CreateTask, EditTask, AssignTask e ClaimTask; status do projeto e isolamento entre Tenants
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -3977,7 +4150,11 @@ As permissões `ManageProjectPermissions`, `EditProject` e `ManageProjectMembers
 
 `EditProject` também é utilizada nos fluxos de início, pausa e retomada de projetos.
 
-`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas, `EditTask` à atualização dos dados básicos, `AssignTask` à atribuição, reatribuição e remoção de responsável e `ClaimTask` ao fluxo em que o próprio membro assume uma tarefa disponível; as demais permissões de tarefas serão incorporadas aos próximos casos de uso.
+`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas, `EditTask` à atualização dos dados básicos, `AssignTask` à atribuição, reatribuição e remoção de responsável e `ClaimTask` ao fluxo em que o próprio membro assume uma tarefa disponível.
+
+A listagem de tarefas utiliza `TenantAccess` e autorização de leitura baseada no projeto. `TenantAdmin` possui acesso aos projetos do próprio Tenant, enquanto `ProjectManager` e `Member` precisam possuir participação ativa. A leitura das tarefas não exige `EditTask` nem outra permissão operacional específica.
+
+As demais permissões de tarefas serão incorporadas aos próximos casos de uso.
 
 ```text
 Permissões específicas por recurso
@@ -4081,6 +4258,22 @@ A remoção preserva `Backlog` e `Todo`, transforma `InProgress` em `Todo` e man
 Tarefas em `Validation` ou arquivadas bloqueiam a remoção. Projetos `Completed` e `Archived` também bloqueiam a operação.
 
 Projeto e tarefa são bloqueados com `FOR UPDATE`, mantendo a operação coordenada com os demais fluxos concorrentes de tarefas.
+
+`UpdateProjectTask` também está implementado na Application, persistência e API.
+
+A atualização permite alterar título, descrição, prioridade e prazo. `TenantAdmin` possui bypass administrativo, enquanto `ProjectManager` e `Member` precisam possuir participação ativa e `EditTask`.
+
+A atualização preserva status, responsável, validador, criador e data de criação. Projetos `Archived` e tarefas arquivadas bloqueiam a operação. Projeto e tarefa são protegidos por transação e bloqueio pessimista `FOR UPDATE`.
+
+`ListProjectTasks` também está implementado na Application, persistência e API.
+
+A listagem permite paginação, busca por título ou descrição e filtros por status, prioridade, responsável e arquivamento.
+
+`TenantAdmin` pode listar tarefas de qualquer projeto do próprio Tenant. `ProjectManager` e `Member` precisam possuir participação ativa no projeto. A consulta não exige `EditTask`.
+
+Projetos arquivados continuam consultáveis. Tarefas arquivadas ficam ocultas por padrão e podem ser solicitadas explicitamente através de `isArchived=true`.
+
+A consulta é executada sem rastreamento, não utiliza transação de escrita nem bloqueio pessimista e resolve os identificadores públicos dos usuários diretamente na persistência.
 
 O módulo de tarefas deverá contemplar:
 
@@ -4359,6 +4552,8 @@ Essa camada ainda não está implementada.
 - [x] Integração de `AssignTask` à atribuição, reatribuição e remoção de responsável
 - [x] Integração de `ClaimTask` ao fluxo de assumir tarefas
 - [x] Integração de `EditTask` à atualização dos dados básicos das tarefas
+- [x] Autorização da listagem de tarefas através de `TenantAccess` e participação ativa no projeto
+- [x] Listagem de tarefas sem exigir permissão operacional específica de tarefa
 - [ ] Integração das demais permissões aos fluxos de tarefas
 - [ ] Rate limiting
 - [ ] MFA
@@ -4436,6 +4631,17 @@ Essa camada ainda não está implementada.
 - [x] Autorização por participação ativa e EditTask
 - [x] Testes unitários, de Controller e integração PostgreSQL de UpdateProjectTask
 - [x] Validação manual autenticada de UpdateProjectTask
+- [x] ListProjectTasks na Application, persistência e API
+- [x] Endpoint GET de listagem de tarefas do projeto
+- [x] Paginação da listagem de tarefas
+- [x] Busca por título ou descrição
+- [x] Filtros por status, prioridade, responsável e arquivamento
+- [x] Exclusão de tarefas arquivadas da listagem padrão
+- [x] Consulta explícita de tarefas arquivadas
+- [x] Autorização de leitura por participação ativa no projeto
+- [x] Consulta de tarefas em projetos arquivados
+- [x] Testes unitários, de Controller e integração PostgreSQL de ListProjectTasks
+- [x] Validação manual autenticada de ListProjectTasks
 - [ ] Demais casos de uso e endpoints
 - [ ] Fluxo operacional completo
 - [ ] Validação
@@ -4730,7 +4936,25 @@ Projeto e tarefa são bloqueados com FOR UPDATE durante a atualização
 Persistência real de UpdateProjectTask validada com PostgreSQL
 Testes de Controller de UpdateProjectTask aprovados
 Validação manual autenticada de UpdateProjectTask concluída
-1419 testes automatizados aprovados
+ListProjectTasks implementado na Application, persistência e API
+Endpoint GET de listagem de tarefas do projeto implementado
+TenantAdmin pode listar tarefas de qualquer projeto do próprio Tenant
+ProjectManager e Member dependem de participação ativa para listar tarefas
+Listagem de tarefas não exige EditTask
+SystemAdmin não possui acesso operacional à listagem de tarefas de Tenant
+Projetos Archived continuam permitindo consulta de tarefas conforme autorização
+Tarefas arquivadas ficam ocultas da listagem padrão
+Tarefas arquivadas podem ser consultadas explicitamente com isArchived=true
+Listagem possui paginação com tamanho máximo de 100 itens
+Busca case-insensitive por título ou descrição implementada
+Filtros por status, prioridade, responsável e arquivamento implementados
+Ordenação da listagem utiliza CreatedAt DESC e Id DESC
+Dados públicos de criador, responsável e validador são resolvidos na persistência
+Consulta utiliza AsNoTracking e não utiliza transação de escrita ou FOR UPDATE
+Persistência real de ListProjectTasks validada com PostgreSQL
+Testes unitários, de Controller e integração de ListProjectTasks aprovados
+Validação manual autenticada de ListProjectTasks concluída
+1474 testes automatizados aprovados
 0 falhas
 ```
 

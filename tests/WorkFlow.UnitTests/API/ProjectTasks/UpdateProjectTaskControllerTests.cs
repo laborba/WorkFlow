@@ -10,16 +10,17 @@ using WorkFlow.API.Contracts.Common;
 using WorkFlow.API.Contracts.ProjectTasks;
 using WorkFlow.API.Controllers;
 using WorkFlow.API.Exceptions;
+using WorkFlow.Application.Common.Errors;
 using WorkFlow.Application.Projects;
 using WorkFlow.Application.ProjectTasks;
 using WorkFlow.Application.ProjectTasks.AssignProjectTaskResponsible;
 using WorkFlow.Application.ProjectTasks.ClaimProjectTask;
 using WorkFlow.Application.ProjectTasks.CreateProjectTask;
+using WorkFlow.Application.ProjectTasks.ListProjectTasks;
 using WorkFlow.Application.ProjectTasks.RemoveProjectTaskResponsible;
 using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
-using WorkFlow.Application.Common.Errors;
 using WorkFlow.Domain.Entities;
 using WorkFlow.Domain.Enums;
 using WorkFlow.UnitTests.Application.Projects.Fakes;
@@ -745,12 +746,21 @@ public sealed class UpdateProjectTaskControllerTests
                 fixture.TaskRepository,
                 fixture.UnitOfWork);
 
+        var listProjectTasksHandler =
+            new ListProjectTasksHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository);
+
         return new ProjectTasksController(
             createHandler,
             assignHandler,
             claimHandler,
             removeHandler,
-            updateHandler)
+            updateHandler,
+            listProjectTasksHandler)
         {
             ControllerContext =
                 new ControllerContext

@@ -11,6 +11,7 @@ using WorkFlow.Application.ProjectTasks.ClaimProjectTask;
 using WorkFlow.Application.ProjectTasks.CreateProjectTask;
 using WorkFlow.Application.ProjectTasks.RemoveProjectTaskResponsible;
 using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
+using WorkFlow.Application.ProjectTasks.ListProjectTasks;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 
@@ -36,12 +37,16 @@ public sealed class ProjectTasksController : ControllerBase
     private readonly UpdateProjectTaskHandler
         _updateProjectTaskHandler;
 
+    private readonly ListProjectTasksHandler
+        _listProjectTasksHandler;
+
     public ProjectTasksController(
         CreateProjectTaskHandler createProjectTaskHandler,
         AssignProjectTaskResponsibleHandler assignProjectTaskResponsibleHandler,
         ClaimProjectTaskHandler claimProjectTaskHandler,
         RemoveProjectTaskResponsibleHandler removeProjectTaskResponsibleHandler,
-        UpdateProjectTaskHandler updateProjectTaskHandler)
+        UpdateProjectTaskHandler updateProjectTaskHandler,
+        ListProjectTasksHandler listProjectTasksHandler)
     {
         _createProjectTaskHandler =
             createProjectTaskHandler;
@@ -57,6 +62,131 @@ public sealed class ProjectTasksController : ControllerBase
 
         _updateProjectTaskHandler =
             updateProjectTaskHandler;
+
+        _listProjectTasksHandler =
+            listProjectTasksHandler;
+    }
+
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpGet]
+    [ProducesResponseType<ListProjectTasksResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ListProjectTasksResponse>> List(
+        Guid tenantPublicId,
+        Guid projectPublicId,
+        [FromQuery] ListProjectTasksRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var requestedByUserPublicId) ||
+            requestedByUserPublicId == Guid.Empty)
+        {
+            return Unauthorized();
+        }
+
+        var query =
+            new ListProjectTasksQuery(
+                tenantPublicId,
+                projectPublicId,
+                requestedByUserPublicId,
+                request.PageNumber,
+                request.PageSize,
+                request.Search,
+                request.Status,
+                request.Priority,
+                request.ResponsibleUserPublicId,
+                request.IsArchived);
+
+        var result =
+            await _listProjectTasksHandler.HandleAsync(
+                query,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound ||
+                error == UserErrors.NotFound ||
+                error == ProjectErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            if (error == TenantErrors.Inactive)
+            {
+                return Conflict(
+                    errorResponse);
+            }
+
+            if (error == UserErrors.Inactive ||
+                error == ProjectErrors.ViewNotAllowed)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var data =
+            result.Value!;
+
+        var items =
+            data.Items
+                .Select(task =>
+                    new ProjectTaskListItemResponse(
+                        task.PublicId,
+                        task.CreatedByUserPublicId,
+                        task.ResponsibleUserPublicId,
+                        task.ResponsibleUserName,
+                        task.ValidatorUserPublicId,
+                        task.Title,
+                        task.Description,
+                        task.Status,
+                        task.Priority,
+                        task.DueDate,
+                        task.CreatedAt,
+                        task.UpdatedAt,
+                        task.ArchivedAt))
+                .ToArray();
+
+        var response =
+            new ListProjectTasksResponse(
+                items,
+                data.PageNumber,
+                data.PageSize,
+                data.TotalCount,
+                data.TotalPages);
+
+        return Ok(
+            response);
     }
 
     [Authorize(
