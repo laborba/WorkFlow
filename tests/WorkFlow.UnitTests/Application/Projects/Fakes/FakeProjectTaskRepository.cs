@@ -1,4 +1,6 @@
 ﻿using WorkFlow.Application.Abstractions.Persistence;
+using WorkFlow.Application.Abstractions.Persistence.Models;
+using WorkFlow.Application.Common.Pagination;
 using WorkFlow.Domain.Entities;
 using WorkFlow.Domain.Enums;
 
@@ -10,7 +12,7 @@ public sealed class FakeProjectTaskRepository :
     public IReadOnlyCollection<ProjectTaskStatus>
         StatusesToReturn
     { get; set; } =
-            Array.Empty<ProjectTaskStatus>();
+        Array.Empty<ProjectTaskStatus>();
 
     public long? CheckedProjectId { get; private set; }
 
@@ -20,6 +22,22 @@ public sealed class FakeProjectTaskRepository :
 
     public List<(long ProjectId, Guid PublicId)> GetForUpdateCalls { get; } = [];
 
+    public PagedData<ProjectTaskListItemData> PagedDataToReturn { get; set; } =
+        new PagedData<ProjectTaskListItemData>(
+            Array.Empty<ProjectTaskListItemData>(),
+            0);
+
+    public List<(
+        long TenantId,
+        long ProjectId,
+        int PageNumber,
+        int PageSize,
+        string? Search,
+        ProjectTaskStatus? Status,
+        ProjectTaskPriority? Priority,
+        Guid? ResponsibleUserPublicId,
+        bool? IsArchived)> GetPagedCalls
+    { get; } = [];
 
     public Task<IReadOnlyCollection<ProjectTaskStatus>>
         GetStatusesByProjectIdAsync(
@@ -31,6 +49,35 @@ public sealed class FakeProjectTaskRepository :
 
         return Task.FromResult(
             StatusesToReturn);
+    }
+
+    public Task<PagedData<ProjectTaskListItemData>> GetPagedAsync(
+        long tenantId,
+        long projectId,
+        int pageNumber,
+        int pageSize,
+        string? search,
+        ProjectTaskStatus? status,
+        ProjectTaskPriority? priority,
+        Guid? responsibleUserPublicId,
+        bool? isArchived,
+        CancellationToken cancellationToken = default)
+    {
+        GetPagedCalls.Add(
+            (
+                tenantId,
+                projectId,
+                pageNumber,
+                pageSize,
+                search,
+                status,
+                priority,
+                responsibleUserPublicId,
+                isArchived
+            ));
+
+        return Task.FromResult(
+            PagedDataToReturn);
     }
 
     public Task<ProjectTask?> GetForUpdateByPublicIdAsync(

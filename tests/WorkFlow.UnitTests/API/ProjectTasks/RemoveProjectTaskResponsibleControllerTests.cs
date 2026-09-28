@@ -13,6 +13,7 @@ using WorkFlow.Application.ProjectTasks;
 using WorkFlow.Application.ProjectTasks.AssignProjectTaskResponsible;
 using WorkFlow.Application.ProjectTasks.ClaimProjectTask;
 using WorkFlow.Application.ProjectTasks.CreateProjectTask;
+using WorkFlow.Application.ProjectTasks.ListProjectTasks;
 using WorkFlow.Application.ProjectTasks.RemoveProjectTaskResponsible;
 using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
 using WorkFlow.Application.Tenants;
@@ -440,24 +441,20 @@ public sealed class RemoveProjectTaskResponsibleControllerTests
     }
 
     private static ProjectTasksController CreateController(
-        Fixture fixture,
-        string? claim)
+    Fixture fixture,
+    string? claim)
     {
         var claims =
             claim is null
                 ? Array.Empty<Claim>()
                 : new[]
                 {
-                    new Claim(
-                        ClaimTypes.NameIdentifier,
-                        claim)
+                new Claim(
+                    ClaimTypes.NameIdentifier,
+                    claim)
                 };
 
-        return new ProjectTasksController(
-            fixture.CreateProjectTaskHandler,
-            fixture.AssignProjectTaskResponsibleHandler,
-            fixture.ClaimProjectTaskHandler,
-            fixture.RemoveProjectTaskResponsibleHandler,
+        var updateProjectTaskHandler =
             new UpdateProjectTaskHandler(
                 fixture.TenantRepository,
                 fixture.UserRepository,
@@ -465,7 +462,23 @@ public sealed class RemoveProjectTaskResponsibleControllerTests
                 fixture.MemberRepository,
                 fixture.PermissionRepository,
                 fixture.TaskRepository,
-                fixture.UnitOfWork))
+                fixture.UnitOfWork);
+
+        var listProjectTasksHandler =
+            new ListProjectTasksHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository);
+
+        return new ProjectTasksController(
+            fixture.CreateProjectTaskHandler,
+            fixture.AssignProjectTaskResponsibleHandler,
+            fixture.ClaimProjectTaskHandler,
+            fixture.RemoveProjectTaskResponsibleHandler,
+            updateProjectTaskHandler,
+            listProjectTasksHandler)
         {
             ControllerContext =
                 new ControllerContext

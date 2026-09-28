@@ -15,6 +15,7 @@ using WorkFlow.Application.ProjectTasks;
 using WorkFlow.Application.ProjectTasks.AssignProjectTaskResponsible;
 using WorkFlow.Application.ProjectTasks.ClaimProjectTask;
 using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
+using WorkFlow.Application.ProjectTasks.ListProjectTasks;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Enums;
@@ -298,8 +299,8 @@ public sealed class ProjectTasksControllerTests
     }
 
     private static ProjectTasksController CreateController(
-        CreateProjectTaskTestFixture fixture,
-        string? claim)
+    CreateProjectTaskTestFixture fixture,
+    string? claim)
     {
         var claims = claim is null
             ? Array.Empty<Claim>()
@@ -340,11 +341,7 @@ public sealed class ProjectTasksControllerTests
                 fixture.TaskRepository,
                 fixture.UnitOfWork);
 
-        return new ProjectTasksController(
-            fixture.Handler,
-            assignProjectTaskResponsibleHandler,
-            claimProjectTaskHandler,
-            removeProjectTaskResponsibleHandler,
+        var updateProjectTaskHandler =
             new UpdateProjectTaskHandler(
                 fixture.TenantRepository,
                 fixture.UserRepository,
@@ -352,7 +349,23 @@ public sealed class ProjectTasksControllerTests
                 fixture.MemberRepository,
                 fixture.PermissionRepository,
                 fixture.TaskRepository,
-                fixture.UnitOfWork))
+                fixture.UnitOfWork);
+
+        var listProjectTasksHandler =
+            new ListProjectTasksHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository);
+
+        return new ProjectTasksController(
+            fixture.Handler,
+            assignProjectTaskResponsibleHandler,
+            claimProjectTaskHandler,
+            removeProjectTaskResponsibleHandler,
+            updateProjectTaskHandler,
+            listProjectTasksHandler)
         {
             ControllerContext =
                 new ControllerContext
