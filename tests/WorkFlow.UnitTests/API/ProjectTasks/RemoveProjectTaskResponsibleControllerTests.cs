@@ -7,6 +7,7 @@ using WorkFlow.API.Authorization;
 using WorkFlow.API.Contracts.Common;
 using WorkFlow.API.Contracts.ProjectTasks;
 using WorkFlow.API.Controllers;
+using WorkFlow.Application.Abstractions.Persistence;
 using WorkFlow.Application.Common.Errors;
 using WorkFlow.Application.Projects;
 using WorkFlow.Application.ProjectTasks;
@@ -15,7 +16,9 @@ using WorkFlow.Application.ProjectTasks.ClaimProjectTask;
 using WorkFlow.Application.ProjectTasks.CreateProjectTask;
 using WorkFlow.Application.ProjectTasks.ListProjectTasks;
 using WorkFlow.Application.ProjectTasks.RemoveProjectTaskResponsible;
+using WorkFlow.Application.ProjectTasks.StartProjectTask;
 using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
+using WorkFlow.Application.ProjectTasks.MoveProjectTaskToTodo;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Entities;
@@ -472,13 +475,34 @@ public sealed class RemoveProjectTaskResponsibleControllerTests
                 fixture.MemberRepository,
                 fixture.TaskRepository);
 
+        var startProjectTaskHandler =
+            new StartProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var moveToTodoHandler =
+            new MoveProjectTaskToTodoHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.PermissionRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
         return new ProjectTasksController(
             fixture.CreateProjectTaskHandler,
             fixture.AssignProjectTaskResponsibleHandler,
             fixture.ClaimProjectTaskHandler,
             fixture.RemoveProjectTaskResponsibleHandler,
             updateProjectTaskHandler,
-            listProjectTasksHandler)
+            listProjectTasksHandler,
+            startProjectTaskHandler,
+            moveToTodoHandler)
         {
             ControllerContext =
                 new ControllerContext

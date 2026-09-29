@@ -1018,69 +1018,93 @@ Authorization: Bearer {{tenantAdminToken}}
 Accept: application/json
 
 ### ============================================================
-### PROJECT TASKS — LISTAGEM
+### PROJECT TASKS — START TASK
 ###
 ### Regras:
-### - TenantAdmin pode consultar qualquer projeto do próprio Tenant.
-### - ProjectManager e Member precisam possuir participação ativa.
-### - A leitura não exige EditTask.
-### - SystemAdmin não possui acesso operacional ao Tenant.
-### - Projeto Archived continua consultável.
-### - Tarefas arquivadas são ocultadas por padrão.
-### - isArchived=true retorna somente tarefas arquivadas.
-### - Paginação padrão: página 1, tamanho 20.
-### - Tamanho máximo de página: 100.
+### - A tarefa precisa estar em Todo.
+### - A tarefa precisa possuir responsável.
+### - Somente o responsável atual pode iniciar a tarefa.
+### - O responsável precisa ser membro ativo do projeto.
+### - Não existe permissão específica StartTask.
+### - TenantAdmin não possui bypass: também precisa ser o responsável.
+### - O projeto precisa estar em InProgress.
+### - Tarefa arquivada não pode ser iniciada.
+### - A operação não possui body.
+### - Sucesso altera Todo -> InProgress.
 ### ============================================================
 
 
-### ProjectTasks - Listar tarefas como TenantAdmin - 200
-GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks?pageNumber=1&pageSize=20
+### ProjectTasks - Preparação criar tarefa para StartTask - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa para teste de início",
+  "description": "Validação manual do StartProjectTask.",
+  "priority": 2,
+  "dueDate": null
+}
+
+
+### ProjectTasks - Preparação atribuir Member como responsável da StartTask - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{startTaskPublicId}}/responsible
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "responsibleUserPublicId": "{{memberUserPublicId}}"
+}
+
+### ProjectTasks - Preparação mover tarefa da StartTask de Backlog para Todo - 200
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{startTaskPublicId}}/todo
 Authorization: Bearer {{tenantAdminToken}}
 Accept: application/json
 
-
-### ProjectTasks - Listar tarefas com filtros - 200
-GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks?pageNumber=1&pageSize=10&search=Tarefa&priority=2&responsibleUserPublicId={{memberUserPublicId}}&isArchived=false
-Authorization: Bearer {{tenantAdminToken}}
-Accept: application/json
-
-
-### ProjectTasks - Listar somente tarefas arquivadas - 200
-GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks?pageNumber=1&pageSize=20&isArchived=true
-Authorization: Bearer {{tenantAdminToken}}
-Accept: application/json
-
-
-### ProjectTasks - Member ativo listar tarefas - 200
-GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks?pageNumber=1&pageSize=20
+### ProjectTasks - Responsável iniciar tarefa - 200
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{startTaskPublicId}}/start
 Authorization: Bearer {{memberToken}}
 Accept: application/json
 
 
-### ProjectTasks - Listagem sem autenticação - 401
-GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks?pageNumber=1&pageSize=20
+### ProjectTasks - Tentar iniciar novamente tarefa InProgress - 409
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{startTaskPublicId}}/start
+Authorization: Bearer {{memberToken}}
 Accept: application/json
 
 
-### ProjectTasks - SystemAdmin tentando listar tarefas - 403
-GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks?pageNumber=1&pageSize=20
+### ProjectTasks - Usuário que não é responsável tentar iniciar tarefa - 403
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{startTaskPublicId}}/start
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - StartTask sem autenticação - 401
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{startTaskPublicId}}/start
+Accept: application/json
+
+
+### ProjectTasks - SystemAdmin tentando iniciar tarefa - 403
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{startTaskPublicId}}/start
 Authorization: Bearer {{systemAdminToken}}
 Accept: application/json
 
 
-### ProjectTasks - Usuário de outro Tenant tentando listar tarefas - 403
-GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks?pageNumber=1&pageSize=20
+### ProjectTasks - Usuário de outro Tenant tentando iniciar tarefa - 403
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{startTaskPublicId}}/start
 Authorization: Bearer {{otherTenantToken}}
 Accept: application/json
 
 
-### ProjectTasks - Listar tarefas de projeto inexistente - 404
-GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/11111111-1111-1111-1111-111111111111/tasks?pageNumber=1&pageSize=20
-Authorization: Bearer {{tenantAdminToken}}
+### ProjectTasks - StartTask com tarefa inexistente - 404
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/11111111-1111-1111-1111-111111111111/start
+Authorization: Bearer {{memberToken}}
 Accept: application/json
 
 
-### ProjectTasks - Listagem com PageSize acima do máximo - 400
-GET {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks?pageNumber=1&pageSize=101
-Authorization: Bearer {{tenantAdminToken}}
+### ProjectTasks - StartTask com tarefa pertencente a outro projeto - 404
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks/{{startTaskPublicId}}/start
+Authorization: Bearer {{memberToken}}
 Accept: application/json

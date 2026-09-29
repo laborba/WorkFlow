@@ -16,6 +16,8 @@ using WorkFlow.Application.ProjectTasks.AssignProjectTaskResponsible;
 using WorkFlow.Application.ProjectTasks.ClaimProjectTask;
 using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
 using WorkFlow.Application.ProjectTasks.ListProjectTasks;
+using WorkFlow.Application.ProjectTasks.StartProjectTask;
+using WorkFlow.Application.ProjectTasks.MoveProjectTaskToTodo;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Enums;
@@ -359,13 +361,34 @@ public sealed class ProjectTasksControllerTests
                 fixture.MemberRepository,
                 fixture.TaskRepository);
 
+        var startProjectTaskHandler =
+            new StartProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var moveToTodoHandler =
+            new MoveProjectTaskToTodoHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.PermissionRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
         return new ProjectTasksController(
             fixture.Handler,
             assignProjectTaskResponsibleHandler,
             claimProjectTaskHandler,
             removeProjectTaskResponsibleHandler,
             updateProjectTaskHandler,
-            listProjectTasksHandler)
+            listProjectTasksHandler,
+            startProjectTaskHandler,
+            moveToTodoHandler)
         {
             ControllerContext =
                 new ControllerContext

@@ -89,6 +89,41 @@ public static class ProjectTaskErrors
             "ProjectTasks.UpdateBlockedByProjectStatus",
             "Não é possível atualizar tarefas de um projeto arquivado.");
 
+    public static Error StartNotAllowed { get; } =
+        new(
+            "ProjectTasks.StartNotAllowed",
+            "Somente o responsável atual pode iniciar esta tarefa.");
+
+    public static Error StartBlockedByProjectStatus { get; } =
+        new(
+            "ProjectTasks.StartBlockedByProjectStatus",
+            "A tarefa só pode ser iniciada quando o projeto estiver em andamento.");
+
+    public static Error StartBlockedByTaskStatus { get; } =
+        new(
+            "ProjectTasks.StartBlockedByTaskStatus",
+            "Somente tarefas pendentes podem ser iniciadas.");
+
+    public static Error StartRequiresResponsible { get; } =
+        new(
+            "ProjectTasks.StartRequiresResponsible",
+            "A tarefa precisa possuir um responsável para ser iniciada.");
+
+    public static Error MoveToTodoNotAllowed { get; } =
+        new(
+            "ProjectTasks.MoveToTodoNotAllowed",
+            "O usuário não possui permissão para mover esta tarefa para pendente.");
+
+    public static Error MoveToTodoBlockedByProjectStatus { get; } =
+        new(
+            "ProjectTasks.MoveToTodoBlockedByProjectStatus",
+            "Não é possível mover tarefas para pendente quando o projeto está concluído ou arquivado.");
+
+    public static Error MoveToTodoBlockedByTaskStatus { get; } =
+        new(
+            "ProjectTasks.MoveToTodoBlockedByTaskStatus",
+            "Somente tarefas no backlog podem ser movidas para pendente.");
+
     public static Error Archived { get; } =
         new(
             "ProjectTasks.Archived",

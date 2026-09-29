@@ -14,6 +14,8 @@ using WorkFlow.Application.ProjectTasks.CreateProjectTask;
 using WorkFlow.Application.ProjectTasks.ListProjectTasks;
 using WorkFlow.Application.ProjectTasks.RemoveProjectTaskResponsible;
 using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
+using WorkFlow.Application.ProjectTasks.StartProjectTask;
+using WorkFlow.Application.ProjectTasks.MoveProjectTaskToTodo;
 using WorkFlow.Application.Projects;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
@@ -421,13 +423,34 @@ public sealed class ListProjectTasksControllerTests
                 fixture.MemberRepository,
                 fixture.TaskRepository);
 
+        var startProjectTaskHandler =
+            new StartProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository,
+                unitOfWork);
+
+        var moveToTodoHandler =
+            new MoveProjectTaskToTodoHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                permissionRepository,
+                fixture.TaskRepository,
+                unitOfWork);
+
         return new ProjectTasksController(
             createProjectTaskHandler,
             assignProjectTaskResponsibleHandler,
             claimProjectTaskHandler,
             removeProjectTaskResponsibleHandler,
             updateProjectTaskHandler,
-            listProjectTasksHandler)
+            listProjectTasksHandler,
+            startProjectTaskHandler,
+            moveToTodoHandler)
         {
             ControllerContext =
                 new ControllerContext

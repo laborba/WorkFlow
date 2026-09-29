@@ -23,6 +23,8 @@ using WorkFlow.Application.ProjectTasks.ClaimProjectTask;
 using WorkFlow.Application.ProjectTasks.RemoveProjectTaskResponsible;
 using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
 using WorkFlow.Application.ProjectTasks.ListProjectTasks;
+using WorkFlow.Application.ProjectTasks.StartProjectTask;
+using WorkFlow.Application.ProjectTasks.MoveProjectTaskToTodo;
 using WorkFlow.Application.Tenants.ChangeTenantStatus;
 using WorkFlow.Application.Tenants.CreateTenant;
 using WorkFlow.Application.Tenants.GetTenantByPublicId;
@@ -75,6 +77,8 @@ public static class DependencyInjection
         services.AddScoped<ClaimProjectTaskHandler>();
         services.AddScoped<RemoveProjectTaskResponsibleHandler>();
         services.AddScoped<UpdateProjectTaskHandler>();
+        services.AddScoped<StartProjectTaskHandler>();
+        services.AddScoped<MoveProjectTaskToTodoHandler>();
 
         services.AddScoped<AddProjectMemberHandler>();
         services.AddScoped<ListProjectMembersHandler>();
