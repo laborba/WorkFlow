@@ -12,6 +12,8 @@ using WorkFlow.Application.ProjectTasks.CreateProjectTask;
 using WorkFlow.Application.ProjectTasks.RemoveProjectTaskResponsible;
 using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
 using WorkFlow.Application.ProjectTasks.ListProjectTasks;
+using WorkFlow.Application.ProjectTasks.StartProjectTask;
+using WorkFlow.Application.ProjectTasks.MoveProjectTaskToTodo;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 
@@ -40,13 +42,21 @@ public sealed class ProjectTasksController : ControllerBase
     private readonly ListProjectTasksHandler
         _listProjectTasksHandler;
 
+    private readonly StartProjectTaskHandler
+        _startProjectTaskHandler;
+
+    private readonly MoveProjectTaskToTodoHandler
+        _moveProjectTaskToTodoHandler;
+
     public ProjectTasksController(
         CreateProjectTaskHandler createProjectTaskHandler,
         AssignProjectTaskResponsibleHandler assignProjectTaskResponsibleHandler,
         ClaimProjectTaskHandler claimProjectTaskHandler,
         RemoveProjectTaskResponsibleHandler removeProjectTaskResponsibleHandler,
         UpdateProjectTaskHandler updateProjectTaskHandler,
-        ListProjectTasksHandler listProjectTasksHandler)
+        ListProjectTasksHandler listProjectTasksHandler,
+        StartProjectTaskHandler startProjectTaskHandler,
+        MoveProjectTaskToTodoHandler moveProjectTaskToTodoHandler)
     {
         _createProjectTaskHandler =
             createProjectTaskHandler;
@@ -65,6 +75,12 @@ public sealed class ProjectTasksController : ControllerBase
 
         _listProjectTasksHandler =
             listProjectTasksHandler;
+
+        _startProjectTaskHandler =
+            startProjectTaskHandler;
+
+        _moveProjectTaskToTodoHandler =
+            moveProjectTaskToTodoHandler;
     }
 
 
@@ -723,6 +739,214 @@ public sealed class ProjectTasksController : ControllerBase
                 task.TenantPublicId,
                 task.ProjectPublicId,
                 task.ResponsibleUserPublicId,
+                task.Status,
+                task.UpdatedAt);
+
+        return Ok(
+            response);
+    }
+
+    [Authorize(
+    Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpPost("{taskPublicId:guid}/start")]
+    [ProducesResponseType<StartProjectTaskResponse>(
+    StatusCodes.Status200OK)]
+    [ProducesResponseType(
+    StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+    StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+    StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+    StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+    StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<StartProjectTaskResponse>> Start(
+    Guid tenantPublicId,
+    Guid projectPublicId,
+    Guid taskPublicId,
+    CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var startedByUserPublicId) ||
+            startedByUserPublicId == Guid.Empty)
+        {
+            return Unauthorized();
+        }
+
+        var command =
+            new StartProjectTaskCommand(
+                tenantPublicId,
+                projectPublicId,
+                taskPublicId,
+                startedByUserPublicId);
+
+        var result =
+            await _startProjectTaskHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound ||
+                error == UserErrors.NotFound ||
+                error == ProjectErrors.NotFound ||
+                error == ProjectTaskErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            if (error == UserErrors.Inactive ||
+                error == ProjectTaskErrors.StartNotAllowed)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    errorResponse);
+            }
+
+            if (error == TenantErrors.Inactive ||
+                error == ProjectTaskErrors.StartBlockedByProjectStatus ||
+                error == ProjectTaskErrors.StartBlockedByTaskStatus ||
+                error == ProjectTaskErrors.StartRequiresResponsible ||
+                error == ProjectTaskErrors.Archived)
+            {
+                return Conflict(
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var task =
+            result.Value!;
+
+        var response =
+            new StartProjectTaskResponse(
+                task.PublicId,
+                task.TenantPublicId,
+                task.ProjectPublicId,
+                task.ResponsibleUserPublicId,
+                task.Status,
+                task.UpdatedAt);
+
+        return Ok(
+            response);
+    }
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpPost("{taskPublicId:guid}/todo")]
+    [ProducesResponseType<MoveProjectTaskToTodoResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<MoveProjectTaskToTodoResponse>>
+    MoveToTodo(
+        Guid tenantPublicId,
+        Guid projectPublicId,
+        Guid taskPublicId,
+        CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var requestedByUserPublicId) ||
+            requestedByUserPublicId == Guid.Empty)
+        {
+            return Unauthorized();
+        }
+
+        var command =
+            new MoveProjectTaskToTodoCommand(
+                tenantPublicId,
+                projectPublicId,
+                taskPublicId,
+                requestedByUserPublicId);
+
+        var result =
+            await _moveProjectTaskToTodoHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound ||
+                error == UserErrors.NotFound ||
+                error == ProjectErrors.NotFound ||
+                error == ProjectTaskErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            if (error == UserErrors.Inactive ||
+                error ==
+                ProjectTaskErrors.MoveToTodoNotAllowed)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    errorResponse);
+            }
+
+            if (error == TenantErrors.Inactive ||
+                error ==
+                ProjectTaskErrors
+                    .MoveToTodoBlockedByProjectStatus ||
+                error ==
+                ProjectTaskErrors
+                    .MoveToTodoBlockedByTaskStatus ||
+                error == ProjectTaskErrors.Archived)
+            {
+                return Conflict(
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var task =
+            result.Value!;
+
+        var response =
+            new MoveProjectTaskToTodoResponse(
+                task.PublicId,
+                task.TenantPublicId,
+                task.ProjectPublicId,
                 task.Status,
                 task.UpdatedAt);
 
