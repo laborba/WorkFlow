@@ -926,6 +926,107 @@ Os cenários estão disponíveis em:
 src/WorkFlow.API/Http/05-ProjectTasks.http
 ```
 
+### Tarefas — SendProjectTaskToValidation
+
+O envio de uma tarefa concluída pelo responsável para a etapa de validação está implementado através do endpoint:
+
+```http
+POST /api/tenants/{tenantPublicId}/projects/{projectPublicId}/tasks/{taskPublicId}/validation
+```
+
+O endpoint não recebe body.
+
+A transição executada é:
+
+```text
+InProgress
+↓
+Validation
+```
+
+Essa operação representa somente o envio do trabalho para validação. Ela não aprova a tarefa e não utiliza as permissões `ValidateTask` ou `SelfValidateTask`.
+
+As regras atuais são:
+
+- o projeto precisa estar em `InProgress`;
+- a tarefa precisa estar em `InProgress`;
+- a tarefa não pode estar arquivada;
+- a tarefa precisa possuir responsável;
+- somente o responsável atual pode enviar a tarefa para validação;
+- o responsável precisa continuar ativo;
+- o responsável precisa possuir participação ativa no projeto;
+- nenhuma role possui bypass da responsabilidade;
+- `TenantAdmin` também precisa ser o responsável atual e membro ativo;
+- `SystemAdmin` não possui acesso operacional às tarefas do Tenant.
+
+Quando a tarefa entra em validação:
+
+```text
+Status = Validation
+ValidatorUserId = null
+```
+
+O validador será definido posteriormente por um fluxo específico de validação.
+
+O envio para validação preserva:
+
+```text
+ResponsibleUserId
+DueDate
+```
+
+e mantém:
+
+```text
+StatusBeforePause = null
+```
+
+A operação utiliza transação e bloqueio pessimista na mesma ordem adotada pelas demais mutações da tarefa:
+
+```text
+Project FOR UPDATE
+↓
+ProjectTask FOR UPDATE
+```
+
+O sucesso retorna `200 OK` contendo:
+
+```text
+PublicId
+TenantPublicId
+ProjectPublicId
+ResponsibleUserPublicId
+ValidatorUserPublicId
+Status
+UpdatedAt
+```
+
+Os principais erros específicos são:
+
+```text
+ProjectTasks.SendToValidationNotAllowed
+ProjectTasks.SendToValidationBlockedByProjectStatus
+ProjectTasks.SendToValidationBlockedByTaskStatus
+ProjectTasks.SendToValidationRequiresResponsible
+ProjectTasks.Archived
+```
+
+A implementação possui testes unitários da Application, testes de Controller e testes de integração com PostgreSQL.
+
+A validação manual autenticada também foi concluída, cobrindo:
+
+```text
+InProgress → Validation
+tentativa por usuário que não é o responsável
+segunda tentativa quando a tarefa já está em Validation
+```
+
+Os cenários estão disponíveis em:
+
+```text
+src/WorkFlow.API/Http/05-ProjectTasks.http
+```
+
 ### Autenticação e autorização
 
 - login de usuários vinculados a uma empresa;
@@ -981,7 +1082,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-1789 testes automatizados aprovados
+1863 testes automatizados aprovados
 0 falhas
 ```
 
@@ -1004,6 +1105,8 @@ A persistência da listagem também é validada através de testes de integraç�
 `PauseProjectTask` possui cobertura automatizada para os estados `Todo` e `InProgress`, responsabilidade atual da tarefa, participação ativa do responsável, estado `InProgress` do projeto, tarefas arquivadas, ausência de responsável, isolamento entre projetos e Tenants, rollback, mapeamento HTTP e persistência real da transição para `Paused`, incluindo `StatusBeforePause`.
 
 `ResumeProjectTask` possui cobertura automatizada para restauração de `Todo` e `InProgress`, limpeza de `StatusBeforePause`, manutenção ou substituição de `DueDate`, responsabilidade atual, participação ativa, estados inválidos, isolamento entre projetos e Tenants, rollback, mapeamento HTTP e persistência real no PostgreSQL.
+
+`SendProjectTaskToValidation` possui cobertura automatizada para a transição `InProgress → Validation`, responsabilidade atual da tarefa, participação ativa do responsável, projeto em `InProgress`, tarefa arquivada, ausência de responsável, estados inválidos, isolamento entre projetos e Tenants, preservação de `DueDate`, limpeza de `ValidatorUserId`, rollback, mapeamento HTTP e persistência real no PostgreSQL.
 
 A autenticação e autorização possuem testes cobrindo, entre outros cenários:
 
@@ -4044,6 +4147,10 @@ ProjectTasks.ResumeNotAllowed
 ProjectTasks.ResumeBlockedByProjectStatus
 ProjectTasks.ResumeBlockedByTaskStatus
 ProjectTasks.ResumeRequiresResponsible
+ProjectTasks.SendToValidationNotAllowed
+ProjectTasks.SendToValidationBlockedByProjectStatus
+ProjectTasks.SendToValidationBlockedByTaskStatus
+ProjectTasks.SendToValidationRequiresResponsible
 
 Validation.InvalidArgument
 ```
@@ -4235,7 +4342,7 @@ Os arquivos possuem responsabilidades separadas:
 → criação, consulta individual, listagem, atualização e ciclo completo de status de projetos; inclusão, listagem e remoção de membros; concessão, listagem e revogação de permissões; filtros e autorização
 
 05-ProjectTasks.http
--> criação, atualização e listagem de tarefas; atribuição, reatribuição e remoção de responsável; ClaimTask; transições Backlog → Todo, Todo → InProgress, Todo/InProgress → Paused e retomada para o estado anterior; paginação, busca e filtros; autorização por TenantAccess, participação ativa, permissões específicas e responsabilidade pela tarefa; status do projeto e isolamento entre Tenants
+-> criação, atualização e listagem de tarefas; atribuição, reatribuição e remoção de responsável; ClaimTask; transições Backlog → Todo, Todo → InProgress, Todo/InProgress → Paused, retomada para o estado anterior e InProgress → Validation; paginação, busca e filtros; autorização por TenantAccess, participação ativa, permissões específicas e responsabilidade pela tarefa; status do projeto e isolamento entre Tenants
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -4464,7 +4571,7 @@ As permissões `ManageProjectPermissions`, `EditProject` e `ManageProjectMembers
 
 `EditProject` também é utilizada nos fluxos de início, pausa e retomada de projetos.
 
-`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas, `EditTask` à atualização dos dados básicos e à transição `Backlog` → `Todo`, `AssignTask` à atribuição, reatribuição e remoção de responsável e `ClaimTask` ao fluxo em que o próprio membro assume uma tarefa disponível. O início `Todo` → `InProgress`, a pausa `Todo/InProgress` → `Paused` e a retomada de `Paused` são autorizados pela responsabilidade atual da tarefa. O responsável precisa permanecer ativo e possuir participação ativa no projeto, e nenhuma role possui bypass dessa regra.
+`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas, `EditTask` à atualização dos dados básicos e à transição `Backlog` → `Todo`, `AssignTask` à atribuição, reatribuição e remoção de responsável e `ClaimTask` ao fluxo em que o próprio membro assume uma tarefa disponível. O início `Todo` → `InProgress`, a pausa `Todo/InProgress` → `Paused`, a retomada de `Paused` e o envio `InProgress` → `Validation` são autorizados pela responsabilidade atual da tarefa. O responsável precisa permanecer ativo e possuir participação ativa no projeto, e nenhuma role possui bypass dessa regra. O envio para validação não utiliza `ValidateTask` nem `SelfValidateTask`; essas permissões pertencem às operações executadas sobre uma tarefa que já está em `Validation`.
 
 A listagem de tarefas utiliza `TenantAccess` e autorização de leitura baseada no projeto. `TenantAdmin` possui acesso aos projetos do próprio Tenant, enquanto `ProjectManager` e `Member` precisam possuir participação ativa. A leitura das tarefas não exige `EditTask` nem outra permissão operacional específica.
 
@@ -4627,6 +4734,20 @@ O prazo é preservado durante a pausa. Na retomada, pode ser mantido ou substitu
 
 Projeto e tarefa são bloqueados com `FOR UPDATE`, mantendo a mesma ordem das demais mutações concorrentes.
 
+`SendProjectTaskToValidation` também está implementado na Application, persistência e API.
+
+A operação executa a transição `InProgress → Validation`. Somente o responsável atual pode enviar a tarefa para validação.
+
+O responsável precisa continuar ativo e possuir participação ativa no projeto. Não existe bypass administrativo dessa responsabilidade, inclusive para `TenantAdmin`.
+
+O projeto e a tarefa precisam estar em `InProgress`, e tarefas arquivadas bloqueiam a operação.
+
+Ao entrar em `Validation`, `ValidatorUserId` permanece `null` até que um validador seja definido por um fluxo específico de validação. O prazo da tarefa é preservado.
+
+A operação não utiliza `ValidateTask` nem `SelfValidateTask`, pois essas permissões serão aplicadas às ações realizadas depois que a tarefa já estiver em `Validation`.
+
+Projeto e tarefa são bloqueados com `FOR UPDATE` na ordem `Project → ProjectTask`.
+
 O módulo de tarefas deverá contemplar:
 
 - título;
@@ -4655,7 +4776,7 @@ Validation
 Done
 ```
 
-As transições `Backlog → Todo`, `Todo → InProgress`, `Todo/InProgress → Paused` e a retomada de `Paused` para o estado operacional anterior já estão implementadas. As etapas seguintes do fluxo principal serão incorporadas pelas próximas verticais.
+As transições `Backlog → Todo`, `Todo → InProgress`, `Todo/InProgress → Paused`, a retomada de `Paused` para o estado operacional anterior e `InProgress → Validation` já estão implementadas. As operações realizadas dentro da etapa de validação e a transição `Validation → Done` serão incorporadas pelas próximas verticais.
 
 Outros estados poderão incluir:
 
@@ -4737,7 +4858,7 @@ Atualmente já são permissões operacionais efetivas:
 - `EditTask`: permite atualizar título, descrição, prioridade e prazo das tarefas e executar a transição `Backlog → Todo`, com participação ativa e a permissão correspondente para ProjectManager e Member;
 - `AssignTask`: permite atribuir, reatribuir e remover responsáveis das tarefas, com participação ativa e a permissão correspondente para ProjectManager e Member;
 - `ClaimTask`: permite que o próprio membro ativo assuma uma tarefa disponível; `ProjectManager` e `Member` precisam possuir a permissão, enquanto `TenantAdmin` possui bypass da permissão, mas continua precisando ser membro ativo do projeto.
-O início, a pausa e a retomada da execução de uma tarefa não utilizam permissões adicionais. Essas ações pertencem exclusivamente ao responsável atual da tarefa, que precisa permanecer ativo e possuir participação ativa no projeto. `TenantAdmin` não possui bypass da regra de responsabilidade nesses fluxos.
+O início, a pausa, a retomada e o envio da tarefa para validação não utilizam permissões adicionais. Essas ações pertencem exclusivamente ao responsável atual da tarefa, que precisa permanecer ativo e possuir participação ativa no projeto. `TenantAdmin` não possui bypass da regra de responsabilidade nesses fluxos. `ValidateTask` e `SelfValidateTask` serão utilizadas nas operações executadas sobre tarefas que já estão em `Validation`, e não no envio `InProgress → Validation`.
 
 Quando um `ProjectManager` cria um novo projeto, sua participação inicial recebe automaticamente:
 
@@ -5021,6 +5142,14 @@ Essa camada ainda não está implementada.
 - [x] Pausa e retomada restritas ao responsável atual e membro ativo
 - [x] Testes unitários, de Controller e integração PostgreSQL de PauseProjectTask e ResumeProjectTask
 - [x] Validação manual autenticada dos fluxos Todo → Paused → Todo e InProgress → Paused → InProgress
+- [x] SendProjectTaskToValidation na Application, persistência e API
+- [x] Endpoint POST para transição InProgress → Validation
+- [x] Envio para validação restrito ao responsável atual e membro ativo
+- [x] Projeto InProgress obrigatório para envio à validação
+- [x] ValidatorUserId permanece nulo ao entrar em Validation
+- [x] DueDate preservado durante o envio à validação
+- [x] Testes unitários, de Controller e integração PostgreSQL de SendProjectTaskToValidation
+- [x] Validação manual autenticada do fluxo InProgress → Validation
 - [ ] Demais casos de uso e endpoints
 - [ ] Fluxo operacional completo
 - [ ] Validação
@@ -5376,7 +5505,21 @@ Tarefas arquivadas bloqueiam pausa e retomada
 Projeto e tarefa são bloqueados com FOR UPDATE durante pausa e retomada
 Persistência real de PauseProjectTask e ResumeProjectTask validada com PostgreSQL
 Fluxos Todo → Paused → Todo e InProgress → Paused → InProgress validados manualmente
-1789 testes automatizados aprovados
+SendProjectTaskToValidation implementado na Application, persistência e API
+Transição InProgress → Validation implementada
+SendProjectTaskToValidation exige projeto InProgress
+SendProjectTaskToValidation exige responsável definido
+Somente o responsável atual pode enviar a tarefa para validação
+Responsável precisa permanecer ativo e possuir participação ativa no projeto
+TenantAdmin não possui bypass da responsabilidade no envio para validação
+SendProjectTaskToValidation não utiliza ValidateTask nem SelfValidateTask
+ValidatorUserId permanece nulo ao entrar em Validation
+DueDate é preservado durante o envio para validação
+Projeto e tarefa são bloqueados com FOR UPDATE durante SendProjectTaskToValidation
+Persistência real de SendProjectTaskToValidation validada com PostgreSQL
+Testes unitários, de Controller e integração de SendProjectTaskToValidation aprovados
+Fluxo InProgress → Validation validado manualmente
+1863 testes automatizados aprovados
 0 falhas
 ```
 

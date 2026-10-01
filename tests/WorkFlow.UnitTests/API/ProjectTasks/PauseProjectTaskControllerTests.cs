@@ -21,6 +21,7 @@ using WorkFlow.Application.ProjectTasks.MoveProjectTaskToTodo;
 using WorkFlow.Application.ProjectTasks.PauseProjectTask;
 using WorkFlow.Application.ProjectTasks.RemoveProjectTaskResponsible;
 using WorkFlow.Application.ProjectTasks.ResumeProjectTask;
+using WorkFlow.Application.ProjectTasks.SendProjectTaskToValidation;
 using WorkFlow.Application.ProjectTasks.StartProjectTask;
 using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
 using WorkFlow.Application.Tenants;
@@ -630,6 +631,15 @@ public sealed class PauseProjectTaskControllerTests
                 fixture.TaskRepository,
                 fixture.UnitOfWork);
 
+        var sendProjectTaskToValidationHandler =
+            new SendProjectTaskToValidationHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
         return new ProjectTasksController(
             createHandler,
             assignHandler,
@@ -640,7 +650,8 @@ public sealed class PauseProjectTaskControllerTests
             startHandler,
             moveToTodoHandler,
             pauseHandler,
-            resumeHandler)
+            resumeHandler,
+            sendProjectTaskToValidationHandler)
         {
             ControllerContext =
                 new ControllerContext

@@ -17,6 +17,7 @@ using WorkFlow.Application.ProjectTasks.StartProjectTask;
 using WorkFlow.Application.ProjectTasks.MoveProjectTaskToTodo;
 using WorkFlow.Application.ProjectTasks.PauseProjectTask;
 using WorkFlow.Application.ProjectTasks.ResumeProjectTask;
+using WorkFlow.Application.ProjectTasks.SendProjectTaskToValidation;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 
@@ -57,6 +58,9 @@ public sealed class ProjectTasksController : ControllerBase
     private readonly ResumeProjectTaskHandler
         _resumeProjectTaskHandler;
 
+    private readonly SendProjectTaskToValidationHandler
+        _sendProjectTaskToValidationHandler;
+
     public ProjectTasksController(
         CreateProjectTaskHandler createProjectTaskHandler,
         AssignProjectTaskResponsibleHandler assignProjectTaskResponsibleHandler,
@@ -67,7 +71,8 @@ public sealed class ProjectTasksController : ControllerBase
         StartProjectTaskHandler startProjectTaskHandler,
         MoveProjectTaskToTodoHandler moveProjectTaskToTodoHandler,
         PauseProjectTaskHandler pauseProjectTaskHandler,
-        ResumeProjectTaskHandler resumeProjectTaskHandler)
+        ResumeProjectTaskHandler resumeProjectTaskHandler,
+        SendProjectTaskToValidationHandler sendProjectTaskToValidationHandler)
     {
         _createProjectTaskHandler =
             createProjectTaskHandler;
@@ -98,6 +103,9 @@ public sealed class ProjectTasksController : ControllerBase
 
         _resumeProjectTaskHandler =
             resumeProjectTaskHandler;
+
+        _sendProjectTaskToValidationHandler =
+            sendProjectTaskToValidationHandler;
     }
 
 
@@ -1080,6 +1088,118 @@ public sealed class ProjectTasksController : ControllerBase
                 task.Status,
                 task.StatusBeforePause,
                 task.DueDate,
+                task.UpdatedAt);
+
+        return Ok(
+    response);
+    }
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpPost("{taskPublicId:guid}/validation")]
+    [ProducesResponseType<SendProjectTaskToValidationResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<SendProjectTaskToValidationResponse>>
+        SendToValidation(
+            Guid tenantPublicId,
+            Guid projectPublicId,
+            Guid taskPublicId,
+            CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var sentByUserPublicId) ||
+            sentByUserPublicId == Guid.Empty)
+        {
+            return Unauthorized();
+        }
+
+        var command =
+            new SendProjectTaskToValidationCommand(
+                tenantPublicId,
+                projectPublicId,
+                taskPublicId,
+                sentByUserPublicId);
+
+        var result =
+            await _sendProjectTaskToValidationHandler
+                .HandleAsync(
+                    command,
+                    cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound ||
+                error == UserErrors.NotFound ||
+                error == ProjectErrors.NotFound ||
+                error == ProjectTaskErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            if (error == UserErrors.Inactive ||
+                error ==
+                ProjectTaskErrors.SendToValidationNotAllowed)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    errorResponse);
+            }
+
+            if (error == TenantErrors.Inactive ||
+                error ==
+                ProjectTaskErrors
+                    .SendToValidationBlockedByProjectStatus ||
+                error ==
+                ProjectTaskErrors
+                    .SendToValidationBlockedByTaskStatus ||
+                error ==
+                ProjectTaskErrors
+                    .SendToValidationRequiresResponsible ||
+                error == ProjectTaskErrors.Archived)
+            {
+                return Conflict(
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var task =
+            result.Value!;
+
+        var response =
+            new SendProjectTaskToValidationResponse(
+                task.PublicId,
+                task.TenantPublicId,
+                task.ProjectPublicId,
+                task.ResponsibleUserPublicId,
+                task.ValidatorUserPublicId,
+                task.Status,
                 task.UpdatedAt);
 
         return Ok(

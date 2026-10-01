@@ -164,6 +164,26 @@ public static class ProjectTaskErrors
             "ProjectTasks.ResumeRequiresResponsible",
             "A tarefa precisa possuir um responsável para ser retomada.");
 
+    public static Error SendToValidationNotAllowed { get; } =
+        new(
+            "ProjectTasks.SendToValidationNotAllowed",
+            "Somente o responsável atual pode enviar esta tarefa para validação.");
+
+    public static Error SendToValidationBlockedByProjectStatus { get; } =
+        new(
+            "ProjectTasks.SendToValidationBlockedByProjectStatus",
+            "A tarefa só pode ser enviada para validação quando o projeto estiver em andamento.");
+
+    public static Error SendToValidationBlockedByTaskStatus { get; } =
+        new(
+            "ProjectTasks.SendToValidationBlockedByTaskStatus",
+            "Somente tarefas em andamento podem ser enviadas para validação.");
+
+    public static Error SendToValidationRequiresResponsible { get; } =
+        new(
+            "ProjectTasks.SendToValidationRequiresResponsible",
+            "A tarefa precisa possuir um responsável para ser enviada para validação.");
+
     public static Error Archived { get; } =
         new(
             "ProjectTasks.Archived",

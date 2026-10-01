@@ -1232,3 +1232,75 @@ Accept: application/json
 {
   "newDueDate": "2027-07-15T18:00:00Z"
 }
+
+### ============================================================
+### PROJECT TASKS — SEND TO VALIDATION
+###
+### Regras:
+### - InProgress -> Validation.
+### - Somente o responsável atual pode enviar para validação.
+### - O responsável precisa ser usuário ativo e membro ativo do projeto.
+### - TenantAdmin não possui bypass da responsabilidade atual.
+### - O projeto precisa estar InProgress.
+### - A tarefa precisa estar InProgress.
+### - A tarefa não pode estar arquivada.
+### - ValidatorUserId fica null ao entrar em Validation.
+### - DueDate não é alterado.
+### - Não utiliza ValidateTask nem SelfValidateTask.
+###
+### Preparação:
+### - Execute primeiro a criação da tarefa.
+### - Copie o publicId retornado para sendValidationTaskPublicId
+###   em http-client.env.json.
+### - Depois execute as demais requisições na ordem.
+### ============================================================
+
+
+### ProjectTasks - Preparação criar tarefa para SendToValidation - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa para envio à validação",
+  "description": "Validação manual do SendProjectTaskToValidation.",
+  "priority": 3,
+  "dueDate": "2027-10-31T18:00:00Z"
+}
+
+
+### ProjectTasks - Preparação TenantAdmin assumir tarefa para SendToValidation - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{sendValidationTaskPublicId}}/claim
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Preparação mover tarefa para Todo antes de SendToValidation - 200
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{sendValidationTaskPublicId}}/todo
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Preparação iniciar tarefa antes de SendToValidation - 200
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{sendValidationTaskPublicId}}/start
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Não responsável tentar enviar tarefa para validação - 403
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{sendValidationTaskPublicId}}/validation
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### ProjectTasks - Responsável enviar tarefa para validação - 200
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{sendValidationTaskPublicId}}/validation
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Enviar novamente tarefa já em Validation - 409
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{sendValidationTaskPublicId}}/validation
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
