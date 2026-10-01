@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using System.Security.Claims;
 using WorkFlow.API.Authorization;
 using WorkFlow.API.Contracts.Common;
@@ -14,6 +15,8 @@ using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
 using WorkFlow.Application.ProjectTasks.ListProjectTasks;
 using WorkFlow.Application.ProjectTasks.StartProjectTask;
 using WorkFlow.Application.ProjectTasks.MoveProjectTaskToTodo;
+using WorkFlow.Application.ProjectTasks.PauseProjectTask;
+using WorkFlow.Application.ProjectTasks.ResumeProjectTask;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 
@@ -48,6 +51,12 @@ public sealed class ProjectTasksController : ControllerBase
     private readonly MoveProjectTaskToTodoHandler
         _moveProjectTaskToTodoHandler;
 
+    private readonly PauseProjectTaskHandler
+        _pauseProjectTaskHandler;
+
+    private readonly ResumeProjectTaskHandler
+        _resumeProjectTaskHandler;
+
     public ProjectTasksController(
         CreateProjectTaskHandler createProjectTaskHandler,
         AssignProjectTaskResponsibleHandler assignProjectTaskResponsibleHandler,
@@ -56,7 +65,9 @@ public sealed class ProjectTasksController : ControllerBase
         UpdateProjectTaskHandler updateProjectTaskHandler,
         ListProjectTasksHandler listProjectTasksHandler,
         StartProjectTaskHandler startProjectTaskHandler,
-        MoveProjectTaskToTodoHandler moveProjectTaskToTodoHandler)
+        MoveProjectTaskToTodoHandler moveProjectTaskToTodoHandler,
+        PauseProjectTaskHandler pauseProjectTaskHandler,
+        ResumeProjectTaskHandler resumeProjectTaskHandler)
     {
         _createProjectTaskHandler =
             createProjectTaskHandler;
@@ -81,6 +92,12 @@ public sealed class ProjectTasksController : ControllerBase
 
         _moveProjectTaskToTodoHandler =
             moveProjectTaskToTodoHandler;
+
+        _pauseProjectTaskHandler =
+            pauseProjectTaskHandler;
+
+        _resumeProjectTaskHandler =
+            resumeProjectTaskHandler;
     }
 
 
@@ -842,6 +859,227 @@ public sealed class ProjectTasksController : ControllerBase
                 task.ProjectPublicId,
                 task.ResponsibleUserPublicId,
                 task.Status,
+                task.UpdatedAt);
+
+        return Ok(
+            response);
+    }
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpPost("{taskPublicId:guid}/pause")]
+    [ProducesResponseType<PauseProjectTaskResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<PauseProjectTaskResponse>> Pause(
+        Guid tenantPublicId,
+        Guid projectPublicId,
+        Guid taskPublicId,
+        [FromBody] PauseProjectTaskRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var requestedByUserPublicId) ||
+            requestedByUserPublicId == Guid.Empty)
+        {
+            return Unauthorized();
+        }
+
+        var command =
+            new PauseProjectTaskCommand(
+                tenantPublicId,
+                projectPublicId,
+                taskPublicId,
+                requestedByUserPublicId,
+                request.Reason);
+
+        var result =
+            await _pauseProjectTaskHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound ||
+                error == UserErrors.NotFound ||
+                error == ProjectErrors.NotFound ||
+                error == ProjectTaskErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            if (error == UserErrors.Inactive ||
+                error == ProjectTaskErrors.PauseNotAllowed)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    errorResponse);
+            }
+
+            if (error == TenantErrors.Inactive ||
+                error ==
+                ProjectTaskErrors.PauseBlockedByProjectStatus ||
+                error ==
+                ProjectTaskErrors.PauseBlockedByTaskStatus ||
+                error ==
+                ProjectTaskErrors.PauseRequiresResponsible ||
+                error == ProjectTaskErrors.Archived)
+            {
+                return Conflict(
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var task =
+            result.Value!;
+
+        var response =
+            new PauseProjectTaskResponse(
+                task.PublicId,
+                task.TenantPublicId,
+                task.ProjectPublicId,
+                task.ResponsibleUserPublicId,
+                task.Status,
+                task.StatusBeforePause,
+                task.DueDate,
+                task.UpdatedAt);
+
+        return Ok(
+            response);
+    }
+
+    [Authorize(
+        Policy = AuthorizationPolicyNames.TenantAccess)]
+    [HttpPost("{taskPublicId:guid}/resume")]
+    [ProducesResponseType<ResumeProjectTaskResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ErrorResponse>(
+        StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ResumeProjectTaskResponse>> Resume(
+        Guid tenantPublicId,
+        Guid projectPublicId,
+        Guid taskPublicId,
+    [FromBody(
+        EmptyBodyBehavior =
+            EmptyBodyBehavior.Allow)]
+    ResumeProjectTaskRequest? request,
+    CancellationToken cancellationToken)
+    {
+        var userPublicIdValue =
+            User.FindFirst(
+                ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(
+                userPublicIdValue,
+                out var requestedByUserPublicId) ||
+            requestedByUserPublicId == Guid.Empty)
+        {
+            return Unauthorized();
+        }
+
+        var command =
+            new ResumeProjectTaskCommand(
+                tenantPublicId,
+                projectPublicId,
+                taskPublicId,
+                requestedByUserPublicId,
+                request?.NewDueDate);
+
+        var result =
+            await _resumeProjectTaskHandler.HandleAsync(
+                command,
+                cancellationToken);
+
+        if (result.IsFailure)
+        {
+            var error =
+                result.Error!;
+
+            var errorResponse =
+                new ErrorResponse(
+                    error.Code,
+                    error.Message);
+
+            if (error == TenantErrors.NotFound ||
+                error == UserErrors.NotFound ||
+                error == ProjectErrors.NotFound ||
+                error == ProjectTaskErrors.NotFound)
+            {
+                return NotFound(
+                    errorResponse);
+            }
+
+            if (error == UserErrors.Inactive ||
+                error == ProjectTaskErrors.ResumeNotAllowed)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    errorResponse);
+            }
+
+            if (error == TenantErrors.Inactive ||
+                error ==
+                ProjectTaskErrors.ResumeBlockedByProjectStatus ||
+                error ==
+                ProjectTaskErrors.ResumeBlockedByTaskStatus ||
+                error ==
+                ProjectTaskErrors.ResumeRequiresResponsible ||
+                error == ProjectTaskErrors.Archived)
+            {
+                return Conflict(
+                    errorResponse);
+            }
+
+            return BadRequest(
+                errorResponse);
+        }
+
+        var task =
+            result.Value!;
+
+        var response =
+            new ResumeProjectTaskResponse(
+                task.PublicId,
+                task.TenantPublicId,
+                task.ProjectPublicId,
+                task.ResponsibleUserPublicId,
+                task.Status,
+                task.StatusBeforePause,
+                task.DueDate,
                 task.UpdatedAt);
 
         return Ok(

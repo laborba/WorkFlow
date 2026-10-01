@@ -1,12 +1,15 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Reflection;
 using System.Security.Claims;
+using System.Text.Json;
 using WorkFlow.API.Authorization;
 using WorkFlow.API.Contracts.Common;
 using WorkFlow.API.Contracts.ProjectTasks;
 using WorkFlow.API.Controllers;
+using WorkFlow.API.Exceptions;
 using WorkFlow.Application.Common.Errors;
 using WorkFlow.Application.Projects;
 using WorkFlow.Application.ProjectTasks;
@@ -15,11 +18,11 @@ using WorkFlow.Application.ProjectTasks.ClaimProjectTask;
 using WorkFlow.Application.ProjectTasks.CreateProjectTask;
 using WorkFlow.Application.ProjectTasks.ListProjectTasks;
 using WorkFlow.Application.ProjectTasks.MoveProjectTaskToTodo;
+using WorkFlow.Application.ProjectTasks.PauseProjectTask;
 using WorkFlow.Application.ProjectTasks.RemoveProjectTaskResponsible;
+using WorkFlow.Application.ProjectTasks.ResumeProjectTask;
 using WorkFlow.Application.ProjectTasks.StartProjectTask;
 using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
-using WorkFlow.Application.ProjectTasks.PauseProjectTask;
-using WorkFlow.Application.ProjectTasks.ResumeProjectTask;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Entities;
@@ -32,28 +35,62 @@ using WorkFlow.UnitTests.Common.Fakes;
 
 namespace WorkFlow.UnitTests.API.ProjectTasks;
 
-public sealed class MoveProjectTaskToTodoControllerTests
+public sealed class PauseProjectTaskControllerTests
 {
+    private static readonly DateTime DueDate =
+        new(
+            2027,
+            6,
+            30,
+            18,
+            0,
+            0,
+            DateTimeKind.Utc);
+
     [Theory]
-    [InlineData(UserRole.TenantAdmin)]
-    [InlineData(UserRole.ProjectManager)]
-    [InlineData(UserRole.Member)]
-    public async Task MoveToTodo_ShouldReturnOk_WhenAuthorized(
-        UserRole role)
+    [InlineData(
+        UserRole.TenantAdmin,
+        ProjectTaskStatus.Todo)]
+    [InlineData(
+        UserRole.TenantAdmin,
+        ProjectTaskStatus.InProgress)]
+    [InlineData(
+        UserRole.ProjectManager,
+        ProjectTaskStatus.Todo)]
+    [InlineData(
+        UserRole.ProjectManager,
+        ProjectTaskStatus.InProgress)]
+    [InlineData(
+        UserRole.Member,
+        ProjectTaskStatus.Todo)]
+    [InlineData(
+        UserRole.Member,
+        ProjectTaskStatus.InProgress)]
+    public async Task
+        Pause_ShouldReturnOk_WhenRequesterIsResponsibleAndActiveMember(
+            UserRole role,
+            ProjectTaskStatus taskStatus)
     {
         var fixture =
-            CreateFixture(role);
+            CreateFixture(
+                role,
+                taskStatus);
 
         var controller =
             CreateController(
                 fixture,
                 fixture.Requester.PublicId.ToString());
 
+        var request =
+            new PauseProjectTaskRequest(
+                "Aguardando retorno do cliente.");
+
         var result =
-            await controller.MoveToTodo(
+            await controller.Pause(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
                 fixture.ProjectTask.PublicId,
+                request,
                 CancellationToken.None);
 
         var ok =
@@ -65,7 +102,7 @@ public sealed class MoveProjectTaskToTodoControllerTests
             ok.StatusCode);
 
         var response =
-            Assert.IsType<MoveProjectTaskToTodoResponse>(
+            Assert.IsType<PauseProjectTaskResponse>(
                 ok.Value);
 
         Assert.Equal(
@@ -81,18 +118,34 @@ public sealed class MoveProjectTaskToTodoControllerTests
             response.ProjectPublicId);
 
         Assert.Equal(
-            ProjectTaskStatus.Todo,
+            fixture.Requester.PublicId,
+            response.ResponsibleUserPublicId);
+
+        Assert.Equal(
+            ProjectTaskStatus.Paused,
             response.Status);
 
         Assert.Equal(
-            ProjectTaskStatus.Todo,
-            fixture.ProjectTask.Status);
-
-        Assert.NotNull(
-            response.UpdatedAt);
+            taskStatus,
+            response.StatusBeforePause);
 
         Assert.Equal(
-            fixture.ProjectTask.UpdatedAt,
+            DueDate,
+            response.DueDate);
+
+        Assert.Equal(
+            ProjectTaskStatus.Paused,
+            fixture.ProjectTask.Status);
+
+        Assert.Equal(
+            taskStatus,
+            fixture.ProjectTask.StatusBeforePause);
+
+        Assert.Equal(
+            fixture.Requester.Id,
+            fixture.ProjectTask.ResponsibleUserId);
+
+        Assert.NotNull(
             response.UpdatedAt);
 
         Assert.Equal(
@@ -117,8 +170,9 @@ public sealed class MoveProjectTaskToTodoControllerTests
     [InlineData("")]
     [InlineData("invalid")]
     [InlineData("00000000-0000-0000-0000-000000000000")]
-    public async Task MoveToTodo_ShouldReturnUnauthorized_WhenUserClaimIsInvalid(
-        string? claim)
+    public async Task
+        Pause_ShouldReturnUnauthorized_WhenUserClaimIsInvalid(
+            string? claim)
     {
         var fixture =
             CreateFixture();
@@ -129,18 +183,23 @@ public sealed class MoveProjectTaskToTodoControllerTests
                 claim);
 
         var result =
-            await controller.MoveToTodo(
+            await controller.Pause(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
                 fixture.ProjectTask.PublicId,
+                new PauseProjectTaskRequest(
+                    "Motivo da pausa."),
                 CancellationToken.None);
 
         Assert.IsType<UnauthorizedResult>(
             result.Result);
 
         Assert.Equal(
-            ProjectTaskStatus.Backlog,
+            ProjectTaskStatus.InProgress,
             fixture.ProjectTask.Status);
+
+        Assert.Null(
+            fixture.ProjectTask.StatusBeforePause);
 
         Assert.Equal(
             0,
@@ -171,34 +230,29 @@ public sealed class MoveProjectTaskToTodoControllerTests
         "requester-inactive",
         StatusCodes.Status403Forbidden)]
     [InlineData(
-        "project-completed",
-        StatusCodes.Status409Conflict)]
-    [InlineData(
-        "project-archived",
+        "project-paused",
         StatusCodes.Status409Conflict)]
     [InlineData(
         "task-archived",
         StatusCodes.Status409Conflict)]
     [InlineData(
-        "task-not-backlog",
+        "task-not-pausable",
         StatusCodes.Status409Conflict)]
+    [InlineData(
+        "without-responsible",
+        StatusCodes.Status409Conflict)]
+    [InlineData(
+        "not-responsible",
+        StatusCodes.Status403Forbidden)]
     [InlineData(
         "not-active-member",
         StatusCodes.Status403Forbidden)]
-    [InlineData(
-        "without-edit-task",
-        StatusCodes.Status403Forbidden)]
-    public async Task MoveToTodo_ShouldMapApplicationErrors(
+    public async Task Pause_ShouldMapApplicationErrors(
         string scenario,
         int expectedStatusCode)
     {
         var fixture =
-            CreateFixture(
-                scenario is
-                    "not-active-member" or
-                    "without-edit-task"
-                    ? UserRole.Member
-                    : UserRole.TenantAdmin);
+            CreateFixture();
 
         var expectedError =
             ConfigureFailureScenario(
@@ -211,10 +265,12 @@ public sealed class MoveProjectTaskToTodoControllerTests
                 fixture.Requester.PublicId.ToString());
 
         var result =
-            await controller.MoveToTodo(
+            await controller.Pause(
                 fixture.Tenant.PublicId,
                 fixture.Project.PublicId,
                 fixture.ProjectTask.PublicId,
+                new PauseProjectTaskRequest(
+                    "Motivo da pausa."),
                 CancellationToken.None);
 
         var failure =
@@ -243,13 +299,90 @@ public sealed class MoveProjectTaskToTodoControllerTests
     }
 
     [Fact]
-    public void MoveToTodo_ShouldExposeTenantScopedPostProtectedByTenantAccess()
+    public async Task
+        Pause_ShouldUseGlobalValidationHandling_WhenReasonIsInvalid()
+    {
+        var fixture =
+            CreateFixture();
+
+        var controller =
+            CreateController(
+                fixture,
+                fixture.Requester.PublicId.ToString());
+
+        var exception =
+            await Assert.ThrowsAsync<ArgumentException>(
+                () =>
+                    controller.Pause(
+                        fixture.Tenant.PublicId,
+                        fixture.Project.PublicId,
+                        fixture.ProjectTask.PublicId,
+                        new PauseProjectTaskRequest(
+                            "   "),
+                        CancellationToken.None));
+
+        var context =
+            new DefaultHttpContext();
+
+        await using var body =
+            new MemoryStream();
+
+        context.Response.Body =
+            body;
+
+        var exceptionHandler =
+            new GlobalExceptionHandler(
+                NullLogger<GlobalExceptionHandler>.Instance);
+
+        var handled =
+            await exceptionHandler.TryHandleAsync(
+                context,
+                exception,
+                CancellationToken.None);
+
+        Assert.True(
+            handled);
+
+        Assert.Equal(
+            StatusCodes.Status400BadRequest,
+            context.Response.StatusCode);
+
+        body.Position =
+            0;
+
+        var error =
+            await JsonSerializer
+                .DeserializeAsync<ErrorResponse>(
+                    body,
+                    new JsonSerializerOptions(
+                        JsonSerializerDefaults.Web));
+
+        Assert.NotNull(
+            error);
+
+        Assert.Equal(
+            "Validation.InvalidArgument",
+            error!.Code);
+
+        Assert.Equal(
+            0,
+            fixture.UnitOfWork.BeginTransactionCallCount);
+
+        Assert.Equal(
+            ProjectTaskStatus.InProgress,
+            fixture.ProjectTask.Status);
+    }
+
+    [Fact]
+    public void
+        Pause_ShouldExposeTenantScopedPostProtectedByTenantAccess()
     {
         var controllerType =
             typeof(ProjectTasksController);
 
         Assert.NotNull(
-            controllerType.GetCustomAttribute<ApiControllerAttribute>());
+            controllerType
+                .GetCustomAttribute<ApiControllerAttribute>());
 
         Assert.Equal(
             "api/tenants/{tenantPublicId:guid}/projects/{projectPublicId:guid}/tasks",
@@ -259,7 +392,7 @@ public sealed class MoveProjectTaskToTodoControllerTests
 
         var method =
             controllerType.GetMethod(
-                nameof(ProjectTasksController.MoveToTodo));
+                nameof(ProjectTasksController.Pause));
 
         Assert.NotNull(
             method);
@@ -270,23 +403,29 @@ public sealed class MoveProjectTaskToTodoControllerTests
                     .GetCustomAttributes<HttpPostAttribute>());
 
         Assert.Equal(
-            "{taskPublicId:guid}/todo",
+            "{taskPublicId:guid}/pause",
             postAttribute.Template);
 
         Assert.Equal(
             AuthorizationPolicyNames.TenantAccess,
             Assert.Single(
-                    method.GetCustomAttributes<AuthorizeAttribute>())
+                    method
+                        .GetCustomAttributes<AuthorizeAttribute>())
                 .Policy);
 
         Assert.Empty(
             method.GetCustomAttributes<AllowAnonymousAttribute>());
 
-        Assert.DoesNotContain(
-            method.GetParameters(),
-            parameter =>
-                parameter.GetCustomAttribute<FromBodyAttribute>()
-                    is not null);
+        var bodyParameter =
+            Assert.Single(
+                method.GetParameters(),
+                parameter =>
+                    parameter.GetCustomAttribute<FromBodyAttribute>()
+                        is not null);
+
+        Assert.Equal(
+            typeof(PauseProjectTaskRequest),
+            bodyParameter.ParameterType);
     }
 
     private static Error ConfigureFailureScenario(
@@ -332,27 +471,12 @@ public sealed class MoveProjectTaskToTodoControllerTests
 
                 return UserErrors.Inactive;
 
-            case "project-completed":
-                fixture.Project.Complete(
-                    new[]
-                    {
-                        ProjectTaskStatus.Done
-                    });
+            case "project-paused":
+                fixture.Project.Pause(
+                    "Projeto pausado para teste.");
 
                 return ProjectTaskErrors
-                    .MoveToTodoBlockedByProjectStatus;
-
-            case "project-archived":
-                fixture.Project.Complete(
-                    new[]
-                    {
-                        ProjectTaskStatus.Done
-                    });
-
-                fixture.Project.Archive();
-
-                return ProjectTaskErrors
-                    .MoveToTodoBlockedByProjectStatus;
+                    .PauseBlockedByProjectStatus;
 
             case "task-archived":
                 fixture.ProjectTask.Cancel();
@@ -360,35 +484,36 @@ public sealed class MoveProjectTaskToTodoControllerTests
 
                 return ProjectTaskErrors.Archived;
 
-            case "task-not-backlog":
-                fixture.ProjectTask.MoveToTodo();
+            case "task-not-pausable":
+                fixture.ProjectTask.SendToValidation();
 
                 return ProjectTaskErrors
-                    .MoveToTodoBlockedByTaskStatus;
+                    .PauseBlockedByTaskStatus;
+
+            case "without-responsible":
+                fixture.ProjectTask.RemoveResponsible();
+
+                return ProjectTaskErrors
+                    .PauseRequiresResponsible;
+
+            case "not-responsible":
+                fixture.ProjectTask.AssignResponsible(
+                    fixture.OtherUser.Id);
+
+                return ProjectTaskErrors
+                    .PauseNotAllowed;
 
             case "not-active-member":
                 fixture.MemberRepository
-                    .ActiveMembersToReturn[
+                    .IsActiveMemberResults[
                         (
                             fixture.Project.Id,
                             fixture.Requester.Id
                         )] =
-                    null;
-
-                return ProjectTaskErrors
-                    .MoveToTodoNotAllowed;
-
-            case "without-edit-task":
-                fixture.PermissionRepository
-                    .IsActivePermissionResults[
-                        (
-                            fixture.RequesterMember!.Id,
-                            ProjectPermission.EditTask
-                        )] =
                     false;
 
                 return ProjectTaskErrors
-                    .MoveToTodoNotAllowed;
+                    .PauseNotAllowed;
 
             default:
                 throw new ArgumentOutOfRangeException(
@@ -477,24 +602,6 @@ public sealed class MoveProjectTaskToTodoControllerTests
                 fixture.TaskRepository,
                 fixture.UnitOfWork);
 
-        var pauseHandler =
-        new PauseProjectTaskHandler(
-            fixture.TenantRepository,
-            fixture.UserRepository,
-            fixture.ProjectRepository,
-            fixture.MemberRepository,
-            fixture.TaskRepository,
-            fixture.UnitOfWork);
-
-        var resumeHandler =
-            new ResumeProjectTaskHandler(
-                fixture.TenantRepository,
-                fixture.UserRepository,
-                fixture.ProjectRepository,
-                fixture.MemberRepository,
-                fixture.TaskRepository,
-                fixture.UnitOfWork);
-
         var moveToTodoHandler =
             new MoveProjectTaskToTodoHandler(
                 fixture.TenantRepository,
@@ -502,6 +609,24 @@ public sealed class MoveProjectTaskToTodoControllerTests
                 fixture.ProjectRepository,
                 fixture.MemberRepository,
                 fixture.PermissionRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var pauseHandler =
+            new PauseProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var resumeHandler =
+            new ResumeProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
                 fixture.TaskRepository,
                 fixture.UnitOfWork);
 
@@ -535,11 +660,13 @@ public sealed class MoveProjectTaskToTodoControllerTests
 
     private static Fixture CreateFixture(
         UserRole requesterRole =
-            UserRole.TenantAdmin)
+            UserRole.Member,
+        ProjectTaskStatus taskStatus =
+            ProjectTaskStatus.InProgress)
     {
         var tenant =
             new Tenant(
-                "Empresa Move Task To Todo API",
+                "Empresa Pause Task API",
                 $"REG-{Guid.NewGuid():N}",
                 $"tenant-{Guid.NewGuid():N}@test.local");
 
@@ -550,7 +677,7 @@ public sealed class MoveProjectTaskToTodoControllerTests
         var requester =
             new User(
                 tenant.Id,
-                "Usuário solicitante",
+                "Usuário responsável",
                 $"requester-{Guid.NewGuid():N}@test.local",
                 "password-hash",
                 requesterRole);
@@ -559,10 +686,22 @@ public sealed class MoveProjectTaskToTodoControllerTests
             requester,
             10);
 
+        var otherUser =
+            new User(
+                tenant.Id,
+                "Outro usuário",
+                $"other-{Guid.NewGuid():N}@test.local",
+                "password-hash",
+                UserRole.Member);
+
+        EntityTestHelper.SetId(
+            otherUser,
+            20);
+
         var project =
             new Project(
                 tenant.Id,
-                "Projeto Move Task To Todo API",
+                "Projeto Pause Task API",
                 requester.Id);
 
         EntityTestHelper.SetId(
@@ -574,13 +713,31 @@ public sealed class MoveProjectTaskToTodoControllerTests
         var projectTask =
             new ProjectTask(
                 project.Id,
-                "Tarefa no backlog",
+                "Tarefa para pausar",
                 ProjectTaskPriority.Medium,
-                requester.Id);
+                requester.Id,
+                responsibleUserId:
+                    requester.Id,
+                dueDate:
+                    DueDate);
 
         EntityTestHelper.SetId(
             projectTask,
             200);
+
+        projectTask.MoveToTodo();
+
+        if (taskStatus ==
+            ProjectTaskStatus.InProgress)
+        {
+            projectTask.Start();
+        }
+        else if (taskStatus !=
+                 ProjectTaskStatus.Todo)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(taskStatus));
+        }
 
         var tenantRepository =
             new FakeTenantRepository
@@ -597,6 +754,11 @@ public sealed class MoveProjectTaskToTodoControllerTests
                 requester.PublicId] =
             requester;
 
+        userRepository
+            .UsersByPublicIdToReturn[
+                otherUser.PublicId] =
+            otherUser;
+
         var projectRepository =
             new FakeProjectRepository
             {
@@ -607,42 +769,34 @@ public sealed class MoveProjectTaskToTodoControllerTests
         var memberRepository =
             new FakeProjectMemberRepository();
 
+        var requesterMember =
+            new ProjectMember(
+                project.Id,
+                requester.Id,
+                requester.Id);
+
+        EntityTestHelper.SetId(
+            requesterMember,
+            300);
+
+        memberRepository
+            .ActiveMembersToReturn[
+                (
+                    project.Id,
+                    requester.Id
+                )] =
+            requesterMember;
+
+        memberRepository
+            .IsActiveMemberResults[
+                (
+                    project.Id,
+                    requester.Id
+                )] =
+            true;
+
         var permissionRepository =
             new FakeProjectMemberPermissionRepository();
-
-        ProjectMember? requesterMember =
-            null;
-
-        if (requesterRole is
-            UserRole.ProjectManager or
-            UserRole.Member)
-        {
-            requesterMember =
-                new ProjectMember(
-                    project.Id,
-                    requester.Id,
-                    requester.Id);
-
-            EntityTestHelper.SetId(
-                requesterMember,
-                300);
-
-            memberRepository
-                .ActiveMembersToReturn[
-                    (
-                        project.Id,
-                        requester.Id
-                    )] =
-                requesterMember;
-
-            permissionRepository
-                .IsActivePermissionResults[
-                    (
-                        requesterMember.Id,
-                        ProjectPermission.EditTask
-                    )] =
-                true;
-        }
 
         var taskRepository =
             new FakeProjectTaskRepository
@@ -657,9 +811,9 @@ public sealed class MoveProjectTaskToTodoControllerTests
         return new Fixture(
             tenant,
             requester,
+            otherUser,
             project,
             projectTask,
-            requesterMember,
             tenantRepository,
             userRepository,
             projectRepository,
@@ -672,9 +826,9 @@ public sealed class MoveProjectTaskToTodoControllerTests
     private sealed record Fixture(
         Tenant Tenant,
         User Requester,
+        User OtherUser,
         Project Project,
         ProjectTask ProjectTask,
-        ProjectMember? RequesterMember,
         FakeTenantRepository TenantRepository,
         FakeUserRepository UserRepository,
         FakeProjectRepository ProjectRepository,

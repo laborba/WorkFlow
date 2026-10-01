@@ -21,6 +21,8 @@ using WorkFlow.Application.ProjectTasks.RemoveProjectTaskResponsible;
 using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
 using WorkFlow.Application.ProjectTasks.StartProjectTask;
 using WorkFlow.Application.ProjectTasks.MoveProjectTaskToTodo;
+using WorkFlow.Application.ProjectTasks.PauseProjectTask;
+using WorkFlow.Application.ProjectTasks.ResumeProjectTask;
 using WorkFlow.Application.Tenants;
 using WorkFlow.Application.Users;
 using WorkFlow.Domain.Entities;
@@ -765,6 +767,24 @@ public sealed class UpdateProjectTaskControllerTests
                 fixture.TaskRepository,
                 fixture.UnitOfWork);
 
+        var pauseProjectTaskHandler =
+            new PauseProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var resumeProjectTaskHandler =
+            new ResumeProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
         var moveToTodoHandler =
             new MoveProjectTaskToTodoHandler(
                 fixture.TenantRepository,
@@ -783,7 +803,9 @@ public sealed class UpdateProjectTaskControllerTests
             updateHandler,
             listProjectTasksHandler,
             startProjectTaskHandler,
-            moveToTodoHandler)
+            moveToTodoHandler,
+            pauseProjectTaskHandler,
+            resumeProjectTaskHandler)
         {
             ControllerContext =
                 new ControllerContext

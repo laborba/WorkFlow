@@ -779,6 +779,153 @@ Os cenários manuais estão disponíveis em:
 src/WorkFlow.API/Http/05-ProjectTasks.http
 ```
 
+### Tarefas — PauseProjectTask / ResumeProjectTask
+
+A pausa e a retomada de tarefas estão implementadas através dos endpoints:
+
+```http
+POST /api/tenants/{tenantPublicId}/projects/{projectPublicId}/tasks/{taskPublicId}/pause
+POST /api/tenants/{tenantPublicId}/projects/{projectPublicId}/tasks/{taskPublicId}/resume
+```
+
+A pausa permite as transições:
+
+```text
+Todo
+↓
+Paused
+```
+
+e:
+
+```text
+InProgress
+↓
+Paused
+```
+
+O estado anterior é preservado em `StatusBeforePause`.
+
+Ao retomar, a tarefa retorna exatamente ao estado operacional existente antes da pausa:
+
+```text
+Todo → Paused → Todo
+
+InProgress → Paused → InProgress
+```
+
+Depois da retomada:
+
+```text
+StatusBeforePause = null
+```
+
+As regras atuais são:
+
+- o projeto precisa estar em `InProgress`;
+- tarefas arquivadas não podem ser pausadas nem retomadas;
+- somente tarefas em `Todo` ou `InProgress` podem ser pausadas;
+- somente tarefas em `Paused` podem ser retomadas;
+- a tarefa precisa possuir responsável;
+- somente o responsável atual pode pausar ou retomar a tarefa;
+- o responsável precisa continuar ativo e possuir participação ativa no projeto;
+- nenhuma role possui bypass da responsabilidade;
+- `TenantAdmin` também precisa ser o responsável atual e membro ativo;
+- `SystemAdmin` não possui acesso operacional às tarefas do Tenant;
+- nenhuma nova `ProjectPermission` foi criada para pausa ou retomada.
+
+A pausa exige um motivo válido.
+
+O motivo é validado durante a operação. O registro auditável desse motivo será incorporado quando o fluxo de `TaskHistory` for implementado.
+
+Pausar uma tarefa não altera seu prazo.
+
+Na retomada, o prazo existente pode ser mantido omitindo o body ou informando:
+
+```json
+{
+  "newDueDate": null
+}
+```
+
+Também é possível substituir explicitamente o prazo:
+
+```json
+{
+  "newDueDate": "2027-07-15T18:00:00Z"
+}
+```
+
+Quando informado, o novo prazo precisa possuir UTC ou offset válido e é normalizado para UTC.
+
+As duas operações utilizam transação e bloqueio pessimista na ordem:
+
+```text
+Project FOR UPDATE
+↓
+ProjectTask FOR UPDATE
+```
+
+O sucesso retorna `200 OK` contendo:
+
+```text
+PublicId
+TenantPublicId
+ProjectPublicId
+ResponsibleUserPublicId
+Status
+StatusBeforePause
+DueDate
+UpdatedAt
+```
+
+Os principais erros específicos da pausa são:
+
+```text
+ProjectTasks.PauseNotAllowed
+ProjectTasks.PauseBlockedByProjectStatus
+ProjectTasks.PauseBlockedByTaskStatus
+ProjectTasks.PauseRequiresResponsible
+ProjectTasks.Archived
+```
+
+Os principais erros específicos da retomada são:
+
+```text
+ProjectTasks.ResumeNotAllowed
+ProjectTasks.ResumeBlockedByProjectStatus
+ProjectTasks.ResumeBlockedByTaskStatus
+ProjectTasks.ResumeRequiresResponsible
+ProjectTasks.Archived
+```
+
+A implementação possui testes unitários da Application, testes de Controller, testes de integração com PostgreSQL e validação manual autenticada.
+
+Os fluxos abaixo foram validados manualmente:
+
+```text
+InProgress → Paused → InProgress
+
+Todo → Paused → Todo
+```
+
+Também foram validados manualmente:
+
+```text
+tentativa por usuário que não é responsável
+pausa repetida
+retomada repetida
+motivo inválido
+preservação de DueDate durante a pausa
+alteração explícita de DueDate durante a retomada
+```
+
+Os cenários estão disponíveis em:
+
+```text
+src/WorkFlow.API/Http/05-ProjectTasks.http
+```
+
 ### Autenticação e autorização
 
 - login de usuários vinculados a uma empresa;
@@ -834,7 +981,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-1617 testes automatizados aprovados
+1789 testes automatizados aprovados
 0 falhas
 ```
 
@@ -853,6 +1000,10 @@ A persistência da listagem também é validada através de testes de integraç�
 `MoveProjectTaskToTodo` possui cobertura automatizada para autorização por perfil, participação ativa, `EditTask`, estados permitidos do projeto, bloqueio de tarefas arquivadas, exigência de `Backlog`, isolamento entre projetos e Tenants, mapeamento HTTP e persistência real da transição `Backlog → Todo` no PostgreSQL.
 
 `StartProjectTask` possui cobertura automatizada para responsabilidade da tarefa, participação ativa do responsável, estado `InProgress` do projeto, exigência de tarefa em `Todo`, existência de responsável, isolamento entre projetos e Tenants, mapeamento HTTP e persistência da transição `Todo → InProgress`.
+
+`PauseProjectTask` possui cobertura automatizada para os estados `Todo` e `InProgress`, responsabilidade atual da tarefa, participação ativa do responsável, estado `InProgress` do projeto, tarefas arquivadas, ausência de responsável, isolamento entre projetos e Tenants, rollback, mapeamento HTTP e persistência real da transição para `Paused`, incluindo `StatusBeforePause`.
+
+`ResumeProjectTask` possui cobertura automatizada para restauração de `Todo` e `InProgress`, limpeza de `StatusBeforePause`, manutenção ou substituição de `DueDate`, responsabilidade atual, participação ativa, estados inválidos, isolamento entre projetos e Tenants, rollback, mapeamento HTTP e persistência real no PostgreSQL.
 
 A autenticação e autorização possuem testes cobrindo, entre outros cenários:
 
@@ -3885,6 +4036,14 @@ ProjectTasks.StartNotAllowed
 ProjectTasks.StartBlockedByProjectStatus
 ProjectTasks.StartBlockedByTaskStatus
 ProjectTasks.StartRequiresResponsible
+ProjectTasks.PauseNotAllowed
+ProjectTasks.PauseBlockedByProjectStatus
+ProjectTasks.PauseBlockedByTaskStatus
+ProjectTasks.PauseRequiresResponsible
+ProjectTasks.ResumeNotAllowed
+ProjectTasks.ResumeBlockedByProjectStatus
+ProjectTasks.ResumeBlockedByTaskStatus
+ProjectTasks.ResumeRequiresResponsible
 
 Validation.InvalidArgument
 ```
@@ -4076,7 +4235,7 @@ Os arquivos possuem responsabilidades separadas:
 → criação, consulta individual, listagem, atualização e ciclo completo de status de projetos; inclusão, listagem e remoção de membros; concessão, listagem e revogação de permissões; filtros e autorização
 
 05-ProjectTasks.http
--> criação, atualização e listagem de tarefas; atribuição, reatribuição e remoção de responsável; ClaimTask; transições Backlog → Todo e Todo → InProgress; paginação, busca e filtros da listagem; autorização por TenantAccess, participação ativa, CreateTask, EditTask, AssignTask, ClaimTask e responsabilidade pela tarefa; status do projeto e isolamento entre Tenants
+-> criação, atualização e listagem de tarefas; atribuição, reatribuição e remoção de responsável; ClaimTask; transições Backlog → Todo, Todo → InProgress, Todo/InProgress → Paused e retomada para o estado anterior; paginação, busca e filtros; autorização por TenantAccess, participação ativa, permissões específicas e responsabilidade pela tarefa; status do projeto e isolamento entre Tenants
 ```
 
 As variáveis compartilhadas e identificadores públicos utilizados nos testes ficam em:
@@ -4305,7 +4464,7 @@ As permissões `ManageProjectPermissions`, `EditProject` e `ManageProjectMembers
 
 `EditProject` também é utilizada nos fluxos de início, pausa e retomada de projetos.
 
-`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas, `EditTask` à atualização dos dados básicos e à transição `Backlog` → `Todo`, `AssignTask` à atribuição, reatribuição e remoção de responsável e `ClaimTask` ao fluxo em que o próprio membro assume uma tarefa disponível. O início `Todo` → `InProgress` é autorizado pela responsabilidade atual da tarefa e exige que o responsável continue como membro ativo do projeto.
+`CompleteProject`, `ReopenProject` e `ArchiveProject` já estão integradas ao ciclo de vida dos projetos. `CreateTask` está integrada à criação de tarefas, `EditTask` à atualização dos dados básicos e à transição `Backlog` → `Todo`, `AssignTask` à atribuição, reatribuição e remoção de responsável e `ClaimTask` ao fluxo em que o próprio membro assume uma tarefa disponível. O início `Todo` → `InProgress`, a pausa `Todo/InProgress` → `Paused` e a retomada de `Paused` são autorizados pela responsabilidade atual da tarefa. O responsável precisa permanecer ativo e possuir participação ativa no projeto, e nenhuma role possui bypass dessa regra.
 
 A listagem de tarefas utiliza `TenantAccess` e autorização de leitura baseada no projeto. `TenantAdmin` possui acesso aos projetos do próprio Tenant, enquanto `ProjectManager` e `Member` precisam possuir participação ativa. A leitura das tarefas não exige `EditTask` nem outra permissão operacional específica.
 
@@ -4446,6 +4605,28 @@ O projeto precisa estar em `InProgress`. Projetos em qualquer outro estado e tar
 
 As duas operações utilizam transação e bloqueio pessimista do projeto e da tarefa, preservando a ordem `Project FOR UPDATE → ProjectTask FOR UPDATE`.
 
+`PauseProjectTask` e `ResumeProjectTask` também estão implementados na Application, persistência e API.
+
+A pausa é permitida exclusivamente ao responsável atual da tarefa, que precisa continuar ativo e possuir participação ativa no projeto. Não existe bypass administrativo da responsabilidade nem uma nova permissão específica.
+
+Tarefas em `Todo` ou `InProgress` podem ser pausadas quando o projeto está em `InProgress`.
+
+A pausa exige motivo e preserva o estado anterior em `StatusBeforePause`.
+
+A retomada aceita somente tarefas em `Paused` e restaura:
+
+```text
+Todo → Paused → Todo
+
+InProgress → Paused → InProgress
+```
+
+Depois da retomada, `StatusBeforePause` é limpo.
+
+O prazo é preservado durante a pausa. Na retomada, pode ser mantido ou substituído explicitamente por um novo `DueDate`.
+
+Projeto e tarefa são bloqueados com `FOR UPDATE`, mantendo a mesma ordem das demais mutações concorrentes.
+
 O módulo de tarefas deverá contemplar:
 
 - título;
@@ -4474,7 +4655,7 @@ Validation
 Done
 ```
 
-As transições `Backlog → Todo` e `Todo → InProgress` já estão implementadas. As etapas seguintes do fluxo operacional serão incorporadas pelas próximas verticais.
+As transições `Backlog → Todo`, `Todo → InProgress`, `Todo/InProgress → Paused` e a retomada de `Paused` para o estado operacional anterior já estão implementadas. As etapas seguintes do fluxo principal serão incorporadas pelas próximas verticais.
 
 Outros estados poderão incluir:
 
@@ -4556,7 +4737,7 @@ Atualmente já são permissões operacionais efetivas:
 - `EditTask`: permite atualizar título, descrição, prioridade e prazo das tarefas e executar a transição `Backlog → Todo`, com participação ativa e a permissão correspondente para ProjectManager e Member;
 - `AssignTask`: permite atribuir, reatribuir e remover responsáveis das tarefas, com participação ativa e a permissão correspondente para ProjectManager e Member;
 - `ClaimTask`: permite que o próprio membro ativo assuma uma tarefa disponível; `ProjectManager` e `Member` precisam possuir a permissão, enquanto `TenantAdmin` possui bypass da permissão, mas continua precisando ser membro ativo do projeto.
-O início da execução de uma tarefa (`Todo → InProgress`) não utiliza uma permissão adicional. A ação pertence exclusivamente ao responsável atual da tarefa, que precisa possuir participação ativa no projeto.
+O início, a pausa e a retomada da execução de uma tarefa não utilizam permissões adicionais. Essas ações pertencem exclusivamente ao responsável atual da tarefa, que precisa permanecer ativo e possuir participação ativa no projeto. `TenantAdmin` não possui bypass da regra de responsabilidade nesses fluxos.
 
 Quando um `ProjectManager` cria um novo projeto, sua participação inicial recebe automaticamente:
 
@@ -4828,6 +5009,18 @@ Essa camada ainda não está implementada.
 - [x] Projeto InProgress obrigatório para início da tarefa
 - [x] Testes unitários, de Controller e integração de StartProjectTask
 - [x] Validação manual autenticada do fluxo Backlog → Todo → InProgress
+- [x] PauseProjectTask na Application, persistência e API
+- [x] Endpoint POST para pausa de tarefas
+- [x] Pausa de Todo ou InProgress para Paused
+- [x] Motivo obrigatório na pausa
+- [x] Preservação do estado anterior através de StatusBeforePause
+- [x] ResumeProjectTask na Application, persistência e API
+- [x] Endpoint POST para retomada de tarefas
+- [x] Retomada de Paused para Todo ou InProgress conforme StatusBeforePause
+- [x] Manutenção ou substituição explícita de DueDate na retomada
+- [x] Pausa e retomada restritas ao responsável atual e membro ativo
+- [x] Testes unitários, de Controller e integração PostgreSQL de PauseProjectTask e ResumeProjectTask
+- [x] Validação manual autenticada dos fluxos Todo → Paused → Todo e InProgress → Paused → InProgress
 - [ ] Demais casos de uso e endpoints
 - [ ] Fluxo operacional completo
 - [ ] Validação
@@ -5161,7 +5354,29 @@ StartProjectTask não introduz nova permissão de projeto
 Tarefas arquivadas e tarefas fora de Todo bloqueiam StartProjectTask
 Projeto e tarefa são bloqueados com FOR UPDATE durante StartProjectTask
 Fluxo Backlog → Todo → InProgress validado manualmente
-1617 testes automatizados aprovados
+PauseProjectTask implementado na Application, persistência e API
+Transições Todo → Paused e InProgress → Paused implementadas
+PauseProjectTask exige motivo válido
+PauseProjectTask exige responsável definido
+Somente o responsável atual pode pausar a tarefa
+Responsável precisa possuir participação ativa no projeto para pausar
+TenantAdmin não possui bypass da responsabilidade na pausa
+StatusBeforePause preserva o estado operacional anterior
+ResumeProjectTask implementado na Application, persistência e API
+ResumeProjectTask restaura Todo ou InProgress conforme StatusBeforePause
+StatusBeforePause é limpo após a retomada
+ResumeProjectTask exige responsável definido
+Somente o responsável atual pode retomar a tarefa
+Responsável precisa possuir participação ativa no projeto para retomar
+TenantAdmin não possui bypass da responsabilidade na retomada
+DueDate é preservado por padrão durante pausa e retomada
+ResumeProjectTask permite substituição explícita de DueDate
+Projeto InProgress é obrigatório para pausa e retomada
+Tarefas arquivadas bloqueiam pausa e retomada
+Projeto e tarefa são bloqueados com FOR UPDATE durante pausa e retomada
+Persistência real de PauseProjectTask e ResumeProjectTask validada com PostgreSQL
+Fluxos Todo → Paused → Todo e InProgress → Paused → InProgress validados manualmente
+1789 testes automatizados aprovados
 0 falhas
 ```
 
