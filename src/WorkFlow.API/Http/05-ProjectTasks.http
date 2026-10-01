@@ -1108,3 +1108,127 @@ Accept: application/json
 POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoProjectManagerPublicId}}/tasks/{{startTaskPublicId}}/start
 Authorization: Bearer {{memberToken}}
 Accept: application/json
+
+### ============================================================
+### PROJECT TASKS — PAUSE / RESUME
+###
+### Regras:
+### - somente o responsável atual pode pausar ou retomar;
+### - o responsável precisa ser membro ativo do projeto;
+### - TenantAdmin não possui bypass da responsabilidade;
+### - Pause aceita Todo ou InProgress;
+### - Resume aceita somente Paused;
+### - Pause exige motivo;
+### - Resume restaura StatusBeforePause;
+### - pausar não altera DueDate;
+### - Resume pode manter ou substituir explicitamente DueDate.
+### ============================================================
+
+
+### ProjectTasks - PauseTask por usuário que não é responsável - 403
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{startTaskPublicId}}/pause
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "TenantAdmin não é o responsável atual."
+}
+
+
+### ProjectTasks - PauseTask InProgress pelo responsável Member - 200
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{startTaskPublicId}}/pause
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "Aguardando retorno necessário para continuar."
+}
+
+
+### ProjectTasks - PauseTask novamente quando já está Paused - 409
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{startTaskPublicId}}/pause
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "Segunda tentativa de pausa."
+}
+
+
+### ProjectTasks - ResumeTask restaurar InProgress sem alterar prazo - 200
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{startTaskPublicId}}/resume
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### ProjectTasks - ResumeTask novamente quando não está Paused - 409
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{startTaskPublicId}}/resume
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### ProjectTasks - PauseTask com motivo vazio - 400
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{startTaskPublicId}}/pause
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "   "
+}
+
+
+### ProjectTasks - Preparação criar tarefa Todo para PauseResume - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa Todo para Pause Resume",
+  "description": "Validação manual de Todo para Paused e retorno para Todo.",
+  "priority": 2,
+  "dueDate": "2027-06-30T18:00:00Z"
+}
+
+
+### ProjectTasks - Preparação atribuir Member à tarefa Todo PauseResume - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{pauseTodoTaskPublicId}}/responsible
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "responsibleUserPublicId": "{{memberUserPublicId}}"
+}
+
+
+### ProjectTasks - Preparação mover tarefa PauseResume de Backlog para Todo - 200
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{pauseTodoTaskPublicId}}/todo
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - PauseTask Todo pelo responsável Member - 200
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{pauseTodoTaskPublicId}}/pause
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reason": "Tarefa pendente temporariamente bloqueada."
+}
+
+
+### ProjectTasks - ResumeTask restaurar Todo e alterar prazo - 200
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{pauseTodoTaskPublicId}}/resume
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "newDueDate": "2027-07-15T18:00:00Z"
+}

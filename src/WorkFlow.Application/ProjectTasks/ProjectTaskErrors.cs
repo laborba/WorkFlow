@@ -124,6 +124,46 @@ public static class ProjectTaskErrors
             "ProjectTasks.MoveToTodoBlockedByTaskStatus",
             "Somente tarefas no backlog podem ser movidas para pendente.");
 
+    public static Error PauseNotAllowed { get; } =
+        new(
+            "ProjectTasks.PauseNotAllowed",
+            "Somente o responsável atual pode pausar esta tarefa.");
+
+    public static Error PauseBlockedByProjectStatus { get; } =
+        new(
+            "ProjectTasks.PauseBlockedByProjectStatus",
+            "A tarefa só pode ser pausada quando o projeto estiver em andamento.");
+
+    public static Error PauseBlockedByTaskStatus { get; } =
+        new(
+            "ProjectTasks.PauseBlockedByTaskStatus",
+            "Somente tarefas pendentes ou em andamento podem ser pausadas.");
+
+    public static Error PauseRequiresResponsible { get; } =
+        new(
+            "ProjectTasks.PauseRequiresResponsible",
+            "A tarefa precisa possuir um responsável para ser pausada.");
+
+    public static Error ResumeNotAllowed { get; } =
+        new(
+            "ProjectTasks.ResumeNotAllowed",
+            "Somente o responsável atual pode retomar esta tarefa.");
+
+    public static Error ResumeBlockedByProjectStatus { get; } =
+        new(
+            "ProjectTasks.ResumeBlockedByProjectStatus",
+            "A tarefa só pode ser retomada quando o projeto estiver em andamento.");
+
+    public static Error ResumeBlockedByTaskStatus { get; } =
+        new(
+            "ProjectTasks.ResumeBlockedByTaskStatus",
+            "Somente tarefas pausadas podem ser retomadas.");
+
+    public static Error ResumeRequiresResponsible { get; } =
+        new(
+            "ProjectTasks.ResumeRequiresResponsible",
+            "A tarefa precisa possuir um responsável para ser retomada.");
+
     public static Error Archived { get; } =
         new(
             "ProjectTasks.Archived",
