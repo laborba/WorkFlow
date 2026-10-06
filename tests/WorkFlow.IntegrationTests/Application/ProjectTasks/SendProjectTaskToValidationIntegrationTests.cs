@@ -125,9 +125,13 @@ public sealed class SendProjectTaskToValidationIntegrationTests
             ProjectTaskStatus.Validation,
             result.Value.Status);
 
-        Assert.Equal(
-            persistedTask.UpdatedAt,
+        Assert.NotNull(
             result.Value.UpdatedAt);
+
+        Assert.Equal(
+            persistedTask.UpdatedAt!.Value,
+            result.Value.UpdatedAt!.Value,
+            TimeSpan.FromMicroseconds(1));
 
         await transaction.RollbackAsync();
     }

@@ -1304,3 +1304,128 @@ Accept: application/json
 POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{sendValidationTaskPublicId}}/validation
 Authorization: Bearer {{tenantAdminToken}}
 Accept: application/json
+
+### ============================================================
+### PROJECT TASKS — CLAIM VALIDATION
+###
+### Regras:
+### - A tarefa precisa estar em Validation.
+### - ValidatorUserId precisa estar null.
+### - O usuário precisa estar ativo e ser membro ativo do projeto.
+### - TenantAdmin possui bypass de ValidateTask, mas continua precisando
+###   possuir participação ativa no projeto.
+### - ProjectManager responsável pelo projeto pode validar tarefas de terceiros.
+### - ProjectManager e Member, nos demais casos, precisam de ValidateTask.
+### - ValidateTask = 14.
+### - SelfValidateTask = 15 e é independente de ValidateTask.
+### - Apenas um validador pode assumir a validação.
+### - A operação não altera Status, ResponsibleUserId ou DueDate.
+###
+### Preparação:
+### - Execute primeiro a criação da tarefa.
+### - Copie o publicId retornado para claimValidationTaskPublicId
+###   em http-client.env.json.
+### - Depois execute as demais requisições na ordem indicada.
+### ============================================================
+
+
+### ProjectTasks - Preparação garantir Member sem ValidateTask - 200 ou 404
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/14
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Preparação criar tarefa para ClaimValidation - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "title": "Tarefa para assumir validação",
+  "description": "Validação manual do ClaimProjectTaskValidation.",
+  "priority": 3,
+  "dueDate": "2027-11-30T18:00:00Z"
+}
+
+
+### ProjectTasks - Preparação TenantAdmin assumir tarefa para ClaimValidation - 200
+PATCH {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimValidationTaskPublicId}}/claim
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Preparação mover tarefa para Todo antes de ClaimValidation - 200
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimValidationTaskPublicId}}/todo
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Preparação iniciar tarefa antes de ClaimValidation - 200
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimValidationTaskPublicId}}/start
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Preparação enviar tarefa para Validation antes de ClaimValidation - 200
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimValidationTaskPublicId}}/validation
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Member sem ValidateTask tentar assumir validação - 403
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimValidationTaskPublicId}}/validation/claim
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### ProjectTasks - Preparação conceder ValidateTask ao Member - 201
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions
+Authorization: Bearer {{tenantAdminToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "permission": 14
+}
+
+
+### ProjectTasks - Member com ValidateTask assumir validação - 200
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimValidationTaskPublicId}}/validation/claim
+Authorization: Bearer {{memberToken}}
+Accept: application/json
+
+
+### ProjectTasks - Tentar assumir validação já reivindicada - 409
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimValidationTaskPublicId}}/validation/claim
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - ClaimValidation sem autenticação - 401
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimValidationTaskPublicId}}/validation/claim
+Accept: application/json
+
+
+### ProjectTasks - SystemAdmin tentando assumir validação - 403
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimValidationTaskPublicId}}/validation/claim
+Authorization: Bearer {{systemAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Usuário de outro Tenant tentando assumir validação - 403
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/{{claimValidationTaskPublicId}}/validation/claim
+Authorization: Bearer {{otherTenantToken}}
+Accept: application/json
+
+
+### ProjectTasks - ClaimValidation com tarefa inexistente - 404
+POST {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/tasks/11111111-1111-1111-1111-111111111111/validation/claim
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json
+
+
+### ProjectTasks - Limpeza revogar ValidateTask do Member - 200
+DELETE {{WorkFlow_API_HostAddress}}/api/tenants/{{tenantPrincipalPublicId}}/projects/{{projetoTenantAdminPublicId}}/members/{{memberUserPublicId}}/permissions/14
+Authorization: Bearer {{tenantAdminToken}}
+Accept: application/json

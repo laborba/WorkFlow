@@ -1,0 +1,859 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using System.Reflection;
+using System.Security.Claims;
+using WorkFlow.API.Authorization;
+using WorkFlow.API.Contracts.Common;
+using WorkFlow.API.Contracts.ProjectTasks;
+using WorkFlow.API.Controllers;
+using WorkFlow.Application.Common.Errors;
+using WorkFlow.Application.Projects;
+using WorkFlow.Application.ProjectTasks;
+using WorkFlow.Application.ProjectTasks.AssignProjectTaskResponsible;
+using WorkFlow.Application.ProjectTasks.ClaimProjectTask;
+using WorkFlow.Application.ProjectTasks.ClaimProjectTaskValidation;
+using WorkFlow.Application.ProjectTasks.CreateProjectTask;
+using WorkFlow.Application.ProjectTasks.ListProjectTasks;
+using WorkFlow.Application.ProjectTasks.MoveProjectTaskToTodo;
+using WorkFlow.Application.ProjectTasks.PauseProjectTask;
+using WorkFlow.Application.ProjectTasks.RemoveProjectTaskResponsible;
+using WorkFlow.Application.ProjectTasks.ResumeProjectTask;
+using WorkFlow.Application.ProjectTasks.SendProjectTaskToValidation;
+using WorkFlow.Application.ProjectTasks.StartProjectTask;
+using WorkFlow.Application.ProjectTasks.UpdateProjectTask;
+using WorkFlow.Application.Tenants;
+using WorkFlow.Application.Users;
+using WorkFlow.Domain.Entities;
+using WorkFlow.Domain.Enums;
+using WorkFlow.UnitTests.Application.Projects.Fakes;
+using WorkFlow.UnitTests.Application.Tenants.Fakes;
+using WorkFlow.UnitTests.Application.Users.Fakes;
+using WorkFlow.UnitTests.Common;
+using WorkFlow.UnitTests.Common.Fakes;
+
+namespace WorkFlow.UnitTests.API.ProjectTasks;
+
+public sealed class ClaimProjectTaskValidationControllerTests
+{
+    [Theory]
+    [InlineData(UserRole.TenantAdmin)]
+    [InlineData(UserRole.ProjectManager)]
+    [InlineData(UserRole.Member)]
+    public async Task
+        ClaimValidation_ShouldReturnOk_WhenRequesterCanValidate(
+            UserRole role)
+    {
+        var fixture =
+            CreateFixture(
+                role);
+
+        var responsibleBefore =
+            fixture.ProjectTask.ResponsibleUserId;
+
+        var dueDateBefore =
+            fixture.ProjectTask.DueDate;
+
+        var controller =
+            CreateController(
+                fixture,
+                fixture.Requester.PublicId.ToString());
+
+        var result =
+            await controller.ClaimValidation(
+                fixture.Tenant.PublicId,
+                fixture.Project.PublicId,
+                fixture.ProjectTask.PublicId,
+                CancellationToken.None);
+
+        var ok =
+            Assert.IsType<OkObjectResult>(
+                result.Result);
+
+        Assert.Equal(
+            StatusCodes.Status200OK,
+            ok.StatusCode);
+
+        var response =
+            Assert.IsType<ClaimProjectTaskValidationResponse>(
+                ok.Value);
+
+        Assert.Equal(
+            fixture.ProjectTask.PublicId,
+            response.PublicId);
+
+        Assert.Equal(
+            fixture.Tenant.PublicId,
+            response.TenantPublicId);
+
+        Assert.Equal(
+            fixture.Project.PublicId,
+            response.ProjectPublicId);
+
+        Assert.Equal(
+            fixture.Requester.PublicId,
+            response.ValidatorUserPublicId);
+
+        Assert.Equal(
+            ProjectTaskStatus.Validation,
+            response.Status);
+
+        Assert.Equal(
+            ProjectTaskStatus.Validation,
+            fixture.ProjectTask.Status);
+
+        Assert.Equal(
+            responsibleBefore,
+            fixture.ProjectTask.ResponsibleUserId);
+
+        Assert.Equal(
+            fixture.Requester.Id,
+            fixture.ProjectTask.ValidatorUserId);
+
+        Assert.Equal(
+            dueDateBefore,
+            fixture.ProjectTask.DueDate);
+
+        Assert.Null(
+            fixture.ProjectTask.StatusBeforePause);
+
+        Assert.NotNull(
+            response.UpdatedAt);
+
+        Assert.Equal(
+            fixture.ProjectTask.UpdatedAt,
+            response.UpdatedAt);
+
+        Assert.Equal(
+            1,
+            fixture.UnitOfWork.BeginTransactionCallCount);
+
+        Assert.Equal(
+            1,
+            fixture.UnitOfWork.SaveChangesCallCount);
+
+        Assert.Equal(
+            1,
+            fixture.UnitOfWork.CommitCallCount);
+
+        Assert.Equal(
+            0,
+            fixture.UnitOfWork.RollbackCallCount);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("invalid")]
+    [InlineData("00000000-0000-0000-0000-000000000000")]
+    public async Task
+        ClaimValidation_ShouldReturnUnauthorized_WhenUserClaimIsInvalid(
+            string? claim)
+    {
+        var fixture =
+            CreateFixture();
+
+        var controller =
+            CreateController(
+                fixture,
+                claim);
+
+        var result =
+            await controller.ClaimValidation(
+                fixture.Tenant.PublicId,
+                fixture.Project.PublicId,
+                fixture.ProjectTask.PublicId,
+                CancellationToken.None);
+
+        Assert.IsType<UnauthorizedResult>(
+            result.Result);
+
+        Assert.Null(
+            fixture.ProjectTask.ValidatorUserId);
+
+        Assert.Equal(
+            0,
+            fixture.UnitOfWork.BeginTransactionCallCount);
+
+        Assert.Equal(
+            0,
+            fixture.UnitOfWork.SaveChangesCallCount);
+    }
+
+    [Theory]
+    [InlineData(
+        "tenant-missing",
+        StatusCodes.Status404NotFound)]
+    [InlineData(
+        "requester-missing",
+        StatusCodes.Status404NotFound)]
+    [InlineData(
+        "project-missing",
+        StatusCodes.Status404NotFound)]
+    [InlineData(
+        "task-missing",
+        StatusCodes.Status404NotFound)]
+    [InlineData(
+        "tenant-inactive",
+        StatusCodes.Status409Conflict)]
+    [InlineData(
+        "requester-inactive",
+        StatusCodes.Status403Forbidden)]
+    [InlineData(
+        "project-paused",
+        StatusCodes.Status409Conflict)]
+    [InlineData(
+        "task-archived",
+        StatusCodes.Status409Conflict)]
+    [InlineData(
+        "task-not-validation",
+        StatusCodes.Status409Conflict)]
+    [InlineData(
+        "task-without-responsible",
+        StatusCodes.Status409Conflict)]
+    [InlineData(
+        "already-claimed",
+        StatusCodes.Status409Conflict)]
+    [InlineData(
+        "not-active-member",
+        StatusCodes.Status403Forbidden)]
+    [InlineData(
+        "not-allowed",
+        StatusCodes.Status403Forbidden)]
+    [InlineData(
+        "self-not-allowed",
+        StatusCodes.Status403Forbidden)]
+    public async Task
+        ClaimValidation_ShouldMapApplicationErrors(
+            string scenario,
+            int expectedStatusCode)
+    {
+        var fixture =
+            CreateFixture();
+
+        var expectedError =
+            ConfigureFailureScenario(
+                fixture,
+                scenario);
+
+        var controller =
+            CreateController(
+                fixture,
+                fixture.Requester.PublicId.ToString());
+
+        var result =
+            await controller.ClaimValidation(
+                fixture.Tenant.PublicId,
+                fixture.Project.PublicId,
+                fixture.ProjectTask.PublicId,
+                CancellationToken.None);
+
+        var failure =
+            Assert.IsAssignableFrom<ObjectResult>(
+                result.Result);
+
+        Assert.Equal(
+            expectedStatusCode,
+            failure.StatusCode);
+
+        var response =
+            Assert.IsType<ErrorResponse>(
+                failure.Value);
+
+        Assert.Equal(
+            expectedError.Code,
+            response.Code);
+
+        Assert.Equal(
+            expectedError.Message,
+            response.Message);
+
+        Assert.Equal(
+            0,
+            fixture.UnitOfWork.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public void
+        ClaimValidation_ShouldExposeTenantScopedPostProtectedByTenantAccess()
+    {
+        var controllerType =
+            typeof(ProjectTasksController);
+
+        Assert.NotNull(
+            controllerType.GetCustomAttribute<ApiControllerAttribute>());
+
+        Assert.Equal(
+            "api/tenants/{tenantPublicId:guid}/projects/{projectPublicId:guid}/tasks",
+            controllerType
+                .GetCustomAttribute<RouteAttribute>()!
+                .Template);
+
+        var method =
+            controllerType.GetMethod(
+                nameof(ProjectTasksController.ClaimValidation));
+
+        Assert.NotNull(
+            method);
+
+        var postAttribute =
+            Assert.Single(
+                method!
+                    .GetCustomAttributes<HttpPostAttribute>());
+
+        Assert.Equal(
+            "{taskPublicId:guid}/validation/claim",
+            postAttribute.Template);
+
+        Assert.Equal(
+            AuthorizationPolicyNames.TenantAccess,
+            Assert.Single(
+                    method.GetCustomAttributes<AuthorizeAttribute>())
+                .Policy);
+
+        Assert.Empty(
+            method.GetCustomAttributes<AllowAnonymousAttribute>());
+
+        Assert.DoesNotContain(
+            method.GetParameters(),
+            parameter =>
+                parameter.GetCustomAttribute<FromBodyAttribute>()
+                    is not null);
+    }
+
+    private static Error ConfigureFailureScenario(
+        Fixture fixture,
+        string scenario)
+    {
+        switch (scenario)
+        {
+            case "tenant-missing":
+                fixture.TenantRepository.TenantToReturn =
+                    null;
+
+                return TenantErrors.NotFound;
+
+            case "requester-missing":
+                fixture.UserRepository
+                    .UsersByPublicIdToReturn
+                    .Remove(
+                        fixture.Requester.PublicId);
+
+                return UserErrors.NotFound;
+
+            case "project-missing":
+                fixture.ProjectRepository.ProjectToReturn =
+                    null;
+
+                return ProjectErrors.NotFound;
+
+            case "task-missing":
+                fixture.TaskRepository
+                    .ProjectTaskForUpdateToReturn =
+                    null;
+
+                return ProjectTaskErrors.NotFound;
+
+            case "tenant-inactive":
+                fixture.Tenant.Deactivate();
+
+                return TenantErrors.Inactive;
+
+            case "requester-inactive":
+                fixture.Requester.Deactivate();
+
+                return UserErrors.Inactive;
+
+            case "project-paused":
+                fixture.Project.Pause(
+                    "Projeto pausado para teste.");
+
+                return ProjectTaskErrors
+                    .ClaimValidationBlockedByProjectStatus;
+
+            case "task-archived":
+                fixture.TaskRepository
+                    .ProjectTaskForUpdateToReturn =
+                    CreateArchivedTask(
+                        fixture);
+
+                return ProjectTaskErrors.Archived;
+
+            case "task-not-validation":
+                fixture.TaskRepository
+                    .ProjectTaskForUpdateToReturn =
+                    CreateInProgressTask(
+                        fixture);
+
+                return ProjectTaskErrors
+                    .ClaimValidationBlockedByTaskStatus;
+
+            case "task-without-responsible":
+                SetResponsibleUserId(
+                    fixture.ProjectTask,
+                    null);
+
+                return ProjectTaskErrors
+                    .ClaimValidationRequiresResponsible;
+
+            case "already-claimed":
+                fixture.ProjectTask.ClaimValidation(
+                    fixture.OtherUser.Id);
+
+                return ProjectTaskErrors
+                    .ValidationAlreadyClaimed;
+
+            case "not-active-member":
+                fixture.MemberRepository
+                    .ActiveMembersToReturn[
+                        (
+                            fixture.Project.Id,
+                            fixture.Requester.Id
+                        )] =
+                    null;
+
+                return ProjectTaskErrors
+                    .ClaimValidationNotAllowed;
+
+            case "not-allowed":
+                fixture.PermissionRepository
+                    .IsActivePermissionResults[
+                        (
+                            fixture.RequesterMember.Id,
+                            ProjectPermission.ValidateTask
+                        )] =
+                    false;
+
+                return ProjectTaskErrors
+                    .ClaimValidationNotAllowed;
+
+            case "self-not-allowed":
+                SetResponsibleUserId(
+                    fixture.ProjectTask,
+                    fixture.Requester.Id);
+
+                fixture.PermissionRepository
+                    .IsActivePermissionResults[
+                        (
+                            fixture.RequesterMember.Id,
+                            ProjectPermission.SelfValidateTask
+                        )] =
+                    false;
+
+                return ProjectTaskErrors
+                    .SelfValidationNotAllowed;
+
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(scenario));
+        }
+    }
+
+    private static ProjectTasksController CreateController(
+        Fixture fixture,
+        string? claim)
+    {
+        var claims =
+            claim is null
+                ? Array.Empty<Claim>()
+                : new[]
+                {
+                    new Claim(
+                        ClaimTypes.NameIdentifier,
+                        claim)
+                };
+
+        var createProjectTaskHandler =
+            new CreateProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.PermissionRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var assignProjectTaskResponsibleHandler =
+            new AssignProjectTaskResponsibleHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.PermissionRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var claimProjectTaskHandler =
+            new ClaimProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.PermissionRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var removeProjectTaskResponsibleHandler =
+            new RemoveProjectTaskResponsibleHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.PermissionRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var updateProjectTaskHandler =
+            new UpdateProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.PermissionRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var listProjectTasksHandler =
+            new ListProjectTasksHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository);
+
+        var startProjectTaskHandler =
+            new StartProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var moveProjectTaskToTodoHandler =
+            new MoveProjectTaskToTodoHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.PermissionRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var pauseProjectTaskHandler =
+            new PauseProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var resumeProjectTaskHandler =
+            new ResumeProjectTaskHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var sendProjectTaskToValidationHandler =
+            new SendProjectTaskToValidationHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        var claimProjectTaskValidationHandler =
+            new ClaimProjectTaskValidationHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                fixture.PermissionRepository,
+                fixture.TaskRepository,
+                fixture.UnitOfWork);
+
+        return new ProjectTasksController(
+            createProjectTaskHandler,
+            assignProjectTaskResponsibleHandler,
+            claimProjectTaskHandler,
+            removeProjectTaskResponsibleHandler,
+            updateProjectTaskHandler,
+            listProjectTasksHandler,
+            startProjectTaskHandler,
+            moveProjectTaskToTodoHandler,
+            pauseProjectTaskHandler,
+            resumeProjectTaskHandler,
+            sendProjectTaskToValidationHandler,
+            claimProjectTaskValidationHandler)
+        {
+            ControllerContext =
+                new ControllerContext
+                {
+                    HttpContext =
+                        new DefaultHttpContext
+                        {
+                            User =
+                                new ClaimsPrincipal(
+                                    new ClaimsIdentity(
+                                        claims,
+                                        "Test"))
+                        }
+                }
+        };
+    }
+
+    private static Fixture CreateFixture(
+        UserRole requesterRole =
+            UserRole.Member)
+    {
+        var tenant =
+            new Tenant(
+                "Empresa Claim Validation API",
+                $"REG-{Guid.NewGuid():N}",
+                $"tenant-{Guid.NewGuid():N}@test.local");
+
+        EntityTestHelper.SetId(
+            tenant,
+            42);
+
+        var requester =
+            new User(
+                tenant.Id,
+                "Usuário validador",
+                $"validator-{Guid.NewGuid():N}@test.local",
+                "password-hash",
+                requesterRole);
+
+        EntityTestHelper.SetId(
+            requester,
+            10);
+
+        var otherUser =
+            new User(
+                tenant.Id,
+                "Usuário responsável",
+                $"responsible-{Guid.NewGuid():N}@test.local",
+                "password-hash",
+                UserRole.Member);
+
+        EntityTestHelper.SetId(
+            otherUser,
+            20);
+
+        var project =
+            new Project(
+                tenant.Id,
+                "Projeto Claim Validation API",
+                requester.Id);
+
+        EntityTestHelper.SetId(
+            project,
+            100);
+
+        project.Start();
+
+        var dueDate =
+            new DateTime(
+                2027,
+                10,
+                31,
+                18,
+                0,
+                0,
+                DateTimeKind.Utc);
+
+        var projectTask =
+            new ProjectTask(
+                project.Id,
+                "Tarefa aguardando validação",
+                ProjectTaskPriority.High,
+                requester.Id,
+                responsibleUserId:
+                    otherUser.Id,
+                dueDate:
+                    dueDate);
+
+        EntityTestHelper.SetId(
+            projectTask,
+            200);
+
+        projectTask.MoveToTodo();
+        projectTask.Start();
+        projectTask.SendToValidation();
+
+        var requesterMember =
+            new ProjectMember(
+                project.Id,
+                requester.Id,
+                requester.Id);
+
+        EntityTestHelper.SetId(
+            requesterMember,
+            300);
+
+        var tenantRepository =
+            new FakeTenantRepository
+            {
+                TenantToReturn =
+                    tenant
+            };
+
+        var userRepository =
+            new FakeUserRepository();
+
+        userRepository
+            .UsersByPublicIdToReturn[
+                requester.PublicId] =
+            requester;
+
+        userRepository
+            .UsersByPublicIdToReturn[
+                otherUser.PublicId] =
+            otherUser;
+
+        var projectRepository =
+            new FakeProjectRepository
+            {
+                ProjectToReturn =
+                    project
+            };
+
+        var memberRepository =
+            new FakeProjectMemberRepository();
+
+        memberRepository
+            .ActiveMembersToReturn[
+                (
+                    project.Id,
+                    requester.Id
+                )] =
+            requesterMember;
+
+        var permissionRepository =
+            new FakeProjectMemberPermissionRepository();
+
+        permissionRepository
+            .IsActivePermissionResults[
+                (
+                    requesterMember.Id,
+                    ProjectPermission.ValidateTask
+                )] =
+            true;
+
+        permissionRepository
+            .IsActivePermissionResults[
+                (
+                    requesterMember.Id,
+                    ProjectPermission.SelfValidateTask
+                )] =
+            false;
+
+        var taskRepository =
+            new FakeProjectTaskRepository
+            {
+                ProjectTaskForUpdateToReturn =
+                    projectTask
+            };
+
+        var unitOfWork =
+            new FakeUnitOfWork();
+
+        return new Fixture(
+            tenant,
+            requester,
+            otherUser,
+            project,
+            projectTask,
+            requesterMember,
+            tenantRepository,
+            userRepository,
+            projectRepository,
+            memberRepository,
+            permissionRepository,
+            taskRepository,
+            unitOfWork);
+    }
+
+    private static ProjectTask CreateArchivedTask(
+        Fixture fixture)
+    {
+        var task =
+            new ProjectTask(
+                fixture.Project.Id,
+                "Tarefa arquivada",
+                ProjectTaskPriority.High,
+                fixture.Requester.Id,
+                responsibleUserId:
+                    fixture.OtherUser.Id);
+
+        EntityTestHelper.SetId(
+            task,
+            201);
+
+        task.Cancel();
+        task.Archive();
+
+        return task;
+    }
+
+    private static ProjectTask CreateInProgressTask(
+        Fixture fixture)
+    {
+        var task =
+            new ProjectTask(
+                fixture.Project.Id,
+                "Tarefa em andamento",
+                ProjectTaskPriority.High,
+                fixture.Requester.Id,
+                responsibleUserId:
+                    fixture.OtherUser.Id);
+
+        EntityTestHelper.SetId(
+            task,
+            202);
+
+        task.MoveToTodo();
+        task.Start();
+
+        return task;
+    }
+
+    private static void SetResponsibleUserId(
+        ProjectTask projectTask,
+        long? responsibleUserId)
+    {
+        var property =
+            typeof(ProjectTask)
+                .GetProperty(
+                    nameof(ProjectTask.ResponsibleUserId),
+                    BindingFlags.Instance |
+                    BindingFlags.Public);
+
+        Assert.NotNull(
+            property);
+
+        property!.SetValue(
+            projectTask,
+            responsibleUserId);
+    }
+
+    private sealed record Fixture(
+        Tenant Tenant,
+        User Requester,
+        User OtherUser,
+        Project Project,
+        ProjectTask ProjectTask,
+        ProjectMember RequesterMember,
+        FakeTenantRepository TenantRepository,
+        FakeUserRepository UserRepository,
+        FakeProjectRepository ProjectRepository,
+        FakeProjectMemberRepository MemberRepository,
+        FakeProjectMemberPermissionRepository PermissionRepository,
+        FakeProjectTaskRepository TaskRepository,
+        FakeUnitOfWork UnitOfWork);
+}

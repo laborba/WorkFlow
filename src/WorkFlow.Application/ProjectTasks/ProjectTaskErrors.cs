@@ -184,6 +184,36 @@ public static class ProjectTaskErrors
             "ProjectTasks.SendToValidationRequiresResponsible",
             "A tarefa precisa possuir um responsável para ser enviada para validação.");
 
+    public static Error ClaimValidationNotAllowed { get; } =
+        new(
+            "ProjectTasks.ClaimValidationNotAllowed",
+            "O usuário informado não possui permissão para assumir a validação desta tarefa.");
+
+    public static Error SelfValidationNotAllowed { get; } =
+        new(
+            "ProjectTasks.SelfValidationNotAllowed",
+            "O usuário informado não possui permissão para validar sua própria tarefa.");
+
+    public static Error ClaimValidationBlockedByProjectStatus { get; } =
+        new(
+            "ProjectTasks.ClaimValidationBlockedByProjectStatus",
+            "A validação só pode ser assumida quando o projeto estiver em andamento.");
+
+    public static Error ClaimValidationBlockedByTaskStatus { get; } =
+        new(
+            "ProjectTasks.ClaimValidationBlockedByTaskStatus",
+            "Somente tarefas em validação podem ter sua validação assumida.");
+
+    public static Error ClaimValidationRequiresResponsible { get; } =
+        new(
+            "ProjectTasks.ClaimValidationRequiresResponsible",
+            "A tarefa precisa possuir um responsável para que sua validação possa ser assumida.");
+
+    public static Error ValidationAlreadyClaimed { get; } =
+        new(
+            "ProjectTasks.ValidationAlreadyClaimed",
+            "A validação desta tarefa já possui um responsável.");
+
     public static Error Archived { get; } =
         new(
             "ProjectTasks.Archived",
