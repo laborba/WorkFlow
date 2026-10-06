@@ -28,6 +28,7 @@ using WorkFlow.Application.ProjectTasks.MoveProjectTaskToTodo;
 using WorkFlow.Application.ProjectTasks.PauseProjectTask;
 using WorkFlow.Application.ProjectTasks.ResumeProjectTask;
 using WorkFlow.Application.ProjectTasks.SendProjectTaskToValidation;
+using WorkFlow.Application.ProjectTasks.ClaimProjectTaskValidation;
 using WorkFlow.Application.Tenants.ChangeTenantStatus;
 using WorkFlow.Application.Tenants.CreateTenant;
 using WorkFlow.Application.Tenants.GetTenantByPublicId;
@@ -85,6 +86,7 @@ public static class DependencyInjection
         services.AddScoped<PauseProjectTaskHandler>();
         services.AddScoped<ResumeProjectTaskHandler>();
         services.AddScoped<SendProjectTaskToValidationHandler>();
+        services.AddScoped<ClaimProjectTaskValidationHandler>();
 
         services.AddScoped<AddProjectMemberHandler>();
         services.AddScoped<ListProjectMembersHandler>();

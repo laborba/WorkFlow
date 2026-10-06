@@ -11,6 +11,7 @@ using WorkFlow.Application.Common.Pagination;
 using WorkFlow.Application.Projects;
 using WorkFlow.Application.ProjectTasks.AssignProjectTaskResponsible;
 using WorkFlow.Application.ProjectTasks.ClaimProjectTask;
+using WorkFlow.Application.ProjectTasks.ClaimProjectTaskValidation;
 using WorkFlow.Application.ProjectTasks.CreateProjectTask;
 using WorkFlow.Application.ProjectTasks.ListProjectTasks;
 using WorkFlow.Application.ProjectTasks.MoveProjectTaskToTodo;
@@ -460,6 +461,16 @@ public sealed class ListProjectTasksControllerTests
                 fixture.TaskRepository,
                 unitOfWork);
 
+        var claimProjectTaskValidationHandler =
+            new ClaimProjectTaskValidationHandler(
+                fixture.TenantRepository,
+                fixture.UserRepository,
+                fixture.ProjectRepository,
+                fixture.MemberRepository,
+                permissionRepository,
+                fixture.TaskRepository,
+                unitOfWork);
+
         var moveToTodoHandler =
             new MoveProjectTaskToTodoHandler(
                 fixture.TenantRepository,
@@ -481,7 +492,8 @@ public sealed class ListProjectTasksControllerTests
             moveToTodoHandler,
             pauseProjectTaskHandler,
             resumeProjectTaskHandler,
-            sendProjectTaskToValidationHandler)
+            sendProjectTaskToValidationHandler,
+            claimProjectTaskValidationHandler)
         {
             ControllerContext =
                 new ControllerContext

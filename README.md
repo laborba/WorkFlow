@@ -966,7 +966,7 @@ Status = Validation
 ValidatorUserId = null
 ```
 
-O validador será definido posteriormente por um fluxo específico de validação.
+O validador é definido posteriormente pelo fluxo ClaimProjectTaskValidation, que permite que um usuário autorizado assuma a validação enquanto a tarefa permanece em Validation.
 
 O envio para validação preserva:
 
@@ -1027,6 +1027,183 @@ Os cenários estão disponíveis em:
 src/WorkFlow.API/Http/05-ProjectTasks.http
 ```
 
+### Tarefas — ClaimProjectTaskValidation
+
+A reivindicação de uma validação está implementada através do endpoint:
+
+```http
+POST /api/tenants/{tenantPublicId}/projects/{projectPublicId}/tasks/{taskPublicId}/validation/claim
+```
+
+O endpoint não recebe body.
+
+A operação é executada quando a tarefa já se encontra em:
+
+```text
+Validation
+```
+
+e ainda não possui validador:
+
+```text
+ValidatorUserId = null
+```
+
+Ao assumir a validação:
+
+```text
+Validation
+ValidatorUserId = null
+↓
+ClaimValidation
+↓
+Validation
+ValidatorUserId = usuário autenticado
+```
+
+O status da tarefa permanece `Validation`.
+
+As regras atuais são:
+
+- o Tenant deve existir e estar ativo;
+- o usuário autenticado deve existir, estar ativo e pertencer ao Tenant;
+- o projeto deve pertencer ao Tenant e estar `InProgress`;
+- o usuário precisa possuir participação ativa no projeto, inclusive quando possui perfil `TenantAdmin`;
+- a tarefa deve pertencer ao projeto;
+- a tarefa não pode estar arquivada;
+- a tarefa precisa estar em `Validation`;
+- a tarefa precisa possuir responsável;
+- `ValidatorUserId` precisa estar `null`;
+- `TenantAdmin` pode assumir a validação sem `ValidateTask`, mas continua obrigado a ser membro ativo do projeto;
+- o responsável pelo projeto pode assumir a validação de tarefa pertencente a outro usuário;
+- `ProjectManager` e `Member`, nos demais casos, precisam possuir `ValidateTask`;
+- `ValidateTask` não autoriza auto-validação;
+- `SelfValidateTask` autoriza somente a validação da própria tarefa;
+- `SelfValidateTask` sozinho não autoriza validar tarefas de terceiros;
+- `ProjectManager` responsável pelo projeto pode auto-validar;
+- `Member` responsável pelo projeto não recebe auto-validação implicitamente e precisa de `SelfValidateTask`;
+- apenas um usuário pode possuir a validação por vez.
+
+A operação preserva:
+
+```text
+Status = Validation
+ResponsibleUserId
+DueDate
+StatusBeforePause
+```
+
+e altera somente:
+
+```text
+ValidatorUserId
+UpdatedAt
+```
+
+A autorização considera separadamente os dois tipos de permissão:
+
+```text
+ValidateTask = 14
+SelfValidateTask = 15
+```
+
+Para tarefas de terceiros:
+
+```text
+TenantAdmin
+ou
+responsável pelo projeto
+ou
+membro ativo com ValidateTask
+```
+
+Para auto-validação:
+
+```text
+TenantAdmin
+ou
+ProjectManager responsável pelo projeto
+ou
+membro ativo com SelfValidateTask
+```
+
+A operação utiliza transação e bloqueio pessimista na ordem:
+
+```text
+Project FOR UPDATE
+↓
+ProjectTask FOR UPDATE
+```
+
+Essa ordem também protege contra concorrência entre dois usuários tentando assumir simultaneamente a mesma validação.
+
+Nesse cenário:
+
+```text
+Validador A ─┐
+             ├─ tentam assumir a mesma validação
+Validador B ─┘
+             ↓
+apenas um persiste ValidatorUserId
+             ↓
+o segundo recebe ValidationAlreadyClaimed
+```
+
+O comportamento foi validado com duas conexões e dois `DbContext`s independentes contra PostgreSQL real.
+
+O sucesso retorna `200 OK` com:
+
+```text
+PublicId
+TenantPublicId
+ProjectPublicId
+ValidatorUserPublicId
+Status
+UpdatedAt
+```
+
+Os principais erros específicos são:
+
+```text
+ProjectTasks.ClaimValidationNotAllowed
+ProjectTasks.SelfValidationNotAllowed
+ProjectTasks.ClaimValidationBlockedByProjectStatus
+ProjectTasks.ClaimValidationBlockedByTaskStatus
+ProjectTasks.ClaimValidationRequiresResponsible
+ProjectTasks.ValidationAlreadyClaimed
+ProjectTasks.Archived
+```
+
+O endpoint utiliza a policy:
+
+```text
+TenantAccess
+```
+
+e `SystemAdmin` não possui acesso operacional aos projetos e tarefas dos Tenants.
+
+A implementação possui:
+
+- testes unitários da Application;
+- testes de Controller;
+- testes de integração com PostgreSQL;
+- teste real de concorrência;
+- validação de isolamento multi-tenant;
+- validação de permissões ativas e revogadas;
+- validação manual autenticada da API.
+
+Os cenários manuais estão disponíveis em:
+
+```text
+src/WorkFlow.API/Http/05-ProjectTasks.http
+```
+
+na seção:
+
+```text
+PROJECT TASKS — CLAIM VALIDATION
+```
+
 ### Autenticação e autorização
 
 - login de usuários vinculados a uma empresa;
@@ -1082,7 +1259,7 @@ SystemAdmin
 Última validação local:
 
 ```text
-1863 testes automatizados aprovados
+1964 testes automatizados aprovados
 0 falhas
 ```
 
@@ -4151,6 +4328,12 @@ ProjectTasks.SendToValidationNotAllowed
 ProjectTasks.SendToValidationBlockedByProjectStatus
 ProjectTasks.SendToValidationBlockedByTaskStatus
 ProjectTasks.SendToValidationRequiresResponsible
+ProjectTasks.ClaimValidationNotAllowed
+ProjectTasks.SelfValidationNotAllowed
+ProjectTasks.ClaimValidationBlockedByProjectStatus
+ProjectTasks.ClaimValidationBlockedByTaskStatus
+ProjectTasks.ClaimValidationRequiresResponsible
+ProjectTasks.ValidationAlreadyClaimed
 
 Validation.InvalidArgument
 ```
@@ -4742,9 +4925,9 @@ O responsável precisa continuar ativo e possuir participação ativa no projeto
 
 O projeto e a tarefa precisam estar em `InProgress`, e tarefas arquivadas bloqueiam a operação.
 
-Ao entrar em `Validation`, `ValidatorUserId` permanece `null` até que um validador seja definido por um fluxo específico de validação. O prazo da tarefa é preservado.
+Ao entrar em `Validation`, `ValidatorUserId` permanece `null` até que um usuário autorizado assuma a validação através de `ClaimProjectTaskValidation`. O prazo da tarefa é preservado.
 
-A operação não utiliza `ValidateTask` nem `SelfValidateTask`, pois essas permissões serão aplicadas às ações realizadas depois que a tarefa já estiver em `Validation`.
+O envio para validação não utiliza `ValidateTask` nem `SelfValidateTask`. Essas permissões passam a participar das operações executadas depois que a tarefa já está em `Validation`, começando por `ClaimProjectTaskValidation`.
 
 Projeto e tarefa são bloqueados com `FOR UPDATE` na ordem `Project → ProjectTask`.
 
@@ -4776,7 +4959,9 @@ Validation
 Done
 ```
 
-As transições `Backlog → Todo`, `Todo → InProgress`, `Todo/InProgress → Paused`, a retomada de `Paused` para o estado operacional anterior e `InProgress → Validation` já estão implementadas. As operações realizadas dentro da etapa de validação e a transição `Validation → Done` serão incorporadas pelas próximas verticais.
+As transições `Backlog → Todo`, `Todo → InProgress`, `Todo/InProgress → Paused`, a retomada de `Paused` para o estado operacional anterior e `InProgress → Validation` já estão implementadas.
+
+Dentro da etapa `Validation`, `ClaimProjectTaskValidation` também já está implementado, permitindo que um usuário autorizado assuma a validação. As demais operações de validação e a transição `Validation → Done` serão incorporadas pelas próximas verticais.
 
 Outros estados poderão incluir:
 
@@ -4858,7 +5043,7 @@ Atualmente já são permissões operacionais efetivas:
 - `EditTask`: permite atualizar título, descrição, prioridade e prazo das tarefas e executar a transição `Backlog → Todo`, com participação ativa e a permissão correspondente para ProjectManager e Member;
 - `AssignTask`: permite atribuir, reatribuir e remover responsáveis das tarefas, com participação ativa e a permissão correspondente para ProjectManager e Member;
 - `ClaimTask`: permite que o próprio membro ativo assuma uma tarefa disponível; `ProjectManager` e `Member` precisam possuir a permissão, enquanto `TenantAdmin` possui bypass da permissão, mas continua precisando ser membro ativo do projeto.
-O início, a pausa, a retomada e o envio da tarefa para validação não utilizam permissões adicionais. Essas ações pertencem exclusivamente ao responsável atual da tarefa, que precisa permanecer ativo e possuir participação ativa no projeto. `TenantAdmin` não possui bypass da regra de responsabilidade nesses fluxos. `ValidateTask` e `SelfValidateTask` serão utilizadas nas operações executadas sobre tarefas que já estão em `Validation`, e não no envio `InProgress → Validation`.
+O início, a pausa, a retomada e o envio da tarefa para validação não utilizam permissões adicionais. Essas ações pertencem exclusivamente ao responsável atual da tarefa, que precisa permanecer ativo e possuir participação ativa no projeto. `TenantAdmin` não possui bypass da regra de responsabilidade nesses fluxos. `ValidateTask` e `SelfValidateTask` são utilizadas nas operações executadas sobre tarefas que já estão em `Validation`, começando por `ClaimProjectTaskValidation`, e não no envio `InProgress → Validation`.
 
 Quando um `ProjectManager` cria um novo projeto, sua participação inicial recebe automaticamente:
 
@@ -5150,6 +5335,14 @@ Essa camada ainda não está implementada.
 - [x] DueDate preservado durante o envio à validação
 - [x] Testes unitários, de Controller e integração PostgreSQL de SendProjectTaskToValidation
 - [x] Validação manual autenticada do fluxo InProgress → Validation
+- [x] ClaimProjectTaskValidation na Application, persistência e API
+- [x] Endpoint POST para assumir validação
+- [x] Participação ativa obrigatória para assumir validação
+- [x] Integração de ValidateTask e SelfValidateTask ao ClaimValidation
+- [x] Auto-validação conforme perfil, responsabilidade do projeto e SelfValidateTask
+- [x] Proteção concorrente para impedir dois validadores simultâneos
+- [x] Testes unitários, de Controller, integração e concorrência de ClaimProjectTaskValidation
+- [x] Validação manual autenticada de ClaimProjectTaskValidation
 - [ ] Demais casos de uso e endpoints
 - [ ] Fluxo operacional completo
 - [ ] Validação
@@ -5519,7 +5712,7 @@ Projeto e tarefa são bloqueados com FOR UPDATE durante SendProjectTaskToValidat
 Persistência real de SendProjectTaskToValidation validada com PostgreSQL
 Testes unitários, de Controller e integração de SendProjectTaskToValidation aprovados
 Fluxo InProgress → Validation validado manualmente
-1863 testes automatizados aprovados
+1964 testes automatizados aprovados
 0 falhas
 ```
 
